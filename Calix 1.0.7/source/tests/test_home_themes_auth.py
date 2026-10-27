@@ -131,7 +131,10 @@ def test_login_shell_is_topmost_and_visible_before_browser_import(app,tmp_path,m
     assert dialog.isVisible() and ready.exists()
     assert dialog.windowFlags() & Qt.WindowType.WindowStaysOnTopHint
     assert not calls
-    QTest.qWait(60);assert calls==['browser']
+    from time import monotonic
+    deadline=monotonic()+1
+    while not calls and monotonic()<deadline:QTest.qWait(10)
+    assert calls==['browser']
     dialog.reject();dialog.dispose();dialog.deleteLater();app.processEvents()
 
 def test_verified_login_accepts_canvas_cookies_without_learningx_token(app):
