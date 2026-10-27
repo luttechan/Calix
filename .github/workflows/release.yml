@@ -102,7 +102,7 @@ jobs:
           "$hash  Calix-1.0.8-Windows-x64.zip" | Set-Content -LiteralPath SHA256SUMS.txt -Encoding utf8NoBOM
           Pop-Location
       - name: Publish release
-        if: github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'Release Calix 1.0.8 revision 1'
+        if: github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
