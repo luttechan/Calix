@@ -1,12 +1,7 @@
-과제와 영상을 한눈에. 일정, 시간표, 일기까지.
+- 실행 지연 개선
+- 홈 일정 목록과 달력 초기화 개선
+- 특수 일정 설정 추가
 
-**Windows 10 / 11, 64비트**
+Windows 10 / 11, 64비트. 압축 해제 후 `run_windows.bat` 실행.
 
-ZIP 파일의 압축을 푼 뒤 `run_windows.bat`을 실행하세요.
-
-- 시작할 때 글꼴을 준비하느라 지연되던 문제 개선
-- 홈의 남은 일정과 달력 초기화 개선
-- 설정 → 기타 → 특수 일정 등록 추가
-- 가톨릭 일정과 `???` 표시 선택
-
-[Calix 사이트](https://luttechan.github.io/calix/)
+[사용 설명서](https://luttechan.github.io/calix/guide/)
