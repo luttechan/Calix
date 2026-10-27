@@ -16,7 +16,7 @@ def window(app,tmp_path):
     rows=[Event('assignment:1:1',1,'강의 A','assignment','보고서',now.isoformat(),False),Event('movie:1:2',1,'강의 A','movie','학습 영상',now.isoformat(),False),Event('assignment:2:3',2,'강의 B','assignment','다른 과제',now.isoformat(),False)]
     w.store.apply_batch([Course(1,'강의 A'),Course(2,'강의 B')],{(1,'assignment'):[rows[0]],(1,'movie'):[rows[1]],(2,'assignment'):[rows[2]]});w._reload();w.show();app.processEvents()
     yield w
-    w.close();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete);app.processEvents()
+    w.dispose();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete);app.processEvents()
 
 def open_choices(w):
     w.show_calendar_details(w.selected_date,w.snapshot.events,QPoint(200,100));return w._event_popover
@@ -46,18 +46,18 @@ def test_selecting_another_event_saves_without_model_reset(window,app):
     assert reset.count()==0 and popup.isVisible()
 
 def test_category_changes_keep_opaque_background_and_frame_cache(window,app):
-    from learning_calendar.home_view import TransitionFrame
     for theme in ('sky','dark'):
         window.set_theme(theme);window.show_home(animate=False);app.processEvents();root=window.centralWidget();count=root.render_count
         patch=QRect(190,0,300,10);original=root.grab().toImage().copy(patch)
         for category in ('assignment','movie','all')*3:
             window.home.set_category(category);app.processEvents();assert root.grab().toImage().copy(patch)==original
         window.select_page(0)
-        overlay=window.main_stack._overlay;assert overlay is not None
-        before=overlay.before.toImage();after=overlay.after.toImage()
-        assert before.pixelColor(0,0).alpha()==255 and after.pixelColor(0,0).alpha()==255
-        for progress in (0.,.25,.5,.75,1.):
-            overlay.set_progress(progress);frame=overlay.grab().toImage();assert frame.pixelColor(0,0)==before.pixelColor(0,0)
+        animation=window.main_stack._group;assert animation is not None
+        assert window.main_stack._overlay is None
+        for progress in (0.,.25,.5,.75):
+            animation.setCurrentTime(round(animation.duration()*progress))
+            frame=root.grab().toImage().copy(patch)
+            assert frame==original
         window.main_stack._settle();app.processEvents();assert root.render_count==count
 
 def test_escape_closes_only_details_and_preserves_edits(window,app):

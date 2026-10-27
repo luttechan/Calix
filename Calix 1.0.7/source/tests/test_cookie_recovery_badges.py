@@ -70,7 +70,7 @@ def test_two_category_badges_have_separate_semantic_borders(app,tmp_path):
     c=category_colors();assert c['assignment_line']!=c['movie_line']
     assert pair.assignment.geometry().right()<pair.movie.geometry().left()
     assert pair.assignment.height()==pair.movie.height()==18
-    host.close();host.deleteLater();app.processEvents()
+    host.dispose();host.deleteLater();app.processEvents()
 
 def test_small_cells_use_color_indicators_instead_of_tiny_text(app):
     pair=DayBadges();height=pair.configure(1,5,45,15)
@@ -84,4 +84,4 @@ def test_app_generated_ui_text_has_no_middle_dot(app,tmp_path):
     for event in w.home.upcoming.event_model.rows:
         index=w.home.upcoming.event_model.index(w.home.upcoming.event_model.rows.index(event))
         assert '\u00b7' not in index.data()
-    w.close();w.deleteLater();app.processEvents()
+    w.dispose();w.deleteLater();app.processEvents()

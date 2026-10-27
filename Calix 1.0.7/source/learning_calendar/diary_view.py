@@ -166,6 +166,8 @@ class DiaryPage(QWidget):
         try:self._store().save(value,self.current_id)
         except Exception:self.saved.setText('저장 실패 / 저장 공간과 파일 권한을 확인하세요.');return False
         self.dirty=False;self.metadata[self.current_id]=dict(id=self.current_id,date=value['date'],title=value['title']);self._render_list();self.saved.setText('자동 저장됨');return True
+    def discard_pending(self):
+        self.save_timer.stop();self.dirty=False;self.current_id=None;self._clear_editor()
     def remove_entry(self):
         if self.current_id is None:return
         if QMessageBox.question(self,'일기 삭제','이 일기를 삭제할까요?')!=QMessageBox.StandardButton.Yes:return

@@ -17,7 +17,7 @@ def test_home_has_data_without_constructing_hidden_calendar(app,tmp_path):
     assert sum(not row.isHidden() for row,_,_ in w.home.remaining_table.rows)==5
     w.set_theme('pink');assert w._calendar is None
     w.select_page(0);calendar=w.calendar;w.select_page(1);w.select_page(0);assert w.calendar is calendar
-    w.close();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
+    w.dispose();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
 
 def test_preview_manual_checkbox_and_whole_list_link(app,tmp_path):
     w=MainWindow(tmp_path);tid=w.store.event_types()[0]['id'];now=datetime.now(KST)
@@ -26,4 +26,4 @@ def test_preview_manual_checkbox_and_whole_list_link(app,tmp_path):
     assert check.isVisible() and fields[2].toolTip()=='긴 이름 '*34+'긴 이름'
     QTest.mouseClick(check,Qt.MouseButton.LeftButton,pos=QPoint(7,check.height()//2));app.processEvents();assert w.snapshot.by_key[key].completed
     w.home.open_remaining();assert w.main_stack.currentIndex()==1 and w.state_select.currentIndex()==1
-    w.close();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
+    w.dispose();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)

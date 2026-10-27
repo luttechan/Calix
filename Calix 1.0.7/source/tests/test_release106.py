@@ -40,7 +40,7 @@ def test_menu_path_and_mystery_updates_calendar_without_task_counts(app,tmp_path
     w.select_day(date(2027,6,27));app.processEvents();assert w.day_feast.text()=='클로네 생일'
     QTest.mouseClick(dialog.mystery,Qt.MouseButton.LeftButton,pos=QPoint(8,dialog.mystery.height()//2));app.processEvents();assert not w.day_feast.isVisible()
     holiday=HolidayDialog(w.holiday_calendar,w.selected_date,w);assert not hasattr(holiday,'catholic')
-    holiday.deleteLater();dialog.close();dialog.deleteLater();w.close();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
+    holiday.deleteLater();dialog.close();dialog.deleteLater();w.dispose();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
 
 def test_failed_toggle_keeps_saved_value(app,tmp_path,monkeypatch):
     cal=HolidayCalendar(tmp_path/'holidays.db');dialog=SpecialDatesDialog(cal)

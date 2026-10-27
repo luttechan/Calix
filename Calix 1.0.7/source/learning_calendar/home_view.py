@@ -2,8 +2,8 @@
 import math
 from datetime import datetime
 from PySide6.QtCore import (Qt,QTimer,QPoint,QRect,QPointF,QRectF,QElapsedTimer,Property,QPropertyAnimation,
-    QParallelAnimationGroup,QVariantAnimation,QEasingCurve,Signal)
-from PySide6.QtGui import QColor,QFont,QFontMetrics,QLinearGradient,QPainter,QPen,QPixmap
+    QVariantAnimation,QEasingCurve,Signal)
+from PySide6.QtGui import QColor,QFont,QFontMetrics,QLinearGradient,QPainter,QPen
 from PySide6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QLabel,QPushButton,
     QAbstractButton,QStackedWidget,QSizePolicy,QFrame,QScrollArea,QBoxLayout,QComboBox)
 from .design import colors
@@ -11,61 +11,30 @@ from .models import KST
 from .event_view import EventList
 from .schedule_preview import SchedulePreview
 
-class TransitionFrame(QWidget):
-    """Animate two cached images; the native pages never move or relayout."""
-    def __init__(self,before,after,direction,parent):
-        super().__init__(parent);self.before=before;self.after=after;self.direction=direction;self._progress=0.
-        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
-    def get_progress(self):return self._progress
-    def set_progress(self,value):self._progress=value;self.update()
-    progress=Property(float,get_progress,set_progress)
-    def paintEvent(self,event):
-        p=QPainter(self)
-        p.drawPixmap(self.rect(),self.before)
-        p.setOpacity(self._progress)
-        p.drawPixmap(self.rect(),self.after)
-        p.end()
-    def release(self):self.before=None;self.after=None
-
-
 class AnimatedStack(QStackedWidget):
+    """Move the incoming native page; never rasterize the widget tree."""
     def __init__(self,parent=None):
         super().__init__(parent);self._group=None;self._overlay=None
 
     def _settle(self):
-        if self._group:
-            self._group.stop();self._group.deleteLater();self._group=None
-        if self._overlay:
-            self._overlay.hide();self._overlay.release();self._overlay.deleteLater();self._overlay=None
-        if self.currentWidget():self.currentWidget().setGeometry(self.contentsRect());self.currentWidget().show()
+        group,self._group=self._group,None
+        if group:
+            group.stop();group.deleteLater()
+        page=self.currentWidget()
+        if page:page.setGeometry(self.contentsRect())
 
     def slide_to(self,index):
         if index==self.currentIndex():return
         self._settle()
-        old=self.currentWidget();pix=self._snapshot() if old and self.isVisible() else None
         forward=index>self.currentIndex();super().setCurrentIndex(index)
         page=self.currentWidget();page.setGeometry(self.contentsRect())
-        if pix is None:return
-        page.show();after=self._snapshot()
-        overlay=TransitionFrame(pix,after,1 if forward else -1,self)
-        overlay.setGeometry(self.contentsRect());overlay.show();overlay.raise_();self._overlay=overlay
-        group=QPropertyAnimation(overlay,b'progress',self);self._group=group
-        group.setDuration(260);group.setStartValue(0.);group.setEndValue(1.);group.setEasingCurve(QEasingCurve.Type.OutCubic)
+        if not self.isVisible():return
+        target=self.contentsRect().topLeft()
+        page.move(target+QPoint(0,6 if forward else -6))
+        group=QPropertyAnimation(page,b'pos',self);self._group=group
+        group.setDuration(120);group.setStartValue(page.pos());group.setEndValue(target)
+        group.setEasingCurve(QEasingCurve.Type.OutCubic)
         group.finished.connect(self._settle);group.start()
-
-    def _snapshot(self):
-        # Capture the painted ancestor too: transparent pages alone have no
-        # complete background. Both frames retain identical screen coordinates.
-        window=self.window();root=window.centralWidget() if hasattr(window,'centralWidget') else window
-        # Cap both cached frames together at 7 MiB, even on a large / high-DPI
-        # desktop. Rendering directly avoids first allocating a full-size grab.
-        width=max(1,self.width());height=max(1,self.height());scale=min(self.devicePixelRatioF(),1200/width,750/height)
-        image=QPixmap(max(1,round(width*scale)),max(1,round(height*scale)));image.fill(QColor(colors()['bg']))
-        offset=self.mapTo(root,QPoint(0,0));painter=QPainter(image);painter.scale(scale,scale);painter.translate(-offset)
-        try:root.render(painter,QPoint(0,0))
-        finally:painter.end()
-        return image
 
     def resizeEvent(self,event):
         self._settle();super().resizeEvent(event)
@@ -171,9 +140,10 @@ class HomeView(QWidget):
         self.remaining_table=SchedulePreview(remaining_pane);remaining.addWidget(self.remaining_table,1)
         self.sections.addWidget(today_pane,2);self.sections.addWidget(remaining_pane,3);layout.addWidget(self.preview_area,1)
     def update_snapshot(self,snapshot,now=None):
-        now=now or datetime.now(KST);today=snapshot.today_pending(now)
+        now=now or datetime.now(KST);pending=snapshot.pending(now)
+        today=[event for event in pending if event.due is not None and event.due.date()==now.date()]
         self.hero.dateline.setText(f'{now.month}월 {now.day}일 {"월화수목금토일"[now.weekday()]}요일');self.hero.orbit.day.setText(str(now.day))
-        self.today_card.set_count(len(today));self.remaining_card.set_count(len(snapshot.pending(now)))
+        self.today_card.set_count(len(today));self.remaining_card.set_count(len(pending))
         self._today_rows=today
         for kind,b in self.category_buttons.items():
             count=len(today) if kind=='all' else sum(e.kind==kind for e in today)
@@ -186,7 +156,7 @@ class HomeView(QWidget):
         for (key,name),count in groups.items():self.type_select.addItem(f'{name} {count}',f'type:{key}')
         self.type_select.setVisible(bool(groups))
         if self.category not in self.category_buttons and self.type_select.findData(self.category)<0:self.category='all'
-        self.set_category(self.category);self.remaining_table.set_events(snapshot.pending(now),now)
+        self.set_category(self.category);self.remaining_table.set_events(pending,now)
     def set_category(self,kind):
         self.category=kind
         for key,b in self.category_buttons.items():b.setAutoExclusive(False);b.setChecked(kind==key);b.setAutoExclusive(True)

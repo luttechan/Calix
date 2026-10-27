@@ -21,7 +21,7 @@ def test_metric_buttons_measure_caption_and_count_on_both_category_pages(app,tmp
             for label in button.findChildren(QLabel):
                 assert label.width()>=label.fontMetrics().horizontalAdvance(label.text())
                 assert button.rect().contains(label.geometry())
-    w.close();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
+    w.dispose();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
 
 def test_startup_handoff_waits_for_first_main_window_paint(app):
     from learning_calendar.startup_handoff import StartupHandoff

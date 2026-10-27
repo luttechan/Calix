@@ -15,7 +15,7 @@ def test_full_width_calendar_and_contextual_detail_panel(app,tmp_path):
     assert w.calendar.view.visualRect(w.calendar.view.model().index(0,0)).height()==34
     w.day_toggle.click();app.processEvents();assert w.day_panel.isVisible() and w.calendar.width()<wide
     w.day_toggle.click();app.processEvents();assert not w.day_panel.isVisible() and w.calendar.width()==wide
-    w.close();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete);app.processEvents()
+    w.dispose();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete);app.processEvents()
 
 def test_many_custom_types_stay_on_one_line_with_complete_accessible_counts(app):
     badge=DayBadges();height=badge.configure(1,2,160,95,[('운동',3,'#3AA68E'),('할 일',4,'#7582E6'),('시험',2,'#D48560'),('독서',1,'#CF779A')])
@@ -31,4 +31,4 @@ def test_keyboard_date_selection_updates_native_labels_and_selected_day(app,tmp_
     assert w.selected_date==date(2026,11,30)
     selected=[label.text() for label in w.calendar.date_labels if label.property('dayState')=='selected']
     assert selected==['30']
-    w.close();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete);app.processEvents()
+    w.dispose();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete);app.processEvents()

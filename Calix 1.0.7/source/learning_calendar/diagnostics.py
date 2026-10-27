@@ -67,7 +67,7 @@ def finish_smoke(window,output):
     from PySide6.QtWebEngineWidgets import QWebEngineView
     result['login_available']=QWebEngineView is not None
     Path(output).write_text(json.dumps(result,indent=2),encoding='utf-8')
-    window.close()
+    window.dispose()
 
 
 def check_connection(output):
@@ -132,4 +132,4 @@ class StartupProbe(QObject):
             result['startup_image']=self.notice.native_state()
             result['startup_image_at_first_paint']=self.image_at_first_paint
             result['startup_image_process_ms']=round((self.notice.painted_at-self.started)*1000,1) if self.notice.painted_at is not None else None
-        Path(self.output).write_text(json.dumps(result,indent=2),encoding='utf-8');self.window.close()
+        Path(self.output).write_text(json.dumps(result,indent=2),encoding='utf-8');self.window.dispose()

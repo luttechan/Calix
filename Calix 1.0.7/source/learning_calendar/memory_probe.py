@@ -47,4 +47,4 @@ class MemoryProbe:
     def finish(self):
         self.collect();end=memory_usage();peak=max((x['peak_working_set_mb'] for x in self.samples),default=0)
         result=dict(target_mb=150,synthetic_events=500,cycles=self.step,resolution=[self.w.width(),self.w.height()],baseline=getattr(self,'baseline',{}),end=end,peak_working_set_mb=peak,checkpoints=self.checkpoints,errors=self.errors,widget_count_stable=self.base_widgets is not None and len(self.w.findChildren(QWidget))<=self.base_widgets+1,within_target=bool(self.samples) and peak<=150)
-        self.path.write_text(json.dumps(result,indent=2),encoding='utf-8');self.w.close()
+        self.path.write_text(json.dumps(result,indent=2),encoding='utf-8');self.w.dispose()

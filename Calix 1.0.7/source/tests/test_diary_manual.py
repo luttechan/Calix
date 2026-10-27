@@ -104,7 +104,7 @@ def test_manual_dialog_recurrence_and_type_filters(app,tmp_path):
     w.type_filter.setCurrentIndex(w.type_filter.findData(f'type:{tid}'));assert [e.title for e in w._filtered]==['걷기']
     event=w.store.events()[0];w.complete_manual(event,True);assert w.store.events()[0].completed;w.undo_manual();assert not w.store.events()[0].completed
     w.show_diary();w.main_stack._settle();assert w.main_stack.currentIndex()==2 and w.diary is not None
-    d.close();d.deleteLater();w.close();w.deleteLater();app.processEvents()
+    d.close();d.deleteLater();w.dispose();w.deleteLater();app.processEvents()
 
 def test_rich_diary_format_survives_save_reopen_and_encryption(app,tmp_path):
     from learning_calendar.diary_view import DiaryPage

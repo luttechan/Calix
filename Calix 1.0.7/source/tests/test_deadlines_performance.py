@@ -31,20 +31,19 @@ def test_home_lists_exactly_the_items_counted_today(tmp_path):
     w.resize(900,540);app.processEvents()
     assert w.home.preview_area.isVisible()
     assert w.home.scroll.verticalScrollBar().maximum()>0
-    w.close();w.deleteLater();app.processEvents()
+    w.dispose();w.deleteLater();app.processEvents()
 
-def test_transition_keeps_native_page_stationary_and_releases_images(tmp_path):
+def test_transition_uses_live_page_and_finishes_at_layout_origin(tmp_path):
     from PySide6.QtWidgets import QApplication
     from learning_calendar.gui import MainWindow
     app=QApplication.instance() or QApplication([]);w=MainWindow(tmp_path);w.show();app.processEvents()
     w.select_page(0)
-    overlay=w.main_stack._overlay
-    assert overlay is not None and overlay.before is not None and overlay.after is not None
-    # The live page remains painted underneath the opaque transition frame.
+    assert w.main_stack._overlay is None and w.main_stack._group is not None
     assert w.detail_workspace.pos().x()==0 and w.detail_workspace.isVisible()
+    assert abs(w.detail_workspace.pos().y())<=6
     w.main_stack._settle()
-    assert overlay.before is None and overlay.after is None and w.detail_workspace.isVisible()
-    w.close();w.deleteLater();app.processEvents()
+    assert w.main_stack._group is None and w.detail_workspace.pos().isNull() and w.detail_workspace.isVisible()
+    w.dispose();w.deleteLater();app.processEvents()
 
 def test_parallel_courses_bound_concurrency_and_close_owned_sessions(monkeypatch):
     from learning_calendar.sync import CampusClient

@@ -20,7 +20,7 @@ def window(app,tmp_path):
     w.store.add_timetable(2,1,'11:00','12:30','이 교수','B301',color='#459CD4')
     w._sessions=w.store.timetable();w._reload();w.select_page(3);w.main_stack._settle();w.show();app.processEvents()
     yield w
-    w.close();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete);app.processEvents()
+    w.dispose();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete);app.processEvents()
 
 def test_old_timetable_schema_gets_color_without_losing_rows(tmp_path):
     path=tmp_path/'old.db';db=sqlite3.connect(path)

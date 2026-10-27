@@ -20,7 +20,7 @@ def app():
 def window(app,tmp_path):
     w=MainWindow(tmp_path);w.show();app.processEvents()
     yield w
-    w.close();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete);app.processEvents()
+    w.dispose();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete);app.processEvents()
 
 def test_home_counts_exclude_expired_and_completed(window):
     now=datetime.now(KST)

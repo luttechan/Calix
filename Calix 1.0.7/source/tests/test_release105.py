@@ -69,7 +69,7 @@ def test_calendar_holiday_is_visible_without_tasks_and_detail_button_is_constant
     w.type_filter.setCurrentIndex(w.type_filter.findData('movie'));w.state_select.setCurrentIndex(2);w.refresh();app.processEvents();assert label.isVisible()
     w.set_theme('dark');app.processEvents();w.calendar._layout_badges();assert label.isVisible() and w.calendar.holidays[date(2026,11,2)]=='임시공휴일'
     w.shift_month(1);assert w.day_toggle.text()=='상세 일정'
-    w.close();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
+    w.dispose();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
 
 def test_holiday_dialog_manual_save_hide_reset_and_year_change(app,tmp_path):
     from learning_calendar.holiday_dialog import HolidayDialog
@@ -81,11 +81,10 @@ def test_holiday_dialog_manual_save_hide_reset_and_year_change(app,tmp_path):
 
 def test_transition_snapshot_memory_is_bounded_on_large_windows(app,tmp_path):
     from learning_calendar.gui import MainWindow
-    w=MainWindow(tmp_path);w.resize(2500,1600);w.show();app.processEvents();w.select_page(0);overlay=w.main_stack._overlay
-    assert overlay is not None
-    for frame in (overlay.before,overlay.after):assert frame.width()<=1200 and frame.height()<=750 and frame.width()*frame.height()*4<=3.5*1024*1024
-    w.main_stack._settle();assert overlay.before is None and overlay.after is None
-    w.close();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
+    w=MainWindow(tmp_path);w.resize(2500,1600);w.show();app.processEvents();w.select_page(0)
+    assert w.main_stack._overlay is None and w.main_stack._group is not None
+    w.main_stack._settle();assert w.main_stack._group is None
+    w.dispose();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
 
 def test_catholic_option_is_off_by_default_includes_saints_and_persists(tmp_path):
     path=tmp_path/'holidays.db';cal=HolidayCalendar(path);assert not cal.catholic_enabled and cal.feasts(2026)=={}
@@ -104,7 +103,7 @@ def test_catholic_labels_are_separate_lazy_and_survive_theme_change(app,tmp_path
     day_label=next(label for label in w.calendar.feast_labels if label.property('calendarDate')=='2026-10-22');assert day_label.isVisible() and '요한 바오로 2세' in day_label.toolTip() and day_label.textFormat()==Qt.TextFormat.PlainText
     w.set_theme('dark');app.processEvents();assert day_label.isVisible() and '요한 바오로 2세' in w.day_feast.text()
     dialog.catholic.setChecked(False);app.processEvents();assert not day_label.isVisible() and not w.day_feast.isVisible()
-    dialog.close();dialog.deleteLater();w.close();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
+    dialog.close();dialog.deleteLater();w.dispose();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
 
 def test_calendar_does_not_keep_a_year_of_offscreen_date_formats(app,tmp_path):
     from learning_calendar.calendar_view import MonthCanvas

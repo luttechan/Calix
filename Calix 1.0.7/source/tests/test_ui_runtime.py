@@ -26,7 +26,7 @@ def drain(app):
 def window(app,tmp_path):
     w=MainWindow(tmp_path);w.show();drain(app)
     yield w
-    w.close();w.deleteLater();drain(app)
+    w.dispose();w.deleteLater();drain(app)
 
 def fill(w,count):
     now=datetime.now(KST)

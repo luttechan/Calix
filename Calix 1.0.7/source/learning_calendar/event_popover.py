@@ -108,6 +108,8 @@ class EventPopover(QFrame):
             key=self._type_key(updated)
             if self.kind_filter.findData(key)<0:self.kind_filter.addItem(updated.type_label,key)
         self.dirty=False;self.status.setText('저장됨 / 동기화 후에도 유지됩니다.');return True
+    def discard_pending(self):
+        self.timer.stop();self.dirty=False
     def replace_event(self,event):
         self.rows=[event if row.key==event.key else row for row in self.rows];self.current=None;self.list.update_event(event)
         for i,row in enumerate(self.list.event_model.rows):

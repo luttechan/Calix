@@ -19,9 +19,20 @@ class Snapshot:
         return [e for e in self.pending(now) if e.due is not None and e.due.date()==now.date()]
 
     def deadline_counts(self,now=None):
-        now=now or datetime.now(KST);pending=self.pending(now)
-        return (sum(e.due is not None and e.due.date()==now.date() for e in pending),
-                sum(e.due is not None and e.due<=now+timedelta(days=7) for e in pending),len(pending))
+        return self.count_deadlines(self.events,now)
+
+    @staticmethod
+    def count_deadlines(events,now=None):
+        now=now or datetime.now(KST);today=now.date();week=now+timedelta(days=7)
+        due_today=due_week=pending=0
+        for event in events:
+            if event.completed:continue
+            due=event.due
+            if due is not None and due<=now:continue
+            pending+=1
+            if due is not None:
+                due_today+=due.date()==today;due_week+=due<=week
+        return due_today,due_week,pending
 
     def filtered(self,course_id=None,query='',status=0,now=None,type_key=None):
         now=now or datetime.now(KST);query=query.casefold().strip();out=[]

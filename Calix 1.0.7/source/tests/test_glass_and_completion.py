@@ -15,7 +15,7 @@ def app():return QApplication.instance() or QApplication([])
 def window(app,tmp_path):
     w=MainWindow(tmp_path);w.show();app.processEvents()
     yield w
-    w.close();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete);app.processEvents()
+    w.dispose();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete);app.processEvents()
 
 def test_glass_toggle_persists_without_replacing_native_font(window,app):
     font=app.font();assert glass_enabled()

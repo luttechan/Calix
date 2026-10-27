@@ -69,7 +69,7 @@ def test_popup_saves_on_close_and_timetable_counts_exclude_past_completed(app,tm
     assert view.remaining_assignments.text()=='남은 과제 1건' and view.remaining_videos.text()=='남은 영상 1건'
     card=next(iter(view.surface.blocks.values()));assert card.room.full=='홍길동 / A201' and card.assignments.text()=='과제 1'
     assert view.detail_prof.text()=='홍길동' and card.height()<120
-    w.close();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete);app.processEvents()
+    w.dispose();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete);app.processEvents()
 
 def test_moving_background_is_opaque_deterministic_and_reuses_cache(app):
     from learning_calendar.glass import GlassBackdrop
@@ -93,4 +93,4 @@ def test_popup_autosave_switch_and_repeated_close_release_widgets(app,tmp_path):
     for _ in range(8):
         w.open_event(w.snapshot.by_key[event.key]);w._event_popover.close();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
     assert not w.findChildren(EventPopover) and w._event_popover is None
-    w.close();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
+    w.dispose();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)

@@ -15,7 +15,7 @@ from learning_calendar.gui import MainWindow
 def app():return QApplication.instance() or QApplication([])
 
 def dispose(w,app):
-    w.close();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete);app.processEvents()
+    w.dispose();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete);app.processEvents()
 
 def session_row():
     cookie=QNetworkCookie(b'_normandy_session',b'synthetic-test-session');cookie.setDomain('canvas.bufs.ac.kr');cookie.setPath('/');cookie.setSecure(True)

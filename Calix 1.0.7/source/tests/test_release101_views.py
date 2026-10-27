@@ -20,7 +20,7 @@ def window(app,tmp_path):
           Event('v-future',2,'과목 B','movie','다음 영상',(now+timedelta(days=4)).isoformat(),False)]
     w.store.apply_batch(courses,{(1,'assignment'):[rows[0],rows[2]],(2,'assignment'):[rows[1]],(1,'movie'):[rows[3]],(2,'movie'):[rows[4]]});w._reload()
     yield w
-    w.close();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete);app.processEvents()
+    w.dispose();w.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete);app.processEvents()
 
 def keys(view):return {e.key for e in view.event_model.rows}
 

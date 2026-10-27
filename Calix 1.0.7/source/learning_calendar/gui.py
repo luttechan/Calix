@@ -69,6 +69,9 @@ class MetricButton(QPushButton):
 class MainWindow(QMainWindow):
     def __init__(self,data_dir=None,demo=False):
         super().__init__();self.setWindowTitle('Calix')
+        self.setWindowFlag(Qt.WindowType.WindowCloseButtonHint,False)
+        self._exit_confirmed=False;self._quit_on_close=False;self._exit_prompt_open=False
+        self._shutdown_started=False;self._shutdown_forms_ready=False
         from .app_identity import app_icon
         self.setWindowIcon(app_icon())
         self.appdir=Path(data_dir) if data_dir else Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation))
@@ -141,6 +144,8 @@ class MainWindow(QMainWindow):
         theme_button=button('테마',self.choose_theme,'quiet');theme_button.setIcon(icon('theme'));side.addWidget(theme_button)
         self.account_button=button('계정 설정',self.configure,'quiet');self.account_button.setIcon(icon('settings'));side.addWidget(self.account_button)
         credit_button=button('크레딧',self.credits,'quiet');credit_button.setIcon(icon('info'));side.addWidget(credit_button);side.addSpacing(10)
+        self.exit_button=button('종료',self.request_exit,'quiet');self.exit_button.setIcon(icon('close'))
+        self.exit_button.setAccessibleName('프로그램 종료');side.addWidget(self.exit_button)
         side.addWidget(label('v'+VERSION,'muted'));outer.addWidget(rail)
         main=QWidget();main.setObjectName('page');v=QVBoxLayout(main);v.setContentsMargins(24,20,24,14);v.setSpacing(14)
         header=QHBoxLayout();self.heading=label('홈','heading');header.addWidget(self.heading);header.addStretch()
@@ -191,7 +196,7 @@ class MainWindow(QMainWindow):
         file=self.menuBar().addMenu('파일')
         file.addAction('동기화',self.manual_sync);file.addAction('ICS 저장',self.export)
         file.addSeparator();file.addAction('개인 자료 백업',self.backup_personal);file.addAction('백업 복원',self.restore_personal)
-        file.addSeparator();file.addAction('종료',self.close)
+        file.addSeparator();exit_action=file.addAction('종료',self.request_exit);exit_action.setShortcut(QKeySequence('Ctrl+Q'))
         settings=self.menuBar().addMenu('설정');settings.addAction('계정',self.configure)
         settings.addAction('과목 이름',self.edit_aliases);settings.addAction('변경 기록',self.show_changes)
         settings.addAction('테마',self.choose_theme)
@@ -255,6 +260,7 @@ class MainWindow(QMainWindow):
         return view
 
     def select_page(self,index):
+        self.main_stack._settle()
         if index==0:self.calendar
         if self.diary:self.diary.flush();self.diary.lock()
         previous=self.tabs.currentIndex()
@@ -268,8 +274,8 @@ class MainWindow(QMainWindow):
         self.filter_bar.setVisible(index!=3);self.metrics.setVisible(index in (1,2) and self.height()>=640)
         self.add_task_button.setVisible(index!=3)
         self.type_filter.setVisible(index==0)
-        self.refresh()
-        self.main_stack.slide_to(1);self.detail_button.hide()
+        self.main_stack.slide_to(1)
+        self.refresh();self.detail_button.hide()
         self.detail_button.clicked.disconnect();self.detail_button.clicked.connect(self.show_home)
         self._update_footer()
 
@@ -359,18 +365,20 @@ class MainWindow(QMainWindow):
     def refresh(self):
         if self._closing:return
         self.search_timer.stop()
+        now=datetime.now(KST);snapshot=self._current_snapshot()
         page=self.tabs.currentIndex();kind={1:'movie',2:'assignment'}.get(page)
         type_key=kind or self.type_filter.currentData()
-        self._filtered=self._current_snapshot().filtered(self.course_select.currentData(),self.search.text(),self.state_select.currentIndex(),type_key=type_key)
+        self._filtered=snapshot.filtered(self.course_select.currentData(),self.search.text(),self.state_select.currentIndex(),now=now,type_key=type_key)
         self._buckets=Snapshot.days(self._filtered)
-        context=self._current_snapshot().filtered(self.course_select.currentData(),self.search.text(),type_key=type_key)
+        context=snapshot.filtered(self.course_select.currentData(),self.search.text(),now=now,type_key=type_key)
         self.filter_reset.setEnabled(bool(self.course_select.currentData() is not None or self.search.text() or self.state_select.currentIndex() or (page==0 and self.type_filter.currentData())))
-        values=Snapshot(context).deadline_counts()
+        values=Snapshot.count_deadlines(context,now)
         for w,value,button,status,title in zip(self.metric_labels,values,self.metric_buttons,(6,7,1),('오늘 마감','7일 이내','미완료')):
             w.setText(str(value));button.setAccessibleName(f'{title} {value}건')
             active=self.state_select.currentIndex()==status
             if button.property('active')!=active:button.setProperty('active',active);button.style().unpolish(button);button.style().polish(button)
-        self.home.update_snapshot(self._current_snapshot());self._render_visible();self._update_footer()
+        if self.main_stack.currentIndex()==0:self.home.update_snapshot(snapshot,now)
+        self._render_visible();self._update_footer()
 
     def _metric_filter(self,status):
         if self.tabs.currentIndex()==0:
@@ -641,6 +649,7 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _sync_finished(self):
+        if self._closed:return
         task=self._thread;self._thread=None
         if task:task.deleteLater()
         self._set_busy(False)
@@ -981,19 +990,31 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self,event):
         if self._closed:event.accept();return
-        if self._event_popover and not self._event_popover.close():event.ignore();return
-        if self.diary and not self.diary.prepare_close():
-            if self.diary.task:self._closing=True;self.hide()
-            else:QMessageBox.warning(self,'일기 저장 실패','일기를 저장하지 못했습니다. 저장 공간을 확인한 뒤 다시 종료하세요.')
-            event.ignore();return
-        self._closing=True;self.search_timer.stop();self.local_clock.stop()
-        self.home.hero.clock.stop();self.main_stack._settle()
+        if not self._exit_confirmed:event.ignore();return
+        if not self._shutdown_started:
+            self._shutdown_started=True;self._closing=True
+            self.search_timer.stop();self.local_clock.stop();self.home.hero.clock.stop();self.main_stack._settle()
+            self.exit_button.setEnabled(False);self.status.setText('종료 중')
+            if self._thread and self._thread.isRunning():self._thread.cancel()
+            if self._login_process:
+                proc=self._login_process;self._browser_command('quit')
+                QTimer.singleShot(1500,lambda:self._login_process is proc and proc.kill())
+            self._shutdown_poll=QTimer(self);self._shutdown_poll.setInterval(50)
+            self._shutdown_poll.timeout.connect(self.close);self._shutdown_poll.start()
+        if not self._shutdown_forms_ready:
+            if self._event_popover and not self._event_popover.close():
+                self._cancel_shutdown();self.status.setText('변경 사항을 저장하지 못했습니다.');event.ignore();return
+            if self.diary and not self.diary.prepare_close():
+                if not self.diary.task:
+                    self._cancel_shutdown();self.status.setText('일기를 저장하지 못했습니다.')
+                event.ignore();return
+            self._shutdown_forms_ready=True
         if self._thread and self._thread.isRunning():
-            self._thread.cancel();self.status.setText('종료 중');self.hide();event.ignore();return
+            event.ignore();return
         if self._login_process:
-            proc=self._login_process;self._browser_command('quit')
-            QTimer.singleShot(5000,lambda:self._login_process is proc and proc.kill())
-            self.hide();event.ignore();return
+            event.ignore();return
+        self._shutdown_poll.stop()
+        for dialog in list(self._dialogs.values()):dialog.close()
         try:
             self.settings.update(window_width=self.width(),window_height=self.height())
             write_settings(self.settings_path,self.settings)
@@ -1004,3 +1025,50 @@ class MainWindow(QMainWindow):
         if self._tray:self._tray.hide()
         if self.diary:self.diary.shutdown()
         self.holiday_calendar.close();self.store.close();self._closed=True;event.accept()
+        if self._quit_on_close:QTimer.singleShot(0,QApplication.instance().quit)
+
+    def _has_pending_changes(self):
+        return bool((self.diary and (self.diary.dirty or self.diary.task)) or
+                    (self._event_popover and self._event_popover.dirty) or
+                    (self._thread and self._thread.isRunning()))
+
+    def _confirm_exit(self,pending):
+        box=QMessageBox(self);box.setWindowTitle('Calix')
+        box.setText('변경 사항이 있습니다. 종료하시겠습니까?' if pending else '종료하시겠습니까?')
+        save=box.addButton('저장하고 종료' if pending else '종료',QMessageBox.ButtonRole.AcceptRole)
+        discard=box.addButton('바로 종료',QMessageBox.ButtonRole.DestructiveRole) if pending else None
+        cancel=box.addButton('취소',QMessageBox.ButtonRole.RejectRole);box.setDefaultButton(cancel);box.setEscapeButton(cancel)
+        try:
+            box.exec();chosen=box.clickedButton()
+            return 'save' if chosen is save else 'discard' if discard is not None and chosen is discard else 'cancel'
+        finally:box.deleteLater()
+
+    def request_exit(self,checked=False):
+        if self._closing or self._exit_prompt_open:return
+        timers=[timer for timer in (self.diary.save_timer if self.diary else None,
+                                   self._event_popover.timer if self._event_popover else None) if timer and timer.isActive()]
+        for timer in timers:timer.stop()
+        self._exit_prompt_open=True
+        try:
+            choice=self._confirm_exit(self._has_pending_changes())
+            if choice=='cancel':return
+            if choice=='discard':
+                if self._event_popover:self._event_popover.discard_pending()
+                if self.diary:self.diary.discard_pending()
+            else:
+                if self._event_popover and not self._event_popover.flush():return
+                if self.diary and not self.diary.flush():return
+            self._exit_confirmed=True;self._quit_on_close=True;self.close()
+        finally:
+            self._exit_prompt_open=False
+            if not self._exit_confirmed:
+                for timer in timers:timer.start()
+
+    def _cancel_shutdown(self):
+        self._shutdown_poll.stop();self._shutdown_started=False;self._shutdown_forms_ready=False;self._closing=False;self._exit_confirmed=False
+        self.exit_button.setEnabled(True);self.local_clock.start()
+        if self.home.isVisible():self.home.hero.clock.start()
+
+    def dispose(self):
+        """Close an owned diagnostic window without an interactive prompt."""
+        self._exit_confirmed=True;self._quit_on_close=False;self.close()
