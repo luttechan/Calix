@@ -17,6 +17,7 @@ concurrency:
 
 jobs:
   release:
+    if: github.event_name == 'push' && github.event.head_commit.message == 'Republish approved Calix 1.0.7 hotfix once'
     runs-on: windows-latest
     timeout-minutes: 30
     defaults:
@@ -58,11 +59,19 @@ jobs:
           $hash = (Get-FileHash -LiteralPath Calix-1.0.7-Windows-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  Calix-1.0.7-Windows-x64.zip" | Set-Content -LiteralPath SHA256SUMS.txt -Encoding utf8NoBOM
           Pop-Location
-      - name: Publish release
+      - name: Publish approved same-version hotfix
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
           $package = Join-Path $env:RUNNER_TEMP 'calix-release'
-          gh release create v1.0.7 (Join-Path $package 'Calix-1.0.7-Windows-x64.zip') (Join-Path $package 'SHA256SUMS.txt') --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Calix 1.0.7' --notes-file 'release-notes.md' --latest
+          $previousTag = gh api "repos/$env:GITHUB_REPOSITORY/git/ref/tags/v1.0.7" --jq '.object.sha'
+          if ($LASTEXITCODE -ne 0 -or $previousTag -ne 'a6084250b91767f62147075beb8d28c3080ea682') { throw 'Existing tag changed; replacement stopped.' }
+          $releaseId = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/v1.0.7" --jq '.id'
+          if ($LASTEXITCODE -ne 0 -or $releaseId -ne '425601373') { throw 'Existing release changed; replacement stopped.' }
+          gh release upload v1.0.7 (Join-Path $package 'Calix-1.0.7-Windows-x64.zip') (Join-Path $package 'SHA256SUMS.txt') --repo $env:GITHUB_REPOSITORY --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Release upload failed.' }
+          gh api --method PATCH "repos/$env:GITHUB_REPOSITORY/git/refs/tags/v1.0.7" -f sha=dd447ce8e056281c5cf34fc59b5dcba251cc78f4 -F force=true
+          if ($LASTEXITCODE -ne 0) { throw 'Release tag update failed.' }
+          gh release edit v1.0.7 --repo $env:GITHUB_REPOSITORY --target dd447ce8e056281c5cf34fc59b5dcba251cc78f4 --title 'Calix 1.0.7' --notes-file 'release-notes.md' --latest
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed.' }
