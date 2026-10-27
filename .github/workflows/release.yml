@@ -76,7 +76,8 @@ jobs:
           if (-not $process.WaitForExit(30000)) { $process.Kill(); throw 'Package check timed out.' }
           if ($process.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $report)) { throw 'Package check failed.' }
           $result = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
-          if (-not $result.passed -or -not $result.crypto_roundtrip -or -not $result.tls_context_ready) { throw 'Package validation failed.' }
+          $checks = @('font_loaded','font_has_hangul','tls_context_ready','crypto_roundtrip','assignment_list_matches_snapshot','movie_list_matches_snapshot','calendar_filters_isolated','special_birthday_available','special_options_labels','calendar_nov29_overlay_matches','compact_calendar_chips','calendar_full_width_default','home_available','timetable_available','credits_available','diary_available','vault_crypto_ready','login_available')
+          foreach ($check in $checks) { if ($result.$check -ne $true) { throw "Package validation failed: $check" } }
           Get-Content -LiteralPath $report -Raw
       - name: Package Calix
         run: |
