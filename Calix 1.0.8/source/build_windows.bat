@@ -5,6 +5,8 @@ cd /d "%~dp0"
 if errorlevel 1 goto BAD_DIRECTORY
 call "%~dp0_find_python.bat"
 if errorlevel 1 goto NO_PYTHON
+%CALIX_PYTHON% "%~dp0tools\check_runtime_security.py"
+if errorlevel 1 goto BUILD_FAILED
 %CALIX_PYTHON% -m pip install --only-binary=:all: -r "%~dp0requirements-build.txt"
 if errorlevel 1 goto BUILD_FAILED
 %CALIX_PYTHON% -m PyInstaller --noconfirm --clean "%~dp0Calix.spec"
