@@ -3,12 +3,18 @@ from PySide6.QtCore import Qt,Signal,QModelIndex
 from PySide6.QtWidgets import QFrame,QWidget,QVBoxLayout,QHBoxLayout,QLabel,QPushButton,QCheckBox,QSizePolicy
 from .event_table import ScheduleModel
 from .design import colors,category_colors,type_tokens
+from .text_safety import tooltip_text
 
 class PreviewLabel(QLabel):
     def __init__(self):super().__init__();self.full_text=''
     def setText(self,value):
-        self.full_text=str(value);super().setText(self.fontMetrics().elidedText(self.full_text,Qt.TextElideMode.ElideRight,max(1,self.contentsRect().width())))
-    def resizeEvent(self,event):super().resizeEvent(event);self.setText(self.full_text)
+        self.full_text=str(value)
+        if self.isVisible():self._fit()
+        else:super().setText(self.full_text)
+    def _fit(self):
+        super().setText(self.fontMetrics().elidedText(self.full_text,Qt.TextElideMode.ElideRight,max(1,self.contentsRect().width())))
+    def resizeEvent(self,event):super().resizeEvent(event);self._fit()
+    def showEvent(self,event):super().showEvent(event);self._fit()
 
 class SchedulePreview(QFrame):
     activated=Signal(QModelIndex)
@@ -39,7 +45,7 @@ class SchedulePreview(QFrame):
             row.setVisible(n<len(events))
             if n>=len(events):continue
             event=events[n];values=[str(self.event_model.data(self.event_model.index(n,column)) or '') for column in range(5)]
-            for label,value in zip(fields,values):label.setText(value);label.setToolTip(value)
+            for label,value in zip(fields,values):label.setText(value);label.setToolTip(tooltip_text(value))
             palette=category_colors();kind='assignment' if event.kind=='assignment' else 'movie';tokens=type_tokens(event.type_color) if event.type_id is not None else {key:palette[kind+'_'+key] for key in ('ink','bg','line')}
             style=f'color:{tokens["ink"]};background:{tokens["bg"]};border:1px solid {tokens["line"]};border-radius:5px;padding:3px;font-size:12px;'
             if fields[0].styleSheet()!=style:fields[0].setStyleSheet(style)

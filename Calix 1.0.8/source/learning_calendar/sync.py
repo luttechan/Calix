@@ -4,7 +4,7 @@ import threading
 from queue import Queue,Empty
 from urllib.parse import urljoin, urlparse
 from .models import Course, Event
-from .parsers import course_list, parse_movies, parse_assignments, BASE_URL
+from .parsers import course_list, parse_movies, parse_assignments, BASE_URL,safe_url
 from .cookies import applies_to_canvas
 
 
@@ -62,7 +62,8 @@ class CampusClient:
 
     def _get(self, path: str, params: dict | None = None):
         self._check_cancel()
-        url = urljoin(BASE_URL, path)
+        url = safe_url(path)
+        if not url:raise ValueError('허용되지 않은 학교 연결 주소입니다.')
         endpoint = urlparse(url).path  # Path only; no credentials or query strings.
         is_learningx = endpoint.startswith('/learningx/api/')
         headers = None

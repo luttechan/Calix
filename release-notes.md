@@ -1,7 +1,7 @@
-- 과제와 영상 화면 전환 지연 개선
-- 일기 저장 실패 시 화면 이동 방지
-- CPU 호환성 검사와 빌드 설정 보강
+- 메뉴 전환과 첫 표시 속도 개선
+- 로그인 정보 보호와 계정 삭제 개선
+- 비밀 일기 저장 실패 처리 보완
 
-Windows 10 / 11, 64비트. 압축 해제 후 `run_windows.bat` 실행.
+Windows 10 / 11, 64비트. 압축 해제 후 run_windows.bat 실행.
 
 [사용 설명서](https://luttechan.github.io/calix/guide/)

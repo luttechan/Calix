@@ -5,6 +5,7 @@ from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QDialog,QVBoxLayout,QHBoxLayout,QLabel,QComboBox,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,QLineEdit,QPushButton
 from .controls import DateInput
 from .holidays import SOURCE_URL
+from .text_safety import tooltip_text
 
 def label(value,name='muted'):
     item=QLabel(value);item.setObjectName(name);item.setTextFormat(Qt.TextFormat.PlainText);return item
@@ -41,7 +42,7 @@ class HolidayDialog(QDialog):
         self.loading=True;self.rows=self.calendar.entries(self.year.currentData());self.table.setRowCount(len(self.rows))
         for i,row in enumerate(self.rows):
             for j,key in enumerate(('day','name','source')):
-                item=QTableWidgetItem(row[key]);item.setToolTip(row[key]);self.table.setItem(i,j,item)
+                item=QTableWidgetItem(row[key]);item.setToolTip(tooltip_text(row[key]));self.table.setItem(i,j,item)
         self.loading=False
         self.hint.setText('기본 공휴일에 임시공휴일을 더할 수 있습니다.' if self.calendar.has_year(self.year.currentData()) else '이 연도는 기본 자료가 없습니다. 직접 추가할 수 있습니다.')
     def select(self):

@@ -16,6 +16,7 @@ from cryptography.hazmat.primitives.kdf.argon2 import Argon2id
 
 KEY_AAD=b'Calix/private-diary/v1/data-key'
 ENTRY_AAD=b'Calix/private-diary/v1/entry/'
+PENDING_AAD=b'Calix/private-diary/v1/pending'
 
 
 class VaultError(ValueError):pass
@@ -99,6 +100,21 @@ class Vault:
     def _cipher(self):
         if self.key is None:raise VaultError('비밀 일기가 잠겨 있습니다.')
         return AESGCM(bytes(self.key))
+    def seal_pending(self,item_id,value):
+        raw=json.dumps(dict(id=item_id,value=value),ensure_ascii=True,separators=(',',':')).encode('ascii')
+        packed=struct.pack('>I',len(raw))+raw;packed+=os.urandom((-len(packed))%4096)
+        nonce=os.urandom(12)
+        return nonce,self._cipher().encrypt(nonce,packed,PENDING_AAD)
+    def open_pending(self,pending):
+        try:
+            plain=self._cipher().decrypt(pending[0],pending[1],PENDING_AAD)
+            size=struct.unpack('>I',plain[:4])[0]
+            if size>len(plain)-4:raise ValueError()
+            value=json.loads(plain[4:4+size])
+            if not isinstance(value,dict) or not isinstance(value['value'],dict):raise ValueError()
+            return value['id'],value['value']
+        except (InvalidTag,ValueError,TypeError,KeyError,UnicodeError,struct.error):
+            raise VaultError('임시 내용을 복구하지 못했습니다.') from None
     def save(self,value,item_id=None):
         value=validate_entry(value);cipher=self._cipher();item_id=item_id or uuid4().hex
         if len(item_id)!=32 or any(c not in '0123456789abcdef' for c in item_id):raise VaultError('일기 번호를 확인하세요.')

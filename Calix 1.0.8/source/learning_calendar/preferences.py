@@ -5,6 +5,17 @@ from pathlib import Path
 SERVICE = 'Calix'
 LEGACY_SERVICE = 'BUFS Learning Calendar'
 ACCOUNT_KEY = '__account_id__'
+_credential_backend_ready=False
+
+
+def prepare_credentials():
+    global _credential_backend_ready
+    if _credential_backend_ready:return
+    import sys,keyring
+    if sys.platform=='win32':
+        from keyring.backends.Windows import WinVaultKeyring
+        keyring.set_keyring(WinVaultKeyring())
+    _credential_backend_ready=True
 
 
 def read_settings(path: str | Path) -> dict:
@@ -28,11 +39,13 @@ def write_settings(path: str | Path, settings: dict):
 
 
 def read_account() -> str:
+    prepare_credentials()
     import keyring
     return keyring.get_password(SERVICE, ACCOUNT_KEY) or keyring.get_password(LEGACY_SERVICE, ACCOUNT_KEY) or ''
 
 
 def store_account(student_id: str, password: str | None = None):
+    prepare_credentials()
     import keyring
     old = read_account()
     student_id = student_id.strip()
@@ -41,12 +54,20 @@ def store_account(student_id: str, password: str | None = None):
         if password is not None and password:
             keyring.set_password(SERVICE + '/password', student_id, password)
     else:
-        if old:
-            try: keyring.delete_password(SERVICE, ACCOUNT_KEY)
-            except keyring.errors.PasswordDeleteError: pass
+        # Remove both generations so a legacy fallback cannot restore a deleted account.
+        identifiers={old}
+        identifiers.update(keyring.get_password(service,ACCOUNT_KEY) for service in (SERVICE,LEGACY_SERVICE))
+        for service in (SERVICE,LEGACY_SERVICE):
+            for identifier in filter(None,identifiers):
+                for password_service in (service+'/password',service):
+                    try:keyring.delete_password(password_service,identifier)
+                    except keyring.errors.PasswordDeleteError:pass
+            try:keyring.delete_password(service,ACCOUNT_KEY)
+            except keyring.errors.PasswordDeleteError:pass
 
 
 def read_password(student_id: str) -> str:
+    prepare_credentials()
     import keyring
     return keyring.get_password(SERVICE + '/password', student_id) or keyring.get_password(LEGACY_SERVICE + '/password',student_id) or ''
 

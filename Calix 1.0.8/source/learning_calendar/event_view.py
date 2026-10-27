@@ -4,6 +4,7 @@ from PySide6.QtGui import QColor,QFont,QFontMetrics,QPalette,QIcon
 from PySide6.QtWidgets import QListView,QStyledItemDelegate,QAbstractItemView,QStyleOptionViewItem,QStyleOptionButton,QStyle,QApplication
 from .models import deadline_display
 from .design import colors,icon,glass_enabled
+from .text_safety import tooltip_text
 EVENT_ROLE=int(Qt.ItemDataRole.UserRole)+1
 
 class EventListModel(QAbstractListModel):
@@ -22,7 +23,7 @@ class EventListModel(QAbstractListModel):
         if role==Qt.ItemDataRole.AccessibleTextRole:return f'{e.title} / {e.course_name} / {deadline_display(e)[0]}'
         if role==Qt.ItemDataRole.DecorationRole:return icon('custom',e.type_color) if e.type_id is not None else icon('video' if e.kind=='movie' else 'assignment')
         if role==Qt.ItemDataRole.ForegroundRole:return QColor(colors()['muted'] if e.completed else colors()['ink'])
-        if role==Qt.ItemDataRole.ToolTipRole:return f'{e.title}\n{e.course_name}\n{due}\n{deadline_display(e)[0]}'
+        if role==Qt.ItemDataRole.ToolTipRole:return tooltip_text(f'{e.title}\n{e.course_name}\n{due}\n{deadline_display(e)[0]}')
     def flags(self,index):
         flags=super().flags(index)
         if index.isValid() and self.rows[index.row()].manual:flags|=Qt.ItemFlag.ItemIsUserCheckable

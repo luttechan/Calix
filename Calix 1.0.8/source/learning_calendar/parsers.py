@@ -10,9 +10,12 @@ BASE_URL = 'https://canvas.bufs.ac.kr'
 def safe_url(url: object) -> str:
     if not isinstance(url, str) or not url:
         return ''
-    absolute = urljoin(BASE_URL, url)
-    parsed = urlsplit(absolute)
-    return absolute if parsed.scheme == 'https' and parsed.hostname == 'canvas.bufs.ac.kr' else ''
+    try:
+        absolute = urljoin(BASE_URL, url)
+        parsed = urlsplit(absolute)
+        trusted=(parsed.scheme=='https' and parsed.hostname=='canvas.bufs.ac.kr' and parsed.port in (None,443) and parsed.username is None and parsed.password is None)
+        return absolute if trusted else ''
+    except ValueError:return ''
 
 
 def course_list(payload: object) -> list[Course]:

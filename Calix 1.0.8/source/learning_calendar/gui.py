@@ -8,8 +8,8 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
-from PySide6.QtCore import Qt, QTimer, QStandardPaths, QUrl, QProcess, QSize, Slot
-from PySide6.QtGui import QColor, QDesktopServices, QFont, QFontMetrics, QPainter, QPen, QAction, QKeySequence, QShortcut,QCursor
+from PySide6.QtCore import Qt, QTimer, QStandardPaths, QUrl, QProcess, QSize, Slot,QPoint,QRect
+from PySide6.QtGui import QColor, QDesktopServices, QFont, QFontMetrics, QPainter, QPen, QAction, QKeySequence, QShortcut,QCursor,QImage
 from PySide6.QtWidgets import (QApplication,QMainWindow,QWidget,QFrame,QVBoxLayout,QHBoxLayout,QLabel,
     QPushButton,QToolButton,QAbstractButton,QComboBox,QLineEdit,QStackedWidget,QSplitter,QMenu,QDialog,
     QMessageBox,QFileDialog,QSizePolicy,QScrollArea,QTableWidget,QTableWidgetItem,QHeaderView,
@@ -19,6 +19,7 @@ from .home_view import HomeView, AnimatedStack
 from .models import KST
 from .storage import Store
 from .snapshot import Snapshot
+from .text_safety import tooltip_text
 from .calendar_view import MonthCanvas
 from .event_view import EventList, EVENT_ROLE
 from .dialogs import SettingsDialog, AliasDialog, SessionDialog, MemoDialog, DAYS
@@ -37,11 +38,17 @@ class ElideLabel(QLabel):
         self.setText(text)
 
     def setText(self,text):
-        self.full_text=str(text);self.setToolTip(self.full_text)
+        self.full_text=str(text);self.setToolTip(tooltip_text(self.full_text))
+        if self.isVisible():self._fit()
+        else:super().setText(self.full_text)
+
+    def _fit(self):
         super().setText(QFontMetrics(self.font()).elidedText(self.full_text,Qt.TextElideMode.ElideRight,max(1,self.contentsRect().width())))
 
     def resizeEvent(self,event):
-        super().resizeEvent(event);self.setText(self.full_text)
+        super().resizeEvent(event);self._fit()
+
+    def showEvent(self,event):super().showEvent(event);self._fit()
 
 
 def button(text,callback,name='',parent=None):
@@ -69,6 +76,7 @@ class MetricButton(QPushButton):
 class MainWindow(QMainWindow):
     def __init__(self,data_dir=None,demo=False):
         super().__init__();self.setWindowTitle('Calix')
+        self._isolated=data_dir is not None;self._ready_dialogs=None
         self.setWindowFlag(Qt.WindowType.WindowCloseButtonHint,False)
         self._exit_confirmed=False;self._quit_on_close=False;self._exit_prompt_open=False
         self._shutdown_started=False;self._shutdown_forms_ready=False
@@ -94,7 +102,7 @@ class MainWindow(QMainWindow):
         self._closing=False;self._closed=False;self._login_then_sync=False;self._dialogs={}
         self.selected_date=datetime.now(KST).date();self.month=self.selected_date.replace(day=1)
         self._today=self.selected_date;self._filtered=[];self._buckets={};self._timetable_signature=None
-        self._busy=False;self._filter_signature=None;self._home_filter=None;self._page_filters={}
+        self._busy=False;self._filter_signature=None;self._home_filter=None;self._page_filters={};self._page_cache={}
         self._undo_stack=[];self.diary=None;self._tray=None;self._event_popover=None;self._calendar=None
         from .reminders import DueReminders
         self.reminders=DueReminders()
@@ -123,6 +131,70 @@ class MainWindow(QMainWindow):
         if demo:self.preview()
         else:self.refresh()
         self.show_home(animate=False)
+
+    def prepare_navigation(self):
+        """Prepare native controls before the first interactive frame."""
+        from .preferences import prepare_credentials
+        try:prepare_credentials()
+        except Exception:logging.warning('계정 보관함 준비 실패')
+        self.calendar
+        if not self._timetable_built:self._build_timetable()
+        self._refresh_timetable()
+        self._ensure_diary()
+        self.ensurePolished()
+        self.layout().activate();self.centralWidget().layout().activate()
+        self.main_stack.setCurrentIndex(1)
+        original=self.tabs.currentIndex()
+        for index in range(self.tabs.count()):
+            self.tabs.setCurrentIndex(index)
+            self.refresh()
+            page=self.tabs.widget(index);page.ensurePolished()
+            if page.layout():page.layout().activate()
+            for child in page.findChildren(QWidget):
+                child.ensurePolished()
+                if child.layout():child.layout().activate()
+        self.tabs.setCurrentIndex(original)
+        self.refresh()
+        self.main_stack.setCurrentIndex(2)
+        self.diary_holder.layout().activate()
+        self.main_stack.setCurrentIndex(0)
+        for view in (self.video_list,self.assignment_list):
+            delegate=view.itemDelegate()
+            for size,weight in ((14,QFont.Weight.DemiBold),(12,QFont.Weight.Normal)):
+                _,metrics=delegate.text_style(view.font(),size,weight)
+                for event in view.event_model.rows[:8]:metrics.horizontalAdvance(event.title+' '+event.course_name)
+        self.calendar.badge_timer.stop();self.calendar._layout_badges()
+        # A temporary warm-up surface is released here. Live pages remain
+        # native widgets; page transitions never display cached images.
+        for page in (self.tabs.widget(0),self.assignment_list,self.timetable_page,self.diary_holder):
+            surface=QImage(page.size(),QImage.Format.Format_ARGB32_Premultiplied);surface.fill(Qt.GlobalColor.transparent);page.render(surface)
+        if self._ready_dialogs is None:
+            from .ready_dialogs import ReadyDialogs
+            self._ready_dialogs=ReadyDialogs(self._make_ready_dialog,self);self._ready_dialogs.prime()
+
+    def _make_ready_dialog(self,name):
+        if name=='settings':return SettingsDialog(self,account='' if self._isolated else None)
+        if name=='aliases':return AliasDialog(self.store,self)
+        if name=='session':return SessionDialog(self._current_snapshot().courses,parent=self)
+        if name=='theme':
+            from .appearance import AppearanceDialog
+            return AppearanceDialog(self.theme_key,self)
+        if name=='credits':
+            from .credits import CreditsDialog
+            return CreditsDialog(self)
+        if name in ('manual','types'):
+            from .manual_events import ManualEventDialog,TypeManager
+            return TypeManager(self.store,self) if name=='types' else ManualEventDialog(self.store,self._current_snapshot().courses,self.selected_date,parent=self)
+        if name=='holiday':
+            from .holiday_dialog import HolidayDialog
+            return HolidayDialog(self.holiday_calendar,self.selected_date,self)
+        if name=='special':
+            from .special_dates_dialog import SpecialDatesDialog
+            return SpecialDatesDialog(self.holiday_calendar,self)
+        raise ValueError('Unknown dialog')
+
+    def _take_ready_dialog(self,name):
+        return self._ready_dialogs.take(name) if self._ready_dialogs else self._make_ready_dialog(name)
 
     def _build_ui(self):
         from .glass import GlassBackdrop
@@ -280,6 +352,7 @@ class MainWindow(QMainWindow):
         self.refresh();self.detail_button.hide()
         self.detail_button.clicked.disconnect();self.detail_button.clicked.connect(self.show_home)
         self._update_footer()
+        self._present_page()
 
     def show_home(self,checked=False,animate=True):
         if not hasattr(self,'main_stack'):return
@@ -295,6 +368,12 @@ class MainWindow(QMainWindow):
         self.detail_button.setText('일정 보기');self.detail_button.clicked.disconnect()
         self.detail_button.clicked.connect(lambda:self.open_details('all'))
         self._update_footer()
+        self._present_page()
+
+    def _present_page(self):
+        # Present the incoming native page now; subsequent animation frames use
+        # the ordinary update queue. No screenshots or nested event loops.
+        if self.isVisible():self.main_stack.currentWidget().repaint()
 
     def open_details(self,scope='all'):
         self.select_page(0)
@@ -315,8 +394,7 @@ class MainWindow(QMainWindow):
         self._apply_filters(status=0 if isinstance(status,bool) else int(status));self.refresh()
 
     def choose_theme(self):
-        from .appearance import AppearanceDialog
-        dialog=AppearanceDialog(self.theme_key,self);dialog.chosen.connect(self.set_theme);dialog.notifications_changed.connect(self.set_notifications);dialog.glass_changed.connect(self.set_glass);self._exec_dialog(dialog)
+        dialog=self._take_ready_dialog('theme');dialog.chosen.connect(self.set_theme);dialog.notifications_changed.connect(self.set_notifications);dialog.glass_changed.connect(self.set_glass);self._exec_dialog(dialog)
 
     def set_glass(self,enabled):
         self.main_stack._settle();self.settings['glass']=bool(enabled);QApplication.instance().setProperty('calixGlass',bool(enabled))
@@ -341,6 +419,7 @@ class MainWindow(QMainWindow):
         if key not in THEME_NAMES:return
         self.main_stack._settle()
         self.theme_key=key;self.settings['theme']=key
+        if self._ready_dialogs:self._ready_dialogs.invalidate()
         apply_palette(QApplication.instance(),key);self.setStyleSheet(stylesheet(key))
         write_settings(self.settings_path,self.settings)
         for b in [self.home_nav,self.diary_nav]+self.nav:b.setIcon(icon(b.kind))
@@ -370,13 +449,30 @@ class MainWindow(QMainWindow):
         if self._closing:return
         self.search_timer.stop()
         now=datetime.now(KST);snapshot=self._current_snapshot()
+        if getattr(self,'_cache_snapshot',None) is not snapshot:
+            self._page_cache.clear();self._cache_snapshot=snapshot
+            if self._ready_dialogs:self._ready_dialogs.invalidate()
         page=self.tabs.currentIndex();kind={1:'movie',2:'assignment'}.get(page)
         type_key=kind or self.type_filter.currentData()
-        self._filtered=snapshot.filtered(self.course_select.currentData(),self.search.text(),self.state_select.currentIndex(),now=now,type_key=type_key)
-        self._buckets=Snapshot.days(self._filtered)
-        context=self._filtered if self.state_select.currentIndex()==0 else snapshot.filtered(self.course_select.currentData(),self.search.text(),now=now,type_key=type_key)
+        signature=(snapshot,self.course_select.currentData(),self.search.text(),self.state_select.currentIndex(),type_key)
+        cached=self._page_cache.get(page)
+        if cached and cached[0]==signature and cached[1]<=now<cached[2]:
+            self._filtered,self._buckets,values=cached[3:]
+        else:
+            self._filtered=snapshot.filtered(self.course_select.currentData(),self.search.text(),self.state_select.currentIndex(),now=now,type_key=type_key)
+            self._buckets=Snapshot.days(self._filtered)
+            context=self._filtered if self.state_select.currentIndex()==0 else snapshot.filtered(self.course_select.currentData(),self.search.text(),now=now,type_key=type_key)
+            values=Snapshot.count_deadlines(context,now)
+            # Expire at the next due time, 7-day boundary, midnight, or minute.
+            # This keeps counters correct when a deadline passes during navigation.
+            until=min(now+timedelta(seconds=60),(now+timedelta(days=1)).replace(hour=0,minute=0,second=0,microsecond=0))
+            for event in context:
+                due=event.due
+                if due:
+                    for boundary in (due,due-timedelta(days=7)):
+                        if now<boundary<until:until=boundary
+            self._page_cache[page]=(signature,now,until,self._filtered,self._buckets,values)
         self.filter_reset.setEnabled(bool(self.course_select.currentData() is not None or self.search.text() or self.state_select.currentIndex() or (page==0 and self.type_filter.currentData())))
-        values=Snapshot.count_deadlines(context,now)
         for w,value,button,status,title in zip(self.metric_labels,values,self.metric_buttons,(6,7,1),('오늘 마감','7일 이내','미완료')):
             w.setText(str(value));button.setAccessibleName(f'{title} {value}건')
             active=self.state_select.currentIndex()==status
@@ -611,7 +707,7 @@ class MainWindow(QMainWindow):
 
     @Slot(str)
     def _progress(self,text):
-        if not self._closing:self.status.setText(text);self.status.setToolTip(text)
+        if not self._closing:self.status.setText(text);self.status.setToolTip(tooltip_text(text))
 
     @Slot(object)
     def _sync_ok(self,result):
@@ -666,12 +762,17 @@ class MainWindow(QMainWindow):
     def _reload(self):
         self.snapshot=Snapshot(self.store.events(),self.store.courses());self._reload_type_filter();self._reload_course_filter();self.refresh()
 
-    def show_diary(self):
+    def _ensure_diary(self):
         if self.diary is None:
             from .diary_view import DiaryPage
             self.diary=DiaryPage(self.appdir,self);layout=self.diary_holder.layout() or QVBoxLayout(self.diary_holder);layout.setContentsMargins(0,0,0,0);layout.addWidget(self.diary)
             self.diary.work_finished.connect(lambda:QTimer.singleShot(0,self.close) if self._closing else None)
+        return self.diary
+
+    def show_diary(self):
+        self._ensure_diary()
         self.diary_nav.setChecked(True);self.heading.setText('일기장');self.add_task_button.hide();self.detail_button.hide();self.main_stack.slide_to(2)
+        self._present_page()
 
     def backup_personal(self):
         if self._busy or (self.diary and self.diary.task):return
@@ -719,7 +820,11 @@ class MainWindow(QMainWindow):
             return
         if self.demo:self.end_preview()
         from .manual_events import ManualEventDialog
-        dialog=ManualEventDialog(self.store,self.snapshot.courses,day or self.selected_date,event,self);dialog.types_changed.connect(self._reload)
+        dialog=ManualEventDialog(self.store,self.snapshot.courses,day or self.selected_date,event,self) if event else self._take_ready_dialog('manual')
+        if not event:
+            from PySide6.QtCore import QDate
+            selected=day or self.selected_date;dialog.date.setDate(QDate(selected.year,selected.month,selected.day))
+        dialog.types_changed.connect(self._reload)
         if self._exec_dialog(dialog):
             values=dialog.values();old=self.store.manual_snapshot([event.key] if event else [])
             try:
@@ -731,15 +836,19 @@ class MainWindow(QMainWindow):
     def manage_types(self):
         if self._busy:return
         from .manual_events import TypeManager
-        dialog=TypeManager(self.store,self);dialog.changed.connect(self._reload);self._exec_dialog(dialog)
+        dialog=self._take_ready_dialog('types');dialog.changed.connect(self._reload);self._exec_dialog(dialog)
 
     def manage_holidays(self):
         from .holiday_dialog import HolidayDialog
-        dialog=HolidayDialog(self.holiday_calendar,self.selected_date,self);dialog.changed.connect(self.refresh);self._exec_dialog(dialog)
+        from PySide6.QtCore import QDate
+        dialog=self._take_ready_dialog('holiday');selected=self.selected_date
+        if dialog.year.findData(selected.year)<0:dialog.year.addItem(f'{selected.year}년',selected.year)
+        dialog.year.setCurrentIndex(dialog.year.findData(selected.year));dialog.day.setDate(QDate(selected.year,selected.month,selected.day))
+        dialog.changed.connect(self.refresh);self._exec_dialog(dialog)
 
     def manage_special_dates(self):
         from .special_dates_dialog import SpecialDatesDialog
-        dialog=SpecialDatesDialog(self.holiday_calendar,self);dialog.changed.connect(self.refresh);self._exec_dialog(dialog)
+        dialog=self._take_ready_dialog('special');dialog.changed.connect(self.refresh);self._exec_dialog(dialog)
 
     def complete_manual(self,event,completed):
         if self._busy or not event.manual:return
@@ -776,7 +885,8 @@ class MainWindow(QMainWindow):
         if self._busy:return
         try:before=read_account()
         except Exception:before=''
-        if self._exec_dialog(SettingsDialog(self)):
+        dialog=self._take_ready_dialog('settings');dialog.student.setText(before);dialog.remove.setEnabled(bool(before))
+        if self._exec_dialog(dialog):
             try:after=read_account()
             except Exception:after=before
             if before!=after:
@@ -786,7 +896,7 @@ class MainWindow(QMainWindow):
 
     def edit_aliases(self):
         if self.demo or self._busy:return
-        if self._exec_dialog(AliasDialog(self.store,self)):
+        if self._exec_dialog(self._take_ready_dialog('aliases')):
             self._timetable_signature=None;self._reload()
 
     def preview(self):
@@ -916,7 +1026,7 @@ class MainWindow(QMainWindow):
     def add_session(self,day=None,start=None):
         if self.demo or self._busy:return
         if not self.snapshot.courses:self.status.setText('먼저 동기화하세요');return
-        dialog=SessionDialog(self.snapshot.courses,parent=self);dialog.validation=lambda values:self._validate_session(values)
+        dialog=self._take_ready_dialog('session');dialog.validation=lambda values:self._validate_session(values)
         if day is not None:dialog.days[day].setChecked(True)
         if start is not None:
             from PySide6.QtCore import QTime
@@ -934,7 +1044,7 @@ class MainWindow(QMainWindow):
     def _store_session(self,values,item_id=None,color=''):
         try:
             self.store.add_timetable(*values,item_id=item_id,color=color);self._sessions=self.store.timetable();self.status.setText('시간표 저장됨')
-        except ValueError as exc:self.status.setText(str(exc));self.status.setToolTip(str(exc))
+        except ValueError as exc:self.status.setText(str(exc));self.status.setToolTip(tooltip_text(str(exc)))
         self._timetable_signature=None;self._refresh_timetable()
 
     def _color_session(self,item_id,color):
@@ -979,8 +1089,7 @@ class MainWindow(QMainWindow):
     def credits(self):
         existing=self._dialogs.get('credits')
         if existing:existing.raise_();existing.activateWindow();return
-        from .credits import CreditsDialog
-        dialog=CreditsDialog(self);self._dialogs['credits']=dialog
+        dialog=self._take_ready_dialog('credits');self._dialogs['credits']=dialog
         dialog.destroyed.connect(lambda:self._dialogs.pop('credits',None));dialog.open()
 
     def open_logs(self):
@@ -997,6 +1106,7 @@ class MainWindow(QMainWindow):
         if not self._exit_confirmed:event.ignore();return
         if not self._shutdown_started:
             self._shutdown_started=True;self._closing=True
+            self.setEnabled(False)
             self.search_timer.stop();self.local_clock.stop();self.home.hero.clock.stop();self.main_stack._settle()
             self.exit_button.setEnabled(False);self.status.setText('종료 중')
             if self._thread and self._thread.isRunning():self._thread.cancel()
@@ -1018,6 +1128,7 @@ class MainWindow(QMainWindow):
         if self._login_process:
             event.ignore();return
         self._shutdown_poll.stop()
+        if self._ready_dialogs:self._ready_dialogs.shutdown()
         for dialog in list(self._dialogs.values()):dialog.close()
         try:
             self.settings.update(window_width=self.width(),window_height=self.height())
@@ -1032,7 +1143,7 @@ class MainWindow(QMainWindow):
         if self._quit_on_close:QTimer.singleShot(0,QApplication.instance().quit)
 
     def _has_pending_changes(self):
-        return bool((self.diary and (self.diary.dirty or self.diary.task)) or
+        return bool((self.diary and (self.diary.dirty or self.diary.task or getattr(self.diary,'_pending_secret',None))) or
                     (self._event_popover and self._event_popover.dirty) or
                     (self._thread and self._thread.isRunning()))
 
@@ -1070,6 +1181,7 @@ class MainWindow(QMainWindow):
 
     def _cancel_shutdown(self):
         self._shutdown_poll.stop();self._shutdown_started=False;self._shutdown_forms_ready=False;self._closing=False;self._exit_confirmed=False
+        self.setEnabled(True)
         self.exit_button.setEnabled(True);self.local_clock.start()
         if self.home.isVisible():self.home.hero.clock.start()
 

@@ -23,7 +23,10 @@ class ScheduleModel(QAbstractTableModel):
         if role==EVENT_ROLE:return e
         if role==Qt.ItemDataRole.UserRole:return e.key
         if role==Qt.ItemDataRole.CheckStateRole and column==0 and e.manual:return Qt.CheckState.Checked if e.completed else Qt.CheckState.Unchecked
-        if role in (Qt.ItemDataRole.DisplayRole,Qt.ItemDataRole.ToolTipRole,Qt.ItemDataRole.AccessibleTextRole):return texts[column]
+        if role==Qt.ItemDataRole.ToolTipRole:
+            from .text_safety import tooltip_text
+            return tooltip_text(texts[column])
+        if role in (Qt.ItemDataRole.DisplayRole,Qt.ItemDataRole.AccessibleTextRole):return texts[column]
         if role==Qt.ItemDataRole.TextAlignmentRole:return int(Qt.AlignmentFlag.AlignVCenter| (Qt.AlignmentFlag.AlignCenter if column==0 else Qt.AlignmentFlag.AlignLeft))
         if role==Qt.ItemDataRole.ForegroundRole:
             if column==0:return QColor(type_tokens(e.type_color)['ink'] if e.type_id is not None else category_colors()['assignment_ink' if e.kind=='assignment' else 'movie_ink'])

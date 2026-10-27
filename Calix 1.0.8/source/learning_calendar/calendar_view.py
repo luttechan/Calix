@@ -2,6 +2,7 @@
 from datetime import date,datetime,timedelta
 from PySide6.QtCore import Qt,QDate,QLocale,QTimer,Signal,QEvent,QRectF
 from PySide6.QtGui import QColor,QFont,QTextCharFormat,QFontMetrics,QPen
+from .text_safety import tooltip_text
 from PySide6.QtWidgets import QCalendarWidget,QTableView,QLabel,QSizePolicy,QWidget,QHeaderView
 from .design import colors,type_tokens,category_colors
 from .models import KST
@@ -72,7 +73,7 @@ class DayBadges(QWidget):
                 value=f'{title} {count}' if count else title
                 chip_width=min(maximum,max(38,min(100,QFontMetrics(label.font()).horizontalAdvance(value)+12)))
                 label.setText(label.fontMetrics().elidedText(value,Qt.TextElideMode.ElideRight,max(1,chip_width-8)));label.setGeometry(left,0,chip_width,badge_height);left+=chip_width+gap
-        self.setAccessibleName(all_labels);self.setToolTip(all_labels)
+        self.setAccessibleName(all_labels);self.setToolTip(tooltip_text(all_labels))
         return badge_height
 
 class MonthCanvas(QCalendarWidget):
@@ -102,6 +103,9 @@ class MonthCanvas(QCalendarWidget):
         self._badge_viewport=self.view.viewport();self._badge_viewport.installEventFilter(self)
 
     def set_month(self,month,selected,buckets,holidays=None,feasts=None):
+        c=colors();state=(month,selected,buckets,holidays or {},feasts or {},c['bg'],c['accent'],datetime.now(KST).date())
+        if state==getattr(self,'_month_state',None):return
+        self._month_state=state
         self.buckets=buckets;self.holidays=holidays or {};self.feasts=feasts or {}
         if self.feasts and not self.feast_labels:
             for _ in range(42):
@@ -122,7 +126,7 @@ class MonthCanvas(QCalendarWidget):
             rows=buckets.get(day,[])
             q=QDate(day.year,day.month,day.day);fmt=QTextCharFormat()
             fmt.setFontWeight(QFont.Weight.DemiBold);fmt.setForeground(QColor('#BE607C' if day in self.holidays else c['accent']))
-            fmt.setToolTip('\n'.join(([self.holidays[day]] if day in self.holidays else [])+([self.feasts[day]] if day in self.feasts else [])+[e.title for e in rows[:6]]));self.setDateTextFormat(q,fmt);self._formatted.add(q)
+            fmt.setToolTip(tooltip_text('\n'.join(([self.holidays[day]] if day in self.holidays else [])+([self.feasts[day]] if day in self.feasts else [])+[e.title for e in rows[:6]])));self.setDateTextFormat(q,fmt);self._formatted.add(q)
         self.badge_timer.start(0);self.updateCells()
 
     def paintCell(self,painter,rect,day):
@@ -158,12 +162,12 @@ class MonthCanvas(QCalendarWidget):
             if number.property('dayState')!=state:number.setProperty('dayState',state);number.style().unpolish(number);number.style().polish(number)
             number.show();number.raise_()
             feast_name=self.feasts.get(day,'');tooltip='\n'.join(filter(None,(name,feast_name)))
-            number.setToolTip(tooltip);number.setAccessibleName(day.isoformat()+(' / '+tooltip if tooltip else ''))
-            holiday=self.holiday_labels[i];holiday.setProperty('calendarDate',day.isoformat());holiday.setGeometry(rect.left()+12,rect.top()+31,max(1,rect.width()-24),17);holiday.setToolTip(name);holiday.setAccessibleName(name)
+            number.setToolTip(tooltip_text(tooltip));number.setAccessibleName(day.isoformat()+(' / '+tooltip if tooltip else ''))
+            holiday=self.holiday_labels[i];holiday.setProperty('calendarDate',day.isoformat());holiday.setGeometry(rect.left()+12,rect.top()+31,max(1,rect.width()-24),17);holiday.setToolTip(tooltip_text(name));holiday.setAccessibleName(name)
             text_bottom=rect.bottom()-(26 if rows else 8)
             holiday.setText(holiday.fontMetrics().elidedText(name,Qt.TextElideMode.ElideRight,max(1,rect.width()-24)));holiday.setVisible(bool(name) and day.month==self.monthShown() and holiday.geometry().bottom()<text_bottom)
             if self.feast_labels:
-                feast=self.feast_labels[i];feast.setProperty('calendarDate',day.isoformat());feast.setGeometry(rect.left()+12,rect.top()+(49 if name else 31),max(1,rect.width()-24),17);feast.setToolTip(feast_name);feast.setAccessibleName(feast_name)
+                feast=self.feast_labels[i];feast.setProperty('calendarDate',day.isoformat());feast.setGeometry(rect.left()+12,rect.top()+(49 if name else 31),max(1,rect.width()-24),17);feast.setToolTip(tooltip_text(feast_name));feast.setAccessibleName(feast_name)
                 feast.setText(feast.fontMetrics().elidedText(feast_name,Qt.TextElideMode.ElideRight,max(1,rect.width()-24)));feast.setVisible(bool(feast_name) and day.month==self.monthShown() and feast.geometry().bottom()<text_bottom)
             badges.setProperty('calendarDate',day.isoformat())
             badges.set_events(day,rows)

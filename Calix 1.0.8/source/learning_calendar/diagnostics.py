@@ -20,6 +20,12 @@ def finish_smoke(window,output):
     import ssl
     context=ssl.create_default_context()
     result['tls_context_ready']=context.verify_mode==ssl.CERT_REQUIRED and context.check_hostname
+    result['tls_library']=ssl.OPENSSL_VERSION
+    from cryptography.hazmat.backends.openssl.backend import backend
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    result['crypto_library']=backend.openssl_version_text()
+    cipher=AESGCM(bytes(32));nonce=bytes([1])*12;sample=b'Calix synthetic check'
+    result['crypto_roundtrip']=cipher.decrypt(nonce,cipher.encrypt(nonce,sample,b'Calix/check'),b'Calix/check')==sample
     result['app_icon_sizes']=[s.width() for s in window.windowIcon().availableSizes()]
     from .app_identity import native_identity_state
     result['native_taskbar']=native_identity_state(window)
@@ -109,6 +115,19 @@ def memory_usage():
     if not read(process,c.byref(counters),counters.cb):return {}
     return {'working_set_mb':round(counters.WorkingSetSize/1048576,2),'peak_working_set_mb':round(counters.PeakWorkingSetSize/1048576,2),
             'private_commit_mb':round(counters.PrivateUsage/1048576,2)}
+
+
+def process_age_ms():
+    if sys.platform!='win32':return None
+    import ctypes as c,time
+    from ctypes import wintypes as w
+    kernel=c.WinDLL('kernel32',use_last_error=True);kernel.GetCurrentProcess.restype=w.HANDLE
+    kernel.GetProcessTimes.argtypes=[w.HANDLE]+[c.POINTER(w.FILETIME)]*4
+    kernel.GetProcessTimes.restype=w.BOOL
+    times=[w.FILETIME() for _ in range(4)]
+    if not kernel.GetProcessTimes(kernel.GetCurrentProcess(),*[c.byref(value) for value in times]):return None
+    created=((times[0].dwHighDateTime<<32)|times[0].dwLowDateTime)/10_000_000-11644473600
+    return round(max(0,(time.time()-created)*1000),2)
 
 
 class StartupProbe(QObject):

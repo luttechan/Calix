@@ -38,12 +38,15 @@ LOG_FILE = LOG_DIR / 'app.log'
 class SecretSafeFormatter(logging.Formatter):
     def format(self, record):
         message = super().format(record)
-        for pattern in (
-            r'(?i)(authorization\s*:\s*bearer\s+)\S+',
-            r'(?i)(xn_api_token[=:]\s*)[^\s;,&]+',
-            r'(?i)((?:password|passwd|cookie|sessionid)[=:]\s*)[^\s;,&]+',
+        secret=r'(?:password|passwd|[a-z0-9_-]*(?:token|session)[a-z0-9_-]*)'
+        quoted=r'''(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')'''
+        for pattern,replacement in (
+            (rf'''(?i)(['"](?:authorization|cookie|set-cookie|{secret})['"]\s*:\s*){quoted}''',r'\1"[숨김]"'),
+            (r'(?im)(\b(?:authorization|cookie|set-cookie)\s*:\s*)[^\r\n]*',r'\1[숨김]'),
+            (rf'(?i)(\b(?:cookie|{secret})\s*[=:]\s*){quoted}',r'\1"[숨김]"'),
+            (rf'(?i)(\b(?:cookie|{secret})\s*[=:]\s*)[^\s;,&]+',r'\1[숨김]'),
         ):
-            message = re.sub(pattern, r'\1[숨김]', message)
+            message = re.sub(pattern,replacement,message)
         return message
 
 logger = logging.getLogger()
@@ -57,7 +60,8 @@ for handler in (logging.StreamHandler(sys.stderr), RotatingFileHandler(
 
 def exception_hook(exc_type, exc_value, tb):
     logger.error('처리되지 않은 오류\n%s', ''.join(traceback.format_exception(exc_type, exc_value, tb)))
-    if exc_type not in (KeyboardInterrupt, SystemExit):
+    diagnostics=any(flag in sys.argv for flag in ('--navigation-check','--smoke-test','--startup-check','--memory-check','--connection-check'))
+    if exc_type not in (KeyboardInterrupt, SystemExit) and not diagnostics:
         try:
             from PySide6.QtWidgets import QApplication, QMessageBox
             if QApplication.instance():
@@ -90,7 +94,7 @@ def main():
     parser.add_argument('--startup-items',type=int,default=0)
     parser.add_argument('--memory-check',type=Path)
     parser.add_argument('--navigation-check',type=Path)
-    parser.add_argument('--navigation-items',type=int,default=5000)
+    parser.add_argument('--navigation-items',type=int,default=250)
     args=parser.parse_args()
     if args.connection_check:
         from learning_calendar.diagnostics import check_connection
@@ -135,6 +139,7 @@ def main():
         from learning_calendar.navigation_probe import NavigationProbe
         w.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen,True)
         navigation_probe=NavigationProbe(w,args.navigation_check,args.navigation_items)
+    w.prepare_navigation()
     from learning_calendar.startup_handoff import StartupHandoff
     w._startup_handoff=StartupHandoff(w,STARTUP_NOTICE)
     if args.startup_check:

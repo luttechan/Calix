@@ -18,6 +18,8 @@ def apply_korean_font(app):
     path = font_path()
     static=[path.with_name(f'CalixSans-{style}.ttf') for style in ('Regular','Medium','SemiBold','Bold')]
     candidates=static if all(face.is_file() for face in static) else [path]
+    if candidates==static:
+        candidates += [face for style in ('Italic','BoldItalic') if (face:=path.with_name(f'CalixSans-{style}.ttf')).is_file()]
     ids=[QFontDatabase.addApplicationFont(str(face)) for face in candidates if face.is_file()]
     font_id=next((value for value in ids if value>=0),-1)
     families=[family for value in ids if value>=0 for family in QFontDatabase.applicationFontFamilies(value)]

@@ -43,7 +43,7 @@ login.CampusLoginDialog.showEvent=show
 try:
     result=run(OUTPUT)
     assert result==2 and not Path(OUTPUT).exists()
-    assert state.get('regular_profile') and state.get('cookie_policy')=='AllowPersistentCookies',state
+    assert state.get('regular_profile') and state.get('cookie_policy')=='NoPersistentCookies',state
     assert state.get('cookie_returned'),state
     assert not Path(state['temp_profile']).exists(),'Temporary browser profile was not cleaned'
 finally:server.shutdown()

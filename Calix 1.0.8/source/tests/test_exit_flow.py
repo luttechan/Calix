@@ -97,6 +97,7 @@ def test_unresponsive_owned_browser_is_killed_and_application_quits(window,monke
     monkeypatch.setattr(QApplication.instance(),'quit',lambda:events.append('app quit'))
     window.request_exit()
     assert events==['quit'] and not window._closed
+    assert not window.isEnabled()
     from PySide6.QtTest import QTest
     QTest.qWait(1700);QApplication.processEvents()
     assert events==['quit','killed','app quit'] and window._closed

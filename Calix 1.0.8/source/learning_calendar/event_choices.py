@@ -32,7 +32,10 @@ class EventChoiceModel(QAbstractTableModel):
         if role==EVENT_ROLE:return event
         if role==Qt.ItemDataRole.UserRole:return event.key
         if role==Qt.ItemDataRole.DisplayRole:return (event.course_name,event.type_label,event.title)[index.column()]
-        if role in (Qt.ItemDataRole.ToolTipRole,Qt.ItemDataRole.AccessibleTextRole):return f'{event.course_name} / {event.type_label} / {event.title}'
+        if role==Qt.ItemDataRole.ToolTipRole:
+            from .text_safety import tooltip_text
+            return tooltip_text(f'{event.course_name} / {event.type_label} / {event.title}')
+        if role==Qt.ItemDataRole.AccessibleTextRole:return f'{event.course_name} / {event.type_label} / {event.title}'
         if role==Qt.ItemDataRole.ForegroundRole:return QColor(type_tokens(event.type_color)['ink'] if index.column()==1 and event.type_color else colors()['ink'])
     def set_events(self,rows):
         self.beginResetModel();self.rows=list(rows);self.endResetModel()

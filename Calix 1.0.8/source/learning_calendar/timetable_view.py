@@ -8,6 +8,7 @@ from .models import KST
 from .design import colors
 from .schedule_colors import PALETTE,course_color,normalize_color,minutes,clock
 from .controls import TimeInput
+from .text_safety import tooltip_text
 
 DAYS=('월','화','수','목','금','토','일')
 
@@ -17,9 +18,13 @@ def text(value,name='muted',parent=None):
 class ElidedText(QLabel):
     def __init__(self,value='',parent=None):
         super().__init__(parent);self.full='';self.setMinimumWidth(0);self.setTextFormat(Qt.TextFormat.PlainText);self.set_value(value)
-    def set_value(self,value):self.full=str(value);self.setToolTip(self.full);self._fit()
+    def set_value(self,value):
+        self.full=str(value);self.setToolTip(tooltip_text(self.full))
+        if self.isVisible():self._fit()
+        else:super().setText(self.full)
     def _fit(self):super().setText(self.fontMetrics().elidedText(self.full,Qt.TextElideMode.ElideRight,max(1,self.width())))
     def resizeEvent(self,event):super().resizeEvent(event);self._fit()
+    def showEvent(self,event):super().showEvent(event);self._fit()
 
 class ColorPicker(QWidget):
     changed=Signal(str)
@@ -104,7 +109,7 @@ class SessionBlock(QFrame):
     def configure(self,row,name,selected=False,workload=(0,0)):
         self.row=row;self.title.set_value(name);self.time.setText(row['start_time']+' – '+row['end_time']);self.room.set_value(' / '.join(filter(None,(row.get('professor',''),row.get('room','')))))
         self.assignments.setText(f'과제 {workload[0]}');self.videos.setText(f'영상 {workload[1]}')
-        self.setAccessibleName(f'{name} / {DAYS[row["day"]]} / {self.time.text()} / {self.room.full} / 남은 과제 {workload[0]}건 / 남은 영상 {workload[1]}건');self.setToolTip(self.accessibleName())
+        self.setAccessibleName(f'{name} / {DAYS[row["day"]]} / {self.time.text()} / {self.room.full} / 남은 과제 {workload[0]}건 / 남은 영상 {workload[1]}건');self.setToolTip(tooltip_text(self.accessibleName()))
         color=row.get('color') or course_color(row['course_id']);accent=QColor(color);base=QColor(colors()['surface'])
         dark=base.lightness()<128;mix=.21 if dark else .13
         bg=QColor(*[round(accent.getRgb()[i]*mix+base.getRgb()[i]*(1-mix)) for i in range(3)]).name()
@@ -253,6 +258,6 @@ class TimetableView(QWidget):
     def resizeEvent(self,event):super().resizeEvent(event);self.inspector.setVisible(self.width()>=920)
     def eventFilter(self,obj,event):
         from PySide6.QtCore import QEvent
-        if obj is self.scroll.viewport() and event.type()==QEvent.Type.Resize:
+        if event.type()==QEvent.Type.Resize and obj is self.scroll.viewport():
             self.headers.layout().setContentsMargins(52,0,max(0,self.headers.width()-self.scroll.viewport().width()),0)
         return super().eventFilter(obj,event)

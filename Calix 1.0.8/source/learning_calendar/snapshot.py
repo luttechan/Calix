@@ -50,6 +50,7 @@ class Snapshot:
 
     def filtered(self,course_id=None,query='',status=0,now=None,type_key=None):
         now=now or datetime.now(KST);query=query.casefold().strip();out=[]
+        if not query and status==0 and (course_id is None or not type_key):return list(self.candidates(course_id,type_key))
         for e in self.candidates(course_id,type_key):
             if type_key and not (e.kind==type_key or (e.type_id is not None and type_key==f'type:{e.type_id}')):continue
             if course_id is not None and e.course_id!=course_id:continue

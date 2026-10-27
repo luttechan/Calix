@@ -19,9 +19,9 @@ def when(e: Event):
     return e.due.strftime('%m/%d %H:%M') if e.due else '기한 없음'
 
 class SettingsDialog(QDialog):
-    def __init__(self,parent=None):
+    def __init__(self,parent=None,account=None):
         super().__init__(parent);self.setWindowTitle('계정 설정');self.resize(460,440)
-        try:student=read_account()
+        try:student=read_account() if account is None else account
         except Exception:student=''
         layout=QVBoxLayout(self);layout.setContentsMargins(28,26,28,24);layout.setSpacing(16)
         layout.addWidget(label('계정 연결','heading'));layout.addWidget(label('부산외대 Canvas','muted'))
@@ -29,7 +29,13 @@ class SettingsDialog(QDialog):
         layout.addWidget(label('비밀번호','fieldLabel'));self.password=QLineEdit();self.password.setEchoMode(QLineEdit.EchoMode.Password);self.password.setPlaceholderText('변경할 때만 입력');layout.addWidget(self.password)
         note=label('Windows 자격 증명 관리자에 보관됩니다.','caption');note.setWordWrap(True);layout.addWidget(note)
         self.error=label('','formError');self.error.setWordWrap(True);layout.addWidget(self.error);layout.addStretch()
-        actions=QHBoxLayout();actions.addStretch();cancel=QPushButton('취소');cancel.clicked.connect(self.reject);save=QPushButton('저장');save.setObjectName('primary');save.clicked.connect(self.save);actions.addWidget(cancel);actions.addWidget(save);layout.addLayout(actions)
+        actions=QHBoxLayout();self.remove=QPushButton('저장 계정 삭제');self.remove.setObjectName('danger');self.remove.setEnabled(bool(student));self.remove.clicked.connect(self.remove_account);actions.addWidget(self.remove);actions.addStretch();cancel=QPushButton('취소');cancel.clicked.connect(self.reject);save=QPushButton('저장');save.setObjectName('primary');save.clicked.connect(self.save);actions.addWidget(cancel);actions.addWidget(save);layout.addLayout(actions)
+    def remove_account(self):
+        try:store_account('')
+        except Exception:self.error.setText('계정을 삭제하지 못했습니다.');return
+        self.student.clear();self.password.clear();self.accept()
+    def done(self,result):
+        self.password.clear();super().done(result)
     def save(self):
         student=self.student.text().strip()
         if not student:self.error.setText('학교 ID를 입력하세요.');return

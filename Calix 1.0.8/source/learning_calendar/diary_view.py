@@ -1,7 +1,7 @@
 """Native diary workspace with password-only secret storage and bounded idle lock."""
 from __future__ import annotations
 import time
-from PySide6.QtCore import Qt,QDate,QThread,QTimer,Signal,QEvent
+from PySide6.QtCore import Qt,QDate,QThread,QTimer,Signal,QEvent,QSize
 from PySide6.QtGui import QTextCharFormat
 from PySide6.QtWidgets import (QApplication,QWidget,QVBoxLayout,QHBoxLayout,QLabel,QPushButton,
     QLineEdit,QPlainTextEdit,QListWidget,QListWidgetItem,QStackedWidget,QSplitter,QDialog,QMessageBox)
@@ -33,11 +33,20 @@ class KeyTask(QThread):
         finally:wipe(key);self.password='';self.new_password=None
 
 
+class DiaryPane(QWidget):
+    # QSplitter otherwise repeatedly asks nested rich-text layouts for hints.
+    def sizeHint(self):return QSize(320,440)
+    def minimumSizeHint(self):return QSize(170,150)
+
+
 class DiaryPage(QWidget):
     work_finished=Signal()
+    def sizeHint(self):return QSize(900,600)
+    def minimumSizeHint(self):return QSize(420,280)
     def __init__(self,folder,parent=None):
-        super().__init__(parent);self.folder=folder;self.normal=DiaryStore(folder/'journals.db');self.vault=None
+        super().__init__(parent);self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground,True);self.folder=folder;self.normal=DiaryStore(folder/'journals.db');self.vault=None
         self.secret=False;self.current_id=None;self.metadata={};self.loading=False;self.dirty=False
+        self._pending_secret=None
         self.task=None;self.generation=0;self._closed=False;self.last_activity=time.monotonic()
         self.save_timer=QTimer(self);self.save_timer.setSingleShot(True);self.save_timer.setInterval(650);self.save_timer.timeout.connect(self.flush)
         self.idle_timer=QTimer(self);self.idle_timer.setInterval(15000);self.idle_timer.timeout.connect(self._idle);self.idle_timer.start()
@@ -56,10 +65,10 @@ class DiaryPage(QWidget):
         self.unlock_button=QPushButton('잠금 해제');self.unlock_button.setObjectName('primary');self.unlock_button.clicked.connect(self.unlock);form.addWidget(self.unlock_button)
         self.password.returnPressed.connect(self.unlock);self.confirm.returnPressed.connect(self.unlock)
         self.lock_error=text('','formError');self.lock_error.setWordWrap(True);form.addWidget(self.lock_error);outer.addWidget(box,0,Qt.AlignmentFlag.AlignHCenter);outer.addStretch();self.stack.addWidget(self.locked)
-        self.workspace=QSplitter(Qt.Orientation.Horizontal);self.workspace.setChildrenCollapsible(False);self.workspace.setHandleWidth(16)
-        left=QWidget();lv=QVBoxLayout(left);lv.setContentsMargins(0,0,0,0);lv.setSpacing(10);self.search=QLineEdit();self.search.setPlaceholderText('제목이나 날짜 검색');self.search.setClearButtonEnabled(True);self.search.textChanged.connect(self._render_list);lv.addWidget(self.search)
+        self.workspace=QSplitter(Qt.Orientation.Horizontal,self);self.workspace.setChildrenCollapsible(False);self.workspace.setHandleWidth(16)
+        left=DiaryPane();lv=QVBoxLayout(left);lv.setContentsMargins(0,0,0,0);lv.setSpacing(10);self.search=QLineEdit();self.search.setPlaceholderText('제목이나 날짜 검색');self.search.setClearButtonEnabled(True);self.search.textChanged.connect(self._render_list);lv.addWidget(self.search)
         self.entries=QListWidget();self.entries.setObjectName('diaryList');self.entries.setMinimumWidth(170);self.entries.currentItemChanged.connect(self._select);lv.addWidget(self.entries,1);self.count=text('','muted');lv.addWidget(self.count);self.workspace.addWidget(left)
-        right=QWidget();rv=QVBoxLayout(right);rv.setContentsMargins(4,0,0,0);rv.setSpacing(14);bar=QHBoxLayout();self.date=DateInput();self.date.changed.connect(self.mark_dirty);bar.addWidget(self.date);bar.addStretch();self.remove_button=QPushButton('삭제');self.remove_button.setObjectName('danger');self.remove_button.clicked.connect(self.remove_entry);bar.addWidget(self.remove_button);rv.addLayout(bar)
+        right=DiaryPane();rv=QVBoxLayout(right);rv.setContentsMargins(4,0,0,0);rv.setSpacing(14);bar=QHBoxLayout();self.date=DateInput();self.date.changed.connect(self.mark_dirty);bar.addWidget(self.date);bar.addStretch();self.remove_button=QPushButton('삭제');self.remove_button.setObjectName('danger');self.remove_button.clicked.connect(self.remove_entry);bar.addWidget(self.remove_button);rv.addLayout(bar)
         self.title=QLineEdit();self.title.setObjectName('diaryTitle');self.title.setMaxLength(200);self.title.setPlaceholderText('오늘의 제목');self.title.setAccessibleName('일기 제목');self.title.textEdited.connect(self.mark_dirty);rv.addWidget(self.title)
         self.body=DiaryEditor();self.format_bar=FormatBar(self.body);rv.addWidget(self.format_bar);self.body.setPlaceholderText('오늘은 어떤 하루였나요?');self.body.setAccessibleName('일기 내용');self.body.textChanged.connect(self.mark_dirty);rv.addWidget(self.body,1)
         self.hint=text('내용은 자동으로 저장됩니다.','muted');rv.addWidget(self.hint);self.workspace.addWidget(right);self.workspace.setSizes([235,650]);self.workspace.setStretchFactor(1,1);self.stack.addWidget(self.workspace)
@@ -111,6 +120,14 @@ class DiaryPage(QWidget):
             elif mode=='change':self.vault.replace_header(header);self.saved.setText('암호 변경됨');return
             else:self.vault.activate(key)
             self.last_activity=time.monotonic();self.stack.setCurrentWidget(self.workspace);self.saved.setText('잠금 해제됨');self.body.setUndoRedoEnabled(False);self._load_metadata();self._buttons()
+            if self._pending_secret:
+                item_id,entry=self.vault.open_pending(self._pending_secret)
+                self.loading=True;self.current_id=item_id;self.title.setText(entry['title']);self.date.setDate(QDate.fromString(entry['date'],'yyyy-MM-dd'))
+                if entry.get('html'):self.body.setHtml(entry['html'])
+                else:self.body.setPlainText(entry['body'])
+                self.loading=False;self.dirty=True;self._pending_secret=None
+                self.metadata[item_id]=dict(id=item_id,date=entry['date'],title=entry['title'])
+                self._render_list();self._buttons();self.save_timer.start();self.saved.setText('저장 대기')
         except Exception:
             self.lock();self.lock_error.setText('저장소를 열지 못했습니다. 백업 상태를 확인하세요.')
         finally:wipe(key)
@@ -161,13 +178,15 @@ class DiaryPage(QWidget):
         self.dirty=True;self.saved.setText('작성 중');self.save_timer.start();self.last_activity=time.monotonic()
     def flush(self):
         self.save_timer.stop()
+        if self._pending_secret:
+            self.saved.setText('잠금 해제 후 저장하세요.');return False
         if not self.dirty or self.current_id is None:return True
         value=dict(date=self.date.date().toString('yyyy-MM-dd'),title=self.title.text(),body=self.body.toPlainText(),html=self.body.toHtml())
         try:self._store().save(value,self.current_id)
         except Exception:self.saved.setText('저장 실패 / 저장 공간과 파일 권한을 확인하세요.');return False
         self.dirty=False;self.metadata[self.current_id]=dict(id=self.current_id,date=value['date'],title=value['title']);self._render_list();self.saved.setText('자동 저장됨');return True
     def discard_pending(self):
-        self.save_timer.stop();self.dirty=False;self.current_id=None;self._clear_editor()
+        self.save_timer.stop();self._pending_secret=None;self.dirty=False;self.current_id=None;self._clear_editor()
     def remove_entry(self):
         if self.current_id is None:return
         if QMessageBox.question(self,'일기 삭제','이 일기를 삭제할까요?')!=QMessageBox.StandardButton.Yes:return
@@ -179,7 +198,11 @@ class DiaryPage(QWidget):
         if self._closed:return
         self.generation+=1
         if not self.secret:return
-        saved=self.flush();self.current_id=None;self._clear_editor();self.search.clear();self.metadata.clear();self.entries.clear();self.count.clear();self.password.clear();self.confirm.clear()
+        saved=self.flush()
+        if not saved and self.dirty and self.current_id and self.vault and self.vault.unlocked:
+            value=dict(date=self.date.date().toString('yyyy-MM-dd'),title=self.title.text(),body=self.body.toPlainText(),html=self.body.toHtml())
+            self._pending_secret=self.vault.seal_pending(self.current_id,value)
+        self.current_id=None;self._clear_editor();self.search.clear();self.metadata.clear();self.entries.clear();self.count.clear();self.password.clear();self.confirm.clear()
         if self.vault:self.vault.lock();self._show_locked()
         self.saved.setText('잠김' if saved else '저장하지 못한 내용이 있습니다. 저장 공간을 확인하세요.')
     def _idle(self):
@@ -214,7 +237,7 @@ class DiaryPage(QWidget):
         self.lock();self.generation+=1
         return self.task is None
     def shutdown(self):
-        self._closed=True;self.idle_timer.stop();self.save_timer.stop();QApplication.instance().removeEventFilter(self)
+        self._closed=True;self._pending_secret=None;self.idle_timer.stop();self.save_timer.stop();QApplication.instance().removeEventFilter(self)
         QApplication.instance().applicationStateChanged.disconnect(self._application_state)
         self.normal.close()
         if self.vault:self.vault.close()

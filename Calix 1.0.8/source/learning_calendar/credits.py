@@ -11,9 +11,11 @@ class ProfileAvatar(QLabel):
     def __init__(self,parent=None):
         super().__init__('LL',parent);self.setObjectName('creatorMark');self.setFixedSize(96,96);self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setAccessibleName('Lutté Laurent 개발자 프로필');self.setProperty('profileLoaded',False)
-        QTimer.singleShot(0,self._load)
+        QTimer.singleShot(0,self,self._load)
     def _load(self):
-        dpr=self.devicePixelRatioF();pixels=min(384,round(96*dpr));reader=QImageReader(str(asset_path('profile.png')));reader.setAutoTransform(True)
+        dpr=self.devicePixelRatioF();pixels=min(384,round(96*dpr));path=asset_path('profile-avatar.png')
+        if not path.is_file():path=asset_path('profile.png')
+        reader=QImageReader(str(path));reader.setAutoTransform(True)
         size=reader.size()
         if not size.isValid():return
         reader.setScaledSize(size.scaled(pixels,pixels,Qt.AspectRatioMode.KeepAspectRatioByExpanding));image=reader.read()
@@ -38,9 +40,8 @@ class CreditsDialog(QDialog):
         role=QLabel('만든 사람');role.setObjectName('creatorRole');role.setAlignment(Qt.AlignmentFlag.AlignCenter);body.addWidget(role);layout.addWidget(hero)
         links=QHBoxLayout();links.setSpacing(12);dark=colors()['bg']=='#11151D'
         for title,caption,logo,url in [('GitHub.io','홈페이지','github','https://luttechan.github.io/index.html'),('PayPal','개발자 후원','paypal','https://www.paypal.com/ncp/payment/XKVWYK7U2EAB4')]:
-            button=QPushButton(title+'\n'+caption);button.setObjectName('creditLink');button.setIcon(QIcon(str(asset_path('icons/'+logo+('-dark' if dark else '')+'.svg'))));button.setIconSize(QSize(28,28))
+            button=QPushButton(title+'\n'+caption);button.setObjectName('creditLink');button.setIcon(QIcon(str(asset_path('icons/'+logo+('-dark' if dark else '')+'.png'))));button.setIconSize(QSize(28,28))
             button.setCursor(Qt.CursorShape.PointingHandCursor);button.setToolTip(url);button.clicked.connect(lambda checked=False,u=url:QDesktopServices.openUrl(QUrl(u)));links.addWidget(button,1)
         layout.addLayout(links)
-        note=QLabel('학습의 흐름을 가볍게 정리하는 Calix.');note.setObjectName('muted');layout.addWidget(note)
         legal=QLabel('Python / Qt / PySide6 / Requests\nPretendard / Kil Hyung-jin / SIL OFL 1.1\n공휴일 자료 / python-holidays / MIT');legal.setObjectName('caption');layout.addWidget(legal)
         footer=QHBoxLayout();footer.addStretch();close=QPushButton('닫기');close.clicked.connect(self.close);footer.addWidget(close);layout.addLayout(footer)

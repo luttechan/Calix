@@ -142,7 +142,9 @@ class CampusLoginDialog(QDialog):
             self.profile.setCachePath(self._profile_dir.path()+'/cache')
             self.profile.setHttpCacheType(QWebEngineProfile.HttpCacheType.MemoryHttpCache)
             self.profile.setHttpCacheMaximumSize(16*1024*1024)
-            self.profile.setPersistentCookiesPolicy(QWebEngineProfile.PersistentCookiesPolicy.AllowPersistentCookies)
+            # Keep the regular SSO context, but persist cookie snapshots only
+            # through the application's DPAPI store, never Chromium's database.
+            self.profile.setPersistentCookiesPolicy(QWebEngineProfile.PersistentCookiesPolicy.NoPersistentCookies)
             self.profile.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled,True)
             self.profile.settings().setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled,True)
             self.interceptor=TokenInterceptor(self.profile);self.interceptor.captured.connect(self._capture_token)
@@ -383,14 +385,19 @@ class CampusLoginDialog(QDialog):
     def fill_form(self):
         if self.view is None:return
         location=urlparse(self.view.url().toString())
-        if location.scheme!='https' or location.hostname not in {'canvas.bufs.ac.kr','eclass.bufs.ac.kr'}:return
+        try:
+            if location.scheme!='https' or location.hostname not in {'canvas.bufs.ac.kr','eclass.bufs.ac.kr'} or location.port not in (None,443) or location.username is not None or location.password is not None:return
+        except ValueError:return
         from .preferences import read_account,read_password
         try:self._student_id=read_account();self._password=read_password(self._student_id) if self._student_id else ''
         except Exception:self._student_id=self._password=''
         if not self._student_id or not self._password:
             self.message.setText('계정을 직접 입력하거나 설정에서 저장해주세요.');return
         code='''(()=>{const u=%s,p=%s;const fields=[...document.querySelectorAll('input')];const write=(el,v)=>{if(!el)return false;Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,v);el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));return true;};return [write(fields.find(x=>x.type==='text'||x.type==='email'),u),write(fields.find(x=>x.type==='password'),p)];})()'''%(json.dumps(self._student_id),json.dumps(self._password))
-        self.page.runJavaScript(code);self._password=''
+        # The page can navigate between the Python check and JavaScript delivery.
+        # Recheck the destination inside the page before exposing either value.
+        guard="""(()=>{const allowed=new Set(['canvas.bufs.ac.kr','eclass.bufs.ac.kr']);const trusted=u=>u.protocol==='https:'&&allowed.has(u.hostname)&&(!u.port||u.port==='443')&&!u.username&&!u.password;if(!trusted(new URL(location.href)))return;const field=document.querySelector('input[type=password]');if(!field||!field.form||!trusted(new URL(field.form.action||location.href,location.href)))return;return %s;})()"""%code
+        self.page.runJavaScript(guard);self._password=''
 
     def reject(self):
         if self.resident and not self._shutting_down:
