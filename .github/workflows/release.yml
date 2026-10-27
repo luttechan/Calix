@@ -1,77 +1,21 @@
-name: Windows release
-
+name: Finalize approved Calix 1.0.7 release
 on:
-  workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - 'Calix 1.0.7/**'
-      - '.github/workflows/release.yml'
-
+      - .github/workflows/release.yml
 permissions:
   contents: write
-
-concurrency:
-  group: calix-windows-release
-  cancel-in-progress: true
-
 jobs:
   release:
-    if: github.event_name == 'push' && github.event.head_commit.message == 'Republish approved Calix 1.0.7 hotfix once'
-    runs-on: windows-latest
-    timeout-minutes: 30
-    defaults:
-      run:
-        shell: pwsh
+    if: github.event.head_commit.message == 'Finalize approved Calix 1.0.7 release notes once'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
-          python-version: '3.12'
-          cache: pip
-          cache-dependency-path: 'Calix 1.0.7/source/requirements-build.txt'
-      - name: Install build dependencies
-        working-directory: Calix 1.0.7/source
-        run: python -m pip install -r requirements-build.txt
-      - name: Check application
-        working-directory: Calix 1.0.7/source
-        env:
-          QT_QPA_PLATFORM: offscreen
-          PYTHONDONTWRITEBYTECODE: '1'
-        run: python -m pytest -q tests -p no:cacheprovider
-      - name: Build Windows application
-        working-directory: Calix 1.0.7/source
-        run: python -m PyInstaller --noconfirm --clean Calix.spec
-      - name: Package Calix
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $destination = Join-Path $env:RUNNER_TEMP 'calix-release'
-          $version = Join-Path $destination 'Calix 1.0.7'
-          New-Item -ItemType Directory -Path $version | Out-Null
-          Copy-Item -LiteralPath 'Calix 1.0.7/source/dist/Calix-1.0.7' -Destination (Join-Path $version 'app') -Recurse
-          & robocopy 'Calix 1.0.7/source' (Join-Path $version 'source') /E /XJ /XD build dist __pycache__ .pytest_cache .venv /XF *.pyc /R:1 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
-          if ($LASTEXITCODE -gt 7) { throw 'Source copy failed.' }
-          Copy-Item -LiteralPath 'Calix 1.0.7/run_windows.bat' -Destination $version
-          Copy-Item -LiteralPath 'README.md','LICENSE' -Destination $version
-          Push-Location $destination
-          tar -a -c -f Calix-1.0.7-Windows-x64.zip 'Calix 1.0.7'
-          if ($LASTEXITCODE -ne 0) { throw 'Archive failed.' }
-          $hash = (Get-FileHash -LiteralPath Calix-1.0.7-Windows-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  Calix-1.0.7-Windows-x64.zip" | Set-Content -LiteralPath SHA256SUMS.txt -Encoding utf8NoBOM
-          Pop-Location
-      - name: Publish approved same-version hotfix
+          persist-credentials: false
+      - name: Update release description
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $package = Join-Path $env:RUNNER_TEMP 'calix-release'
-          $previousTag = gh api "repos/$env:GITHUB_REPOSITORY/git/ref/tags/v1.0.7" --jq '.object.sha'
-          if ($LASTEXITCODE -ne 0 -or $previousTag -ne 'a6084250b91767f62147075beb8d28c3080ea682') { throw 'Existing tag changed; replacement stopped.' }
-          $releaseId = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/v1.0.7" --jq '.id'
-          if ($LASTEXITCODE -ne 0 -or $releaseId -ne '425601373') { throw 'Existing release changed; replacement stopped.' }
-          gh release upload v1.0.7 (Join-Path $package 'Calix-1.0.7-Windows-x64.zip') (Join-Path $package 'SHA256SUMS.txt') --repo $env:GITHUB_REPOSITORY --clobber
-          if ($LASTEXITCODE -ne 0) { throw 'Release upload failed.' }
-          gh api --method PATCH "repos/$env:GITHUB_REPOSITORY/git/refs/tags/v1.0.7" -f sha=dd447ce8e056281c5cf34fc59b5dcba251cc78f4 -F force=true
-          if ($LASTEXITCODE -ne 0) { throw 'Release tag update failed.' }
-          gh release edit v1.0.7 --repo $env:GITHUB_REPOSITORY --target dd447ce8e056281c5cf34fc59b5dcba251cc78f4 --title 'Calix 1.0.7' --notes-file 'release-notes.md' --latest
-          if ($LASTEXITCODE -ne 0) { throw 'Release publication failed.' }
+        run: gh release edit v1.0.7 --repo luttechan/Calix --notes-file release-notes.md --latest
