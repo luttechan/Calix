@@ -64,15 +64,18 @@ try:
 finally:notice.finish()
 after=user.GetGuiResources(kernel.GetCurrentProcess(),0)
 assert not notice.thread.is_alive() and notice.hwnd==0,(before,after,notice.error)
-# Windows warms its stock GDI/theme cache on the first native window. Further
-# complete open/error/close cycles must return to that same resource count.
-for _ in range(2):
+# Windows can initialize its stock theme caches over multiple windows. Warm
+# those caches, then compare complete open/error/close cycles for growth.
+counts=[]
+for _ in range(8):
     again=start_notice([])
     try:
         assert again.ready.wait(2) and not again.error,again.error
         again.fail();time.sleep(.12);again._post(again.hwnd,0x0111,100,0);assert again.closed.wait(2)
     finally:again.finish()
-    assert user.GetGuiResources(kernel.GetCurrentProcess(),0)<=after+1
+    counts.append(user.GetGuiResources(kernel.GetCurrentProcess(),0))
+baseline=counts[2]
+assert max(counts[3:])<=baseline+1,(before,after,counts)
 print(json.dumps({'topmost':initial['topmost'],'before_qt':True,'held_until_ready':True,'failure_remains_visible':True,'gdi_resources_released':True}))
 '''.replace('ROOT',repr(str(root)))
     result=subprocess.run([sys.executable,'-B','-c',code],env=env,capture_output=True,text=True,timeout=15)
