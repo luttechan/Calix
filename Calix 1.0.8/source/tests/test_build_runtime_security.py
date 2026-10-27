@@ -1,5 +1,5 @@
 import pytest
-from tools.check_runtime_security import check_openssl,check_release_python
+from tools.check_runtime_security import check_openssl,check_release_python,parse_openssl_version
 
 
 @pytest.mark.parametrize('version',[(3,0,16),(3,5,8),(3,6,4),(4,0,2),(2,0,0)])
@@ -16,3 +16,10 @@ def test_release_python_cannot_silently_fall_back_to_312():
     assert check_release_python((3,14,10))
     assert not check_release_python((3,12,10))
     assert not check_release_python((3,14,7))
+
+
+def test_real_openssl_version_string_is_parsed_as_semantic_patch():
+    assert parse_openssl_version('OpenSSL 3.5.9 29 Sep 2026')==(3,5,9)
+    assert check_openssl(parse_openssl_version('OpenSSL 3.5.9 29 Sep 2026'))
+    assert not check_openssl(parse_openssl_version('OpenSSL 3.0.16 11 Feb 2025'))
+    assert not check_openssl(parse_openssl_version('LibreSSL 3.5.9'))
