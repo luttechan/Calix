@@ -1,0 +1,26 @@
+name: Calix release text (one time)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/calix-release-copy-once.yml
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    if: github.event.head_commit.message == 'Update Calix 1.0.7 release text once'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - name: Update Calix 1.0.7 description
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit v1.0.7 --repo luttechan/Calix --notes-file release-notes.md
