@@ -1,0 +1,7 @@
+-r requirements.txt
+pytest>=8,<10
+psutil>=6,<8
+
+# Offline public-holiday table generator only
+holidays==0.107
+fonttools==4.67.0

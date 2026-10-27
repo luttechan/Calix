@@ -1,0 +1,15 @@
+**/__pycache__/
+**/.pytest_cache/
+**/build/
+**/dist/
+**/.venv/
+**/app/
+*.pyc
+*.log
+*.db
+*.db-wal
+*.db-shm
+*.dpapi
+*.har
+*.calix
+*.zip
