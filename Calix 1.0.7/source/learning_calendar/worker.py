@@ -1,6 +1,7 @@
 """Network and SQLite writes run outside the GUI thread."""
 import logging
 import threading
+from queue import Queue,Empty
 from pathlib import Path
 from PySide6.QtCore import QThread, Signal
 from .sync import CampusClient, SyncCancelled, AuthenticationRequired
@@ -18,13 +19,36 @@ class SyncTask(QThread):
 
     def cancel(self):self.cancel_event.set()
 
+    def _fetch_network(self):
+        # Requests cannot interrupt every blocked socket. Only network work
+        # may outlive cancellation; SQLite writes always stay on this QThread.
+        result=Queue(maxsize=1);cancel=self.cancel_event;cookies=self.cookies
+        def progress(message):
+            if not cancel.is_set():self.progress.emit(message)
+        def fetch():
+            client=None
+            try:
+                client=CampusClient(cookies,cancel)
+                identity=client._get('/api/v1/users/self/profile').json()
+                uid=str(int(identity['id']))
+                courses,batches,warnings=client.fetch(progress)
+                value=(uid,courses,batches,warnings,getattr(client,'movie_auth_required',False))
+                result.put((True,value))
+            except Exception as exc:result.put((False,exc))
+            finally:
+                if client:client.session.close()
+        threading.Thread(target=fetch,name='calix-network',daemon=True).start()
+        while True:
+            if cancel.is_set():raise SyncCancelled('취소됨')
+            try:ok,value=result.get(timeout=.025)
+            except Empty:continue
+            if not ok:raise value
+            return value
+
     def run(self):
-        client=None;store=None
+        store=None
         try:
-            client=CampusClient(self.cookies,self.cancel_event)
-            identity=client._get('/api/v1/users/self/profile').json()
-            uid=str(int(identity['id']))
-            courses,batches,warnings=client.fetch(self.progress.emit)
+            uid,courses,batches,warnings,movie_auth_required=self._fetch_network()
             if self.cancel_event.is_set():raise SyncCancelled('취소됨')
             if not batches:raise RuntimeError('일정을 가져오지 못했습니다. 다시 시도하세요.')
             store=Store(self.db_path)
@@ -47,7 +71,7 @@ class SyncTask(QThread):
             snapshot=Snapshot(store.events(),store.courses())
             self.success.emit({'path':str(store.path),'snapshot':snapshot,'stats':stats,
                                'last_sync':store.get_meta('last_sync'),'warnings':warnings,'sessions':store.timetable(),
-                               'movie_auth_required':getattr(client,'movie_auth_required',False)})
+                               'movie_auth_required':movie_auth_required})
         except SyncCancelled:
             pass
         except AuthenticationRequired as exc:
@@ -57,4 +81,3 @@ class SyncTask(QThread):
         finally:
             self.cookies=[]
             if store:store.close()
-            if client:client.session.close()

@@ -1,7 +1,7 @@
 from __future__ import annotations
 import requests
 import threading
-from concurrent.futures import ThreadPoolExecutor,as_completed
+from queue import Queue,Empty
 from urllib.parse import urljoin, urlparse
 from .models import Course, Event
 from .parsers import course_list, parse_movies, parse_assignments, BASE_URL
@@ -144,13 +144,32 @@ class CampusClient:
                     part,notes=client._fetch_course(course,say)
                     return part,notes,client.movie_auth_required
                 finally:client.session.close()
-            with ThreadPoolExecutor(max_workers=min(4,len(courses)),thread_name_prefix='bufs-sync') as pool:
-                jobs=[pool.submit(collect,course) for course in courses]
-                try:
-                    for future in as_completed(jobs):
-                        part,notes,needs_auth=future.result();batches.update(part);warnings.extend(notes);self.movie_auth_required|=needs_auth
-                finally:
-                    for future in jobs:future.cancel()
+            jobs=Queue();results=Queue();stop=threading.Event()
+            for course in courses:jobs.put(course)
+            def consume():
+                while not stop.is_set() and not self.cancel_event.is_set():
+                    try:course=jobs.get_nowait()
+                    except Empty:return
+                    try:results.put((True,collect(course)))
+                    except Exception as exc:results.put((False,exc));return
+            workers=[threading.Thread(target=consume,name=f'bufs-sync-{i}',daemon=True) for i in range(min(4,len(courses)))]
+            for worker in workers:worker.start()
+            try:
+                for _ in courses:
+                    while True:
+                        self._check_cancel()
+                        try:ok,value=results.get(timeout=.025);break
+                        except Empty:continue
+                    if not ok:raise value
+                    part,notes,needs_auth=value;batches.update(part);warnings.extend(notes);self.movie_auth_required|=needs_auth
+            finally:
+                stop.set()
+                # Normal completion closes every owned Session. Cancellation
+                # never joins a blocked daemon request during application exit.
+                if not self.cancel_event.is_set():
+                    for worker in workers:
+                        while worker.is_alive():
+                            self._check_cancel();worker.join(.025)
         return courses,batches,warnings
 
     def _fetch_course(self,course,say):
