@@ -1,6 +1,6 @@
 """Verify embedded app code and runtime-only distribution contents."""
 from pathlib import Path
-import sys,json,types,marshal,pefile
+import sys,json,types,marshal,pefile,ast
 from PyInstaller.archive.readers import CArchiveReader
 from bundle_policy import RUNTIME_ASSETS,keep_entry,keep_tls_library
 
@@ -18,6 +18,10 @@ def check(folder):
     pyz=archive.open_embedded_archive(next(name for name in archive.toc if name.lower().endswith('.pyz')))
     modules=[]
     for source in (ROOT/'learning_calendar').glob('*.py'):
+        for node in ast.walk(ast.parse(source.read_bytes())):
+            if isinstance(node,ast.ImportFrom):
+                assert node.module!='PySide6.QtTest' and not (node.module=='PySide6' and any(item.name=='QtTest' for item in node.names)),source.name
+            elif isinstance(node,ast.Import):assert all(item.name!='PySide6.QtTest' for item in node.names),source.name
         name='learning_calendar' if source.stem=='__init__' else 'learning_calendar.'+source.stem
         assert name in pyz.toc,name
         assert signature(pyz.extract(name))==signature(compile(source.read_bytes(),str(source),'exec')),name

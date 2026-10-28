@@ -2,9 +2,9 @@
 import json
 import time
 from datetime import datetime,timedelta
-from PySide6.QtCore import QObject,QEvent,QTimer,Qt,QPoint
+from PySide6.QtCore import QObject,QEvent,QTimer,Qt,QPoint,QPointF
+from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QApplication,QWidget
-from PySide6.QtTest import QTest
 from .models import Course,Event,KST
 from .snapshot import Snapshot
 
@@ -30,7 +30,11 @@ class NavigationProbe(QObject):
         self.active=dict(page=page,started=time.perf_counter(),target=target,painted=False)
         QApplication.instance().installEventFilter(self);self.timer.start(4000)
         button=w.home_nav if page=='home' else w.diary_nav if page=='diary' else w.nav[page]
-        QTest.mouseClick(button,Qt.MouseButton.LeftButton)
+        center=button.rect().center();local=QPointF(center);global_pos=QPointF(button.mapToGlobal(center))
+        # Deliver the same press/release path without bundling Qt's test tools.
+        for kind,buttons in ((QEvent.Type.MouseButtonPress,Qt.MouseButton.LeftButton),(QEvent.Type.MouseButtonRelease,Qt.MouseButton.NoButton)):
+            event=QMouseEvent(kind,local,global_pos,Qt.MouseButton.LeftButton,buttons,Qt.KeyboardModifier.NoModifier)
+            QApplication.sendEvent(button,event)
         self.active['handler_ms']=(time.perf_counter()-self.active['started'])*1000
         target.update()
 
