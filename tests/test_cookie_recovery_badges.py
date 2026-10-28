@@ -49,7 +49,7 @@ def test_cookie_probe_must_round_trip_before_loading_school(dialog,app):
 
 def test_canvas_cookie_warning_recovers_once(dialog,monkeypatch):
     calls=[];dialog.view=SimpleNamespace(url=lambda:QUrl('https://canvas.bufs.ac.kr/login'),stop=lambda:None,deleteLater=lambda:None)
-    dialog.page=SimpleNamespace(runJavaScript=lambda script,callback:callback('쿠키 필요. 보안 기본 설정을 조정하십시오.'))
+    dialog.page=SimpleNamespace(runJavaScript=lambda script,callback:callback('쿠키 필요. 보안 기본 설정을 조정하십시오.'),deleteLater=lambda:None)
     monkeypatch.setattr(dialog,'_restart_login',lambda:calls.append('restart'))
     dialog._page_loaded(True);dialog._page_loaded(True)
     assert calls==['restart'] and dialog._warning_recovered
