@@ -1,8 +1,8 @@
 """Verify embedded app code and runtime-only distribution contents."""
 from pathlib import Path
-import sys,json,types,marshal
+import sys,json,types,marshal,pefile
 from PyInstaller.archive.readers import CArchiveReader
-from bundle_policy import RUNTIME_ASSETS,keep_entry
+from bundle_policy import RUNTIME_ASSETS,keep_entry,keep_tls_library
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -24,10 +24,21 @@ def check(folder):
         modules.append(name)
     assert signature(marshal.loads(archive.extract('main')))==signature(compile((ROOT/'main.py').read_bytes(),str(ROOT/'main.py'),'exec'))
     files=[path for path in folder.rglob('*') if path.is_file()]
+    required_tls=set()
+    for module in ('_ssl.pyd','_hashlib.pyd'):
+        pe=pefile.PE(str(folder/'_internal'/module),fast_load=True)
+        pe.parse_data_directories(directories=[pefile.DIRECTORY_ENTRY['IMAGE_DIRECTORY_ENTRY_IMPORT']])
+        for item in pe.DIRECTORY_ENTRY_IMPORT:
+            name=item.dll.decode('ascii').lower()
+            if name.startswith(('libcrypto-','libssl-')):
+                assert (folder/'_internal'/name).is_file(),f'Missing Python TLS dependency: {name}'
+                required_tls.add(name)
+        pe.close()
     for path in files:
         relative=path.relative_to(folder).as_posix()
         assert path.suffix.lower() not in {'.py','.pyc','.har','.db','.dpapi'},relative
         assert keep_entry(relative),relative
+        assert keep_tls_library(relative,required_tls),relative
         assert not path.name.startswith(('Qt63D','Qt6Quick3D')),relative
     for path in RUNTIME_ASSETS:assert (folder/'_internal'/path).is_file(),path
     assert not (folder/'_internal/asset/style/PretendardVariable.ttf').exists()

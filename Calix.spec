@@ -3,12 +3,13 @@ from pathlib import Path
 import os
 import ssl
 import sys
+import _ssl,_hashlib,pefile
 from importlib.metadata import distribution
 from PyInstaller.utils.hooks import collect_data_files
 
 root = Path(SPECPATH)
 sys.path.insert(0,str(root/'tools'))
-from bundle_policy import RUNTIME_ASSETS,keep_entry
+from bundle_policy import RUNTIME_ASSETS,keep_entry,keep_tls_library
 debug = os.environ.get('CALIX_DEBUG') == '1'
 product = 'Calix-Debug' if debug else 'Calix'
 # The build runtime's ssl module loads an adjacent certificate policy file
@@ -30,9 +31,15 @@ a = Analysis(
     hookspath=[str(root/'tools/pyinstaller_hooks')], hooksconfig={}, runtime_hooks=[], excludes=['PySide6.QtTest'], noarchive=False,
 )
 system_dlls = {'icuuc.dll', 'icuin.dll', 'ucrtbase.dll'}
+python_tls=set()
+for module in (_ssl,_hashlib):
+    pe=pefile.PE(module.__file__,fast_load=True)
+    pe.parse_data_directories(directories=[pefile.DIRECTORY_ENTRY['IMAGE_DIRECTORY_ENTRY_IMPORT']])
+    python_tls.update(item.dll.decode('ascii').lower() for item in pe.DIRECTORY_ENTRY_IMPORT)
+    pe.close()
 a.datas=[item for item in a.datas if keep_entry(item[0])]
 a.binaries = [item for item in a.binaries
-              if keep_entry(item[0]) and Path(item[0]).name.lower() not in system_dlls
+              if keep_entry(item[0]) and keep_tls_library(item[0],python_tls) and Path(item[0]).name.lower() not in system_dlls
               and not Path(item[0]).name.lower().startswith(('icudt', 'api-ms-win-'))]
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name=product,

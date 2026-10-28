@@ -16,9 +16,14 @@ def keep_entry(name):
     if 'qml' in parts or 'qmltooling' in parts:return False
     if '.debug.' in base or base=='qtwebengineprocessd.exe':return False
     if base.startswith('qtwebengine_devtools_resources'):return False
-    # Qt uses Windows Schannel. Python retains its own patched OpenSSL DLLs.
-    if base in {'qopensslbackend.dll','libcrypto-3.dll','libssl-3.dll'}:return False
+    # Qt uses Windows Schannel. Python's TLS files are selected by PE imports.
+    if base=='qopensslbackend.dll':return False
     if 'translations' in parts:
         if 'qtwebengine_locales' in parts:return base in {'ko.pak','en-us.pak'}
         return base in {'qt_ko.qm','qtbase_ko.qm','qtwebengine_ko.qm'}
     return True
+
+
+def keep_tls_library(name,required):
+    base=PurePosixPath(name.replace('\\','/').lower()).name
+    return not (base.startswith(('libcrypto-','libssl-')) and base.endswith('.dll')) or base in required
