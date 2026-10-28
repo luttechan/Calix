@@ -18,6 +18,12 @@ Qt: https://code.qt.io/ and https://www.qt.io/licensing/
 '''
 
 
+def font_notice():
+    license_text=(ROOT/'asset/style/Pretendard-OFL.txt').read_text(encoding='utf-8')
+    copyright=license_text.partition('This Font Software')[0].strip()
+    return 'Font: Calix Sans (derived from Pretendard)\n'+copyright+'\nSIL Open Font License 1.1.\n'
+
+
 def package(bundle,output):
     bundle=Path(bundle).resolve();output=Path(output).resolve();output.mkdir(parents=True,exist_ok=True)
     assert (bundle/'Calix.exe').is_file() and not (bundle/'source').exists()
@@ -29,7 +35,7 @@ def package(bundle,output):
             assert path.resolve().is_relative_to(bundle) and not path.is_symlink()
             assert relative.parts[0] in {'Calix.exe','_internal'},relative
             archive.write(path,'Calix 1.0.8/'+relative.as_posix());count+=1
-        for name,content in [('run_windows.bat',LAUNCHER),('README.md',README),('THIRD_PARTY_NOTICES.txt',NOTICES),('LICENSE',(ROOT/'LICENSE').read_text(encoding='utf-8'))]:
+        for name,content in [('run_windows.bat',LAUNCHER),('README.md',README),('THIRD_PARTY_NOTICES.txt',NOTICES+'\n'+font_notice()),('LICENSE',(ROOT/'LICENSE').read_text(encoding='utf-8'))]:
             archive.writestr('Calix 1.0.8/'+name,content.encode('utf-8'))
     with archive_path.open('rb') as stream:digest=hashlib.file_digest(stream,'sha256').hexdigest()
     (output/'SHA256SUMS.txt').write_text(f'{digest}  {archive_path.name}\n',encoding='utf-8')

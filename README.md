@@ -19,3 +19,6 @@ python main.py
 빌드: `build_windows.bat`. 출력: 저장소 밖 `../Calix-builds/Calix 1.0.8/`.
 
 개발: Lutté Laurent
+
+글꼴: Pretendard 기반 Calix Sans. © 2021 Kil Hyung-jin.
+[SIL OFL 1.1 / 전체 저작권 고지](asset/style/Pretendard-OFL.txt)
