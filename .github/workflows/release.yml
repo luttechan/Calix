@@ -5,7 +5,13 @@ on:
   push:
     branches: [main]
     paths:
-      - 'Calix 1.0.8/**'
+      - 'learning_calendar/**'
+      - 'asset/**'
+      - 'tests/**'
+      - 'tools/**'
+      - 'main.py'
+      - 'Calix.spec'
+      - 'requirements*.txt'
       - '.github/workflows/release.yml'
 
 permissions:
@@ -22,41 +28,64 @@ jobs:
     defaults:
       run:
         shell: pwsh
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: '3.14.10'
           cache: pip
-          cache-dependency-path: 'Calix 1.0.8/source/requirements-build.txt'
+          cache-dependency-path: requirements-build.txt
       - name: Check release runtime
-        working-directory: Calix 1.0.8/source
         run: python tools/check_runtime_security.py
       - name: Install build dependencies
-        working-directory: Calix 1.0.8/source
         run: 'python -m pip install --only-binary=:all: -r requirements-build.txt'
+      - name: Generate runtime assets
+        run: python -B tools/prepare_assets.py
       - name: Check application
-        working-directory: Calix 1.0.8/source
         env:
           QT_QPA_PLATFORM: offscreen
-          PYTHONDONTWRITEBYTECODE: '1'
         run: python -m pytest -q tests -p no:cacheprovider
       - name: Check portable CPU paths
-        working-directory: Calix 1.0.8/source
         env:
           QT_QPA_PLATFORM: offscreen
           QT_NO_CPU_FEATURE: aes avx avx2 avx512bitalg avx512bw avx512cd avx512dq avx512f avx512fp16 avx512ifma avx512vbmi avx512vbmi2 avx512vl avx512vpopcntdq avxifma bmi bmi2 f16c fma gfni sha sse3 sse4.1 sse4.2 ssse3 vaes
           OPENSSL_ia32cap: '0:0:0:0:0'
         run: python -m pytest -q tests/test_diary_manual.py tests/test_secret_pending.py tests/test_autofill_guard.py tests/test_italic_faces.py tests/test_ready_dialogs.py -p no:cacheprovider
       - name: Build Windows application
-        working-directory: Calix 1.0.8/source
         run: python -m PyInstaller --noconfirm --clean Calix.spec
+      - name: Verify embedded code and bundle size
+        run: python tools/check_bundle.py 'dist/Calix 1.0.8'
+      - name: Check packaged UI and browser
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QT_NO_CPU_FEATURE: aes avx avx2 avx512bitalg avx512bw avx512cd avx512dq avx512f avx512fp16 avx512ifma avx512vbmi avx512vbmi2 avx512vl avx512vpopcntdq avx512vl avxifma bmi bmi2 f16c fma gfni sha sse3 sse4.1 sse4.2 ssse3 vaes
+          OPENSSL_ia32cap: '0:0:0:0:0'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Join-Path (Get-Location) 'dist/Calix 1.0.8/Calix.exe'
+          foreach ($mode in @('smoke-test','browser-check')) {
+            $report = Join-Path $env:RUNNER_TEMP "calix-$mode.json"
+            $process = Start-Process -FilePath $exe -ArgumentList @("--$mode",$report) -WindowStyle Hidden -PassThru
+            if (-not $process.WaitForExit(30000)) { $process.Kill(); throw "$mode timed out." }
+            if ($process.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $report)) { throw "$mode failed." }
+            $result = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+            if ($mode -eq 'browser-check') {
+              if (-not $result.passed -or $result.qt_tls_backend -ne 'schannel') { throw 'Browser validation failed.' }
+            } else {
+              $checks = @('font_loaded','font_has_hangul','tls_context_ready','crypto_roundtrip','assignment_list_matches_snapshot','movie_list_matches_snapshot','calendar_filters_isolated','special_birthday_available','special_options_labels','calendar_nov29_overlay_matches','compact_calendar_chips','calendar_full_width_default','home_available','timetable_available','credits_available','diary_available','vault_crypto_ready','login_available')
+              foreach ($check in $checks) { if ($result.$check -ne $true) { throw "UI check failed: $check" } }
+              if ($result.tls_library -notmatch '^OpenSSL 3[.]5[.]9 ') { throw 'Unexpected TLS runtime.' }
+            }
+            Get-Content -LiteralPath $report -Raw
+          }
       - name: Measure packaged menu response
-        working-directory: Calix 1.0.8/source
         run: |
           $ErrorActionPreference = 'Stop'
           $report = Join-Path $env:RUNNER_TEMP 'calix-navigation.json'
-          $process = Start-Process -FilePath './dist/Calix-1.0.8/Calix.exe' -ArgumentList @('--navigation-check', $report) -WindowStyle Hidden -PassThru
+          $exe = Join-Path (Get-Location) 'dist/Calix 1.0.8/Calix.exe'
+          $process = Start-Process -FilePath $exe -ArgumentList @('--navigation-check',$report) -WindowStyle Hidden -PassThru
           if (-not $process.WaitForExit(30000)) { $process.Kill(); throw 'Menu check timed out.' }
           if ($process.ExitCode -notin @(0,1) -or -not (Test-Path -LiteralPath $report)) { throw 'Menu check failed.' }
           $result = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
@@ -66,51 +95,23 @@ jobs:
           }
           if (-not $result.passed) { Write-Warning '50 ms target was not reached on this hosted runner.' }
           Get-Content -LiteralPath $report -Raw
-      - name: Check packaged cryptography and UI
-        working-directory: Calix 1.0.8/source
-        env:
-          QT_QPA_PLATFORM: offscreen
-          QT_NO_CPU_FEATURE: aes avx avx2 avx512bitalg avx512bw avx512cd avx512dq avx512f avx512fp16 avx512ifma avx512vbmi avx512vbmi2 avx512vl avx512vpopcntdq avxifma bmi bmi2 f16c fma gfni sha sse3 sse4.1 sse4.2 ssse3 vaes
-          OPENSSL_ia32cap: '0:0:0:0:0'
+      - name: Package runtime only
         run: |
-          $ErrorActionPreference = 'Stop'
-          $report = Join-Path $env:RUNNER_TEMP 'calix-smoke.json'
-          $process = Start-Process -FilePath './dist/Calix-1.0.8/Calix.exe' -ArgumentList @('--smoke-test', $report) -WindowStyle Hidden -PassThru
-          if (-not $process.WaitForExit(30000)) { $process.Kill(); throw 'Package check timed out.' }
-          if ($process.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $report)) { throw 'Package check failed.' }
-          $result = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
-          $checks = @('font_loaded','font_has_hangul','tls_context_ready','crypto_roundtrip','assignment_list_matches_snapshot','movie_list_matches_snapshot','calendar_filters_isolated','special_birthday_available','special_options_labels','calendar_nov29_overlay_matches','compact_calendar_chips','calendar_full_width_default','home_available','timetable_available','credits_available','diary_available','vault_crypto_ready','login_available')
-          foreach ($check in $checks) { if ($result.$check -ne $true) { throw "Package validation failed: $check" } }
-          if ($result.tls_library -notmatch '^OpenSSL 3[.]5[.]9 ') { throw 'Unexpected packaged TLS runtime.' }
-          Get-Content -LiteralPath $report -Raw
-      - name: Package Calix
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $destination = Join-Path $env:RUNNER_TEMP 'calix-release'
-          $version = Join-Path $destination 'Calix 1.0.8'
-          New-Item -ItemType Directory -Path $version | Out-Null
-          Copy-Item -LiteralPath 'Calix 1.0.8/source/dist/Calix-1.0.8' -Destination (Join-Path $version 'app') -Recurse
-          & robocopy 'Calix 1.0.8/source' (Join-Path $version 'source') /E /XJ /XD build dist __pycache__ .pytest_cache .venv /XF *.pyc /R:1 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
-          if ($LASTEXITCODE -gt 7) { throw 'Source copy failed.' }
-          Copy-Item -LiteralPath 'Calix 1.0.8/run_windows.bat' -Destination $version
-          Copy-Item -LiteralPath 'README.md','LICENSE' -Destination $version
-          Copy-Item -LiteralPath 'Calix 1.0.8/source/docs' -Destination (Join-Path $version 'docs') -Recurse
-          New-Item -ItemType Directory -Path (Join-Path $version 'asset'),(Join-Path $version 'diagnostics') | Out-Null
-          Copy-Item -LiteralPath 'Calix 1.0.8/source/asset/profile.png','Calix 1.0.8/source/asset/profile-avatar.png' -Destination (Join-Path $version 'asset')
-          Copy-Item -LiteralPath (Join-Path $env:RUNNER_TEMP 'calix-navigation.json') -Destination (Join-Path $version 'diagnostics/menu-response.json')
-          Copy-Item -LiteralPath (Join-Path $env:RUNNER_TEMP 'calix-smoke.json') -Destination (Join-Path $version 'diagnostics/package-check.json')
-          Push-Location $destination
-          tar -a -c -f Calix-1.0.8-Windows-x64.zip 'Calix 1.0.8'
-          if ($LASTEXITCODE -ne 0) { throw 'Archive failed.' }
-          $hash = (Get-FileHash -LiteralPath Calix-1.0.8-Windows-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  Calix-1.0.8-Windows-x64.zip" | Set-Content -LiteralPath SHA256SUMS.txt -Encoding utf8NoBOM
-          Pop-Location
+          $output = Join-Path $env:RUNNER_TEMP 'calix-release'
+          python tools/package_release.py 'dist/Calix 1.0.8' $output
+          if ($LASTEXITCODE -ne 0) { throw 'Packaging failed.' }
+          if ((Get-Item -LiteralPath (Join-Path $output 'Calix-1.0.8-Windows-x64.zip')).Length -ge 200MB) { throw 'Unexpected archive size.' }
       - name: Publish release
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'Calix Release v.1.0.8 revision 3'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
           $package = Join-Path $env:RUNNER_TEMP 'calix-release'
-          gh release create v1.0.8-r2 (Join-Path $package 'Calix-1.0.8-Windows-x64.zip') (Join-Path $package 'SHA256SUMS.txt') --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Calix 1.0.8 보안 패치' --notes-file 'release-notes.md' --latest
+          $existing = gh release view v1.0.8-r3 --repo $env:GITHUB_REPOSITORY --json targetCommitish --jq '.targetCommitish' 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            if ($existing -eq $env:GITHUB_SHA) { exit 0 }
+            throw 'This revision already exists. Do not move the old tag.'
+          }
+          gh release create v1.0.8-r3 (Join-Path $package 'Calix-1.0.8-Windows-x64.zip') (Join-Path $package 'SHA256SUMS.txt') --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Calix 1.0.8 revision 3' --notes-file 'docs/RELEASE_NOTES.md' --latest
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed.' }
