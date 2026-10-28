@@ -409,7 +409,10 @@ class CampusLoginDialog(QDialog):
     def dispose(self):
         from .app_identity import clear_window_identity
         clear_window_identity(self)
+        self._cancelled=True;self._shutting_down=True
         self.capture_timer.stop();self.bootstrap_timer.stop();self._password='';self._student_id=''
         self.snapshot_timer.stop()
-        if self.view:self.view.stop();self.view.deleteLater();self.view=None
-        self.page=None
+        view,page=self.view,self.page;self.view=None;self.page=None
+        if view:view.stop()
+        if page:page.deleteLater()
+        if view:view.deleteLater()

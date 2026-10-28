@@ -23,8 +23,17 @@ def run(output,existing=None,theme='sky',ready_file=None,control_server=None):
     if accepted and canvas_session_available(dialog.session_rows):
         write_cookies(Path(output),dialog.session_rows);result=0
     profile_dir=dialog._profile_dir
-    dialog.dispose();dialog.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
-    QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
+    if control_server:
+        service.quit_timer.stop();service.socket.blockSignals(True);service.socket.abort();service.deleteLater()
+    # A profile must outlive every page that uses it. Keep it independent of
+    # the dialog until deferred page and view destruction has completed.
+    profile=dialog.profile
+    if profile:profile.setParent(None)
+    dialog.dispose();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
+    app.processEvents();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
+    if profile:
+        profile.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
+    dialog.profile=None;dialog.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
     app.processEvents()
     if profile_dir:
         # Chromium can release its disk handles shortly after QObject teardown.
