@@ -2,3 +2,6 @@
 from PyInstaller.utils.hooks.qt import add_qt6_dependencies
 
 hiddenimports,binaries,datas=add_qt6_dependencies(__file__)
+# Filter before binary dependency discovery, so debugger plugins cannot pull
+# their unused Quick3D support libraries into the bundle.
+binaries=[entry for entry in binaries if 'qmltooling' not in entry[0].replace('\\','/').lower().split('/')]
