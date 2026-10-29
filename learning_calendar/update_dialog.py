@@ -27,7 +27,8 @@ class UpdateDialog(QDialog):
         self.manager=QNetworkAccessManager(self);self.reply=None;self.release=None;self.mode='check'
         self.buffer=bytearray();self.file=None;self.partial=None;self.installer=None;self.redirects=0;self.received=0
         self.timeout=QTimer(self);self.timeout.setSingleShot(True);self.timeout.setInterval(20_000);self.timeout.timeout.connect(lambda:self.fail('연결 시간이 초과됐습니다.'))
-        self.action.setEnabled(False);QTimer.singleShot(0,self.check)
+        self.initial_check=QTimer(self);self.initial_check.setSingleShot(True);self.initial_check.timeout.connect(self.check)
+        self.action.setEnabled(False);self.initial_check.start(0)
 
     def open_release(self):QDesktopServices.openUrl(QUrl(self.release.url if self.release else RELEASES))
 
@@ -124,11 +125,17 @@ class UpdateDialog(QDialog):
     def fail(self,message):
         self.cancel();self.mode='check';self.buffer.clear();self.message.setText(message);self.action.setText('다시 확인');self.action.setEnabled(True);self.progress.hide()
 
-    def closeEvent(self,event):
+    def cleanup(self):
+        self.initial_check.stop()
         self.cancel()
         if self.installer:
             self.installer.unlink(missing_ok=True)
             try:self.installer.parent.rmdir()
             except OSError:pass
             self.installer=None
-        super().closeEvent(event)
+
+    def done(self,result):
+        self.cleanup();super().done(result)
+
+    def closeEvent(self,event):
+        self.cleanup();super().closeEvent(event)

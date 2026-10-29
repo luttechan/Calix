@@ -71,3 +71,9 @@ def test_cancelled_exit_keeps_download_and_no_installer_is_started(app,tmp_path,
     widget._install_update(str(tmp_path/'verified.exe'))
     assert not widget._closed and widget._update_installer is None
     widget.dispose();cleanup(widget,app)
+
+def test_escape_cleans_download_and_cancels_unstarted_check(app,tmp_path,monkeypatch):
+    widget=UpdateDialog();calls=[];monkeypatch.setattr(widget.manager,'get',lambda *args:calls.append(args))
+    path=tmp_path/'setup.exe';path.write_bytes(b'fixture');widget.installer=path
+    widget.reject();widget.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete);app.processEvents()
+    assert not path.exists() and not calls
