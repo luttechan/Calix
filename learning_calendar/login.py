@@ -45,18 +45,25 @@ class LoginValidation(QThread):
             if not isinstance(identity,dict) or not identity.get('id'):raise ValueError('학교 계정을 확인하지 못했습니다.')
             cid=None;course_ids=[]
             try:
-                courses=client._get('/api/v1/dashboard/dashboard_cards').json()
-                if isinstance(courses,list):course_ids=[int(c['id']) for c in courses if isinstance(c,dict) and c.get('id')]
+                course_ids=[course.id for course in client._list_courses()]
                 cid=next(iter(course_ids),None)
             except Exception:pass
             token_valid=False
             if client._learningx_token:
-                for candidate in course_ids[:3]:
-                    try:client._get(f'/learningx/api/v1/courses/{candidate}/modules');cid=candidate;token_valid=True;break
-                    except Exception:continue
+                failed=[]
+                from .parsers import parse_movies
+                from .models import Course
+                for candidate in course_ids:
+                    try:
+                        modules=client._paginated(f'/learningx/api/v1/courses/{candidate}/modules',{'include_detail':'true','per_page':100},collection='modules')
+                        parse_movies(Course(candidate,''),modules)
+                    except Exception:failed.append(candidate)
+                token_valid=bool(course_ids) and not failed
+                if failed:cid=failed[0]
+            else:failed=course_ids
             entry=None
             if cid and not token_valid:
-                for candidate in course_ids[:4]:
+                for candidate in failed:
                     try:entry=learningx_entry(client._get(f'/api/v1/courses/{candidate}/tabs').json())
                     except Exception:continue
                     if entry:cid=candidate;break
@@ -272,7 +279,8 @@ class CampusLoginDialog(QDialog):
         if not cid:self._finish_after_validation=True;self._complete();return
         self.message.setText('주차학습을 자동으로 연결하고 있어요…')
         self.done_btn.setText('연결 중');self.done_btn.setEnabled(False)
-        if not self._bootstrap_active:
+        if not self._bootstrap_active or getattr(self,'_bootstrap_course',None)!=cid:
+            self._bootstrap_course=cid
             self._bootstrap_active=True;self._bootstrap_deadline=time.monotonic()+30;self._link_check_at=0.
             self.bootstrap_timer.start()
             self.view.setUrl(QUrl(result.get('learningx_url') or f'https://canvas.bufs.ac.kr/courses/{int(cid)}'))

@@ -34,6 +34,16 @@ def course_list(payload: object) -> list[Course]:
     return list(found.values())
 
 
+def movie_completion(item):
+    value=item.get('completed')
+    if value is True or value==1 or (isinstance(value,str) and value.lower()=='true'):return True
+    attendance=item.get('attendance_status')
+    if attendance in ('attendance','late','excused'):return True
+    if value is False or value==0 or (isinstance(value,str) and value.lower()=='false'):return False
+    if attendance in ('none','absent'):return False
+    raise ValueError('영상 시청 상태를 확인하지 못했습니다.')
+
+
 def parse_movies(course: Course, payload: object) -> list[Event]:
     if isinstance(payload, dict):
         payload = payload.get('modules')
@@ -61,7 +71,7 @@ def parse_movies(course: Course, payload: object) -> list[Event]:
                 key=key, course_id=course.id, course_name=course.name,
                 kind='movie',
                 title=str(data.get('title') or item.get('title') or media.get('title') or f'동영상 {identifier}'),
-                due_at=data.get('due_at'), completed=bool(item.get('completed')),
+                due_at=data.get('due_at'), completed=movie_completion(item),
                 url=safe_url(item.get('url')), week=week,
             )
     return list(found.values())
