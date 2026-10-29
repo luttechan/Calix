@@ -191,7 +191,9 @@ class CampusClient:
         try:
             modules=self._paginated(f'/learningx/api/v1/courses/{course.id}/modules',{'include_detail':'true','per_page':100},collection='modules')
             batches[(course.id,'movie')]=parse_movies(course,modules)
-            report.update(videos_verified=True,videos=len(batches[(course.id,'movie')]),watched=sum(e.completed for e in batches[(course.id,'movie')]))
+            events=batches[(course.id,'movie')];unknown=sum(not e.completion_verified for e in events)
+            report.update(videos_verified=not unknown,videos=len(events),watched=sum(e.completed for e in events),unknown=unknown)
+            if unknown:warnings.append(f'{course.name}: 영상 {unknown}건의 시청 상태 미확인')
         except LearningXAuthenticationRequired:
             self.movie_auth_required=True;warnings.append(f'{course.name}: 동영상 인증을 자동으로 연결하고 있습니다.')
         except AuthenticationRequired:raise

@@ -13,7 +13,7 @@ from learning_calendar.login import LoginValidation
 def test_school_video_completion_fields(item,done):assert movie_completion(item) is done
 
 def test_missing_video_completion_is_not_guessed():
-    with pytest.raises(ValueError,match='시청 상태'):movie_completion({})
+    assert movie_completion({}) is None
 
 @pytest.mark.parametrize('failed_course',[None,6])
 def test_login_checks_every_course_and_does_not_accept_first_success(monkeypatch,failed_course):

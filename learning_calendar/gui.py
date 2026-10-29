@@ -736,7 +736,7 @@ class MainWindow(QMainWindow):
             self._movie_reauth_attempted=True;self._reauth_requested=True
         notes=[note for note in result['warnings'] if '동영상 인증' not in note]
         if notes:
-            box=QMessageBox(QMessageBox.Icon.Warning,'일부 조회 실패','기존 일정을 유지했습니다.',parent=self)
+            box=QMessageBox(QMessageBox.Icon.Warning,'일부 조회 실패','일부 항목을 확인하지 못했습니다.',parent=self)
             box.setDetailedText('\n'.join(notes));box.exec();box.deleteLater()
 
     @Slot(str)

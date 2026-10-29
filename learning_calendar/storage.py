@@ -3,6 +3,7 @@ import sqlite3
 from contextlib import nullcontext
 from pathlib import Path
 from datetime import datetime, timezone
+from dataclasses import replace
 from .models import Course, Event
 
 SCHEMA = '''
@@ -43,7 +44,7 @@ class Store:
         if 'color' not in {r['name'] for r in self.db.execute('PRAGMA table_info(timetable)')}:
             self.db.execute("ALTER TABLE timetable ADD COLUMN color TEXT NOT NULL DEFAULT ''");self.db.commit()
         event_columns={r['name'] for r in self.db.execute('PRAGMA table_info(events)')}
-        for name,definition in (('manual','INTEGER NOT NULL DEFAULT 0'),('type_id','INTEGER'),('series_id',"TEXT NOT NULL DEFAULT ''")):
+        for name,definition in (('manual','INTEGER NOT NULL DEFAULT 0'),('type_id','INTEGER'),('series_id',"TEXT NOT NULL DEFAULT ''"),('completion_verified','INTEGER NOT NULL DEFAULT 1')):
             if name not in event_columns:self.db.execute(f'ALTER TABLE events ADD COLUMN {name} {definition}')
         self.db.execute('CREATE TABLE IF NOT EXISTS event_types(id INTEGER PRIMARY KEY,name TEXT NOT NULL UNIQUE COLLATE NOCASE,color TEXT NOT NULL)')
         self.db.execute('CREATE TABLE IF NOT EXISTS event_customizations(event_key TEXT PRIMARY KEY,title TEXT,type_id INTEGER,note TEXT NOT NULL DEFAULT \'\')')
@@ -66,7 +67,7 @@ class Store:
                                   LEFT JOIN event_types t ON t.id=COALESCE(o.type_id,e.type_id)
                                   {where} ORDER BY e.due_at IS NULL,e.due_at,e.title''')
         return [Event(key=r['key'], course_id=r['course_id'], course_name=r['course_name'],
-                      kind=r['kind'], title=r['display_title'], due_at=r['due_at'], completed=bool(r['completed']),
+                      kind=r['kind'], title=r['display_title'], due_at=r['due_at'], completed=bool(r['completed']),completion_verified=bool(r['completion_verified']),
                       url=r['url'], week=r['week'], starred=bool(r['starred']), note=r['display_note'],type_id=r['display_type_id'],type_name=r['type_name'] or '',type_color=r['type_color'] or '',manual=bool(r['manual']),series_id=r['series_id'],source_title=r['title']) for r in rows]
 
     def event_types(self):
@@ -253,20 +254,21 @@ class Store:
                 for e in entries:
                     seen.add(e.key)
                     old = existing.get(e.key)
+                    if old is not None and not e.completion_verified:e=replace(e,completed=bool(old['completed']))
                     if old is None:
                         ctype='new'; description=f'새 일정: {e.title}'
-                    elif (old['due_at'], old['completed'], old['title'], old['active']) != (e.due_at, int(e.completed),e.title,1):
+                    elif (old['due_at'], old['completed'], old['title'], old['active'],old['completion_verified']) != (e.due_at, int(e.completed),e.title,1,int(e.completion_verified)):
                         ctype='updated'; description=f'일정 변경: {e.title}'
                     else:
                         ctype='unchanged';description=''
                     totals[ctype]+=1
                     if ctype == 'unchanged' and old['url'] == e.url and old['week'] == e.week:
                         continue
-                    self.db.execute('''INSERT INTO events(key,course_id,kind,title,due_at,completed,url,week,active,updated_at)
-                         VALUES(?,?,?,?,?,?,?,?,1,?) ON CONFLICT(key) DO UPDATE SET
+                    self.db.execute('''INSERT INTO events(key,course_id,kind,title,due_at,completed,url,week,active,updated_at,completion_verified)
+                         VALUES(?,?,?,?,?,?,?,?,1,?,?) ON CONFLICT(key) DO UPDATE SET
                          course_id=excluded.course_id,kind=excluded.kind,title=excluded.title,due_at=excluded.due_at,
-                         completed=excluded.completed,url=excluded.url,week=excluded.week,active=1,updated_at=excluded.updated_at''',
-                         (e.key,e.course_id,e.kind,e.title,e.due_at,int(e.completed),e.url,e.week,now))
+                         completed=excluded.completed,url=excluded.url,week=excluded.week,active=1,updated_at=excluded.updated_at,completion_verified=excluded.completion_verified''',
+                         (e.key,e.course_id,e.kind,e.title,e.due_at,int(e.completed),e.url,e.week,now,int(e.completion_verified)))
                     if description:
                         self.db.execute('INSERT INTO changes(event_key,change_type,detail,changed_at) VALUES (?,?,?,?)',(e.key,ctype,description,now))
                 for key,old in existing.items():

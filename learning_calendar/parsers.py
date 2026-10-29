@@ -41,7 +41,7 @@ def movie_completion(item):
     if attendance in ('attendance','late','excused'):return True
     if value is False or value==0 or (isinstance(value,str) and value.lower()=='false'):return False
     if attendance in ('none','absent'):return False
-    raise ValueError('영상 시청 상태를 확인하지 못했습니다.')
+    return None
 
 
 def parse_movies(course: Course, payload: object) -> list[Event]:
@@ -61,17 +61,19 @@ def parse_movies(course: Course, payload: object) -> list[Event]:
             if not isinstance(data, dict):
                 continue
             media = data.get('item_content_data') or {}
-            if not isinstance(media, dict) or media.get('content_type') != 'movie':
+            if not isinstance(media, dict):media={}
+            if (media.get('content_type') or data.get('item_content_type')) != 'movie':
                 continue
             identifier = data.get('item_id') or item.get('content_id') or item.get('module_item_id')
             if identifier is None:
                 continue
             key = f'movie:{course.id}:{identifier}'
+            completion=movie_completion(item)
             found[key] = Event(
                 key=key, course_id=course.id, course_name=course.name,
                 kind='movie',
                 title=str(data.get('title') or item.get('title') or media.get('title') or f'동영상 {identifier}'),
-                due_at=data.get('due_at'), completed=movie_completion(item),
+                due_at=data.get('due_at'), completed=completion is True,completion_verified=completion is not None,
                 url=safe_url(item.get('url')), week=week,
             )
     return list(found.values())

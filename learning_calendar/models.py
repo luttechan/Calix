@@ -46,6 +46,7 @@ class Event:
     manual: bool = False
     series_id: str = ''
     source_title: str = ''
+    completion_verified: bool = True
 
     @property
     def due(self) -> datetime | None:
@@ -60,6 +61,7 @@ class Event:
 
 def deadline_display(event: Event, now: datetime | None = None) -> tuple[str, str]:
     """A status label and semantic color; completion always takes precedence."""
+    if event.kind=='movie' and not event.completion_verified:return ('시청 상태 미확인','neutral')
     if event.completed:
         return ('완료', 'done')
     due = event.due

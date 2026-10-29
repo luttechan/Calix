@@ -48,7 +48,7 @@ class LoginValidation(QThread):
                 course_ids=[course.id for course in client._list_courses()]
                 cid=next(iter(course_ids),None)
             except Exception:pass
-            token_valid=False
+            token_valid=False;states_verified=True
             if client._learningx_token:
                 failed=[]
                 from .parsers import parse_movies
@@ -56,7 +56,8 @@ class LoginValidation(QThread):
                 for candidate in course_ids:
                     try:
                         modules=client._paginated(f'/learningx/api/v1/courses/{candidate}/modules',{'include_detail':'true','per_page':100},collection='modules')
-                        parse_movies(Course(candidate,''),modules)
+                        events=parse_movies(Course(candidate,''),modules)
+                        states_verified=states_verified and all(e.completion_verified for e in events)
                     except Exception:failed.append(candidate)
                 token_valid=bool(course_ids) and not failed
                 if failed:cid=failed[0]
@@ -68,7 +69,8 @@ class LoginValidation(QThread):
                     except Exception:continue
                     if entry:cid=candidate;break
             self.checked.emit({'course_id':cid,'token_valid':token_valid,'learningx_url':entry,
-                               'checked_courses':len(course_ids),'verified_courses':len(course_ids)-len(failed),'failed_courses':failed})
+                               'checked_courses':len(course_ids),'verified_courses':len(course_ids)-len(failed),'failed_courses':failed,
+                               'videos_verified':token_valid and states_verified})
         except AuthenticationRequired:
             self.failed.emit('로그인이 만료됐습니다. 학교 화면에서 다시 로그인해 주세요.')
         except Exception as exc:
@@ -272,7 +274,7 @@ class CampusLoginDialog(QDialog):
     @Slot(object)
     def _checked(self,result):
         if self._cancelled or self._logout_pending:return
-        self.movies_verified=bool(result['token_valid'])
+        self.movies_verified=bool(result.get('videos_verified',result['token_valid']))
         self._validated=True;self._pending_accept=True
         if result['token_valid']:self._bootstrap_active=False;self._finish_after_validation=True;self._complete();return
         if not result.get('verified_courses',0):
