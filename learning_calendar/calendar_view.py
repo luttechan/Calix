@@ -28,7 +28,7 @@ class DayBadges(QWidget):
             now=datetime.now(KST)
             return [e for e in self.events if e.kind=='assignment' and e.type_id is None and
                     ((e.completed and group=='assignment_done') or (not e.completed and
-                     group==('assignment_overdue' if e.due and e.due<=now else 'assignment')))]
+                     group==('assignment_overdue' if e.completion_verified and e.due and e.due<=now else 'assignment')))]
         if group in ('movie','movie_done'):return [e for e in self.events if e.kind=='movie' and e.type_id is None and e.completed==(group=='movie_done')]
         if isinstance(group,tuple):
             name,color,done=group
@@ -179,7 +179,7 @@ class MonthCanvas(QCalendarWidget):
             badges.setProperty('calendarDate',day.isoformat())
             badges.set_events(day,rows)
             if day.month!=self.monthShown() or not rows:badges.hide();continue
-            a=sum(e.kind=='assignment' and e.type_id is None and not e.completed and (e.due is None or e.due>now) for e in rows);late=sum(e.kind=='assignment' and e.type_id is None and not e.completed and e.due is not None and e.due<=now for e in rows);done=sum(e.kind=='assignment' and e.type_id is None and e.completed for e in rows);v=sum(e.kind=='movie' and e.type_id is None and not e.completed for e in rows);vd=sum(e.kind=='movie' and e.type_id is None and e.completed for e in rows)
+            a=sum(e.kind=='assignment' and e.type_id is None and not e.completed and (not e.completion_verified or e.due is None or e.due>now) for e in rows);late=sum(e.kind=='assignment' and e.type_id is None and not e.completed and e.completion_verified and e.due is not None and e.due<=now for e in rows);done=sum(e.kind=='assignment' and e.type_id is None and e.completed for e in rows);v=sum(e.kind=='movie' and e.type_id is None and not e.completed for e in rows);vd=sum(e.kind=='movie' and e.type_id is None and e.completed for e in rows)
             groups={}
             for event in rows:
                 if event.type_id is not None:

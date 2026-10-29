@@ -121,3 +121,18 @@ def test_worker_persists_the_specific_sync_status(monkeypatch,tmp_path):
     assert store.get_meta('sync_partial')=='1' and store.get_meta('sync_summary')=='시청 상태 미확인'
     assert len(store.events())==7 and sum(e.completed for e in store.events())==6
     store.close()
+
+
+def test_calendar_does_not_mark_unknown_submission_as_overdue():
+    from datetime import date
+    from PySide6.QtWidgets import QApplication
+    from learning_calendar.calendar_view import MonthCanvas
+    from learning_calendar.snapshot import Snapshot
+    app=QApplication.instance() or QApplication([])
+    event=Event('assignment:1:107',1,'Course','assignment','Unknown','2000-01-02T01:00:00Z',False,completion_verified=False)
+    widget=MonthCanvas();widget.resize(1200,750);widget.set_month(date(2000,1,1),date(2000,1,2),Snapshot.days([event]))
+    widget.show();app.processEvents();widget._layout_badges()
+    badge=next(b for b in widget.badges if b.day==date(2000,1,2))
+    assert badge.assignment_overdue.isHidden() and not badge.assignment.isHidden()
+    assert badge.matching(badge.assignment)==[event] and not badge.matching(badge.assignment_overdue)
+    widget.close();widget.deleteLater();app.processEvents()
