@@ -28,6 +28,7 @@ class CampusClient:
     def __init__(self, cookies: list[dict], cancel_event: threading.Event | None = None):
         self.cancel_event = cancel_event or threading.Event()
         self.movie_auth_required=False
+        self.course_checks={}
         self.session = requests.Session()
         self.session.headers.update({
             'Accept': 'application/json',
@@ -153,7 +154,7 @@ class CampusClient:
                 self._check_cancel();client=CampusClient(rows,self.cancel_event)
                 try:
                     part,notes=client._fetch_course(course,say)
-                    return part,notes,client.movie_auth_required
+                    return part,notes,client.movie_auth_required,client.course_checks
                 finally:client.session.close()
             jobs=Queue();results=Queue();stop=threading.Event()
             for course in courses:jobs.put(course)
@@ -172,7 +173,7 @@ class CampusClient:
                         try:ok,value=results.get(timeout=.025);break
                         except Empty:continue
                     if not ok:raise value
-                    part,notes,needs_auth=value;batches.update(part);warnings.extend(notes);self.movie_auth_required|=needs_auth
+                    part,notes,needs_auth,checks=value;batches.update(part);warnings.extend(notes);self.movie_auth_required|=needs_auth;self.course_checks.update(checks)
             finally:
                 stop.set()
                 # Normal completion closes every owned Session. Cancellation
@@ -185,10 +186,12 @@ class CampusClient:
 
     def _fetch_course(self,course,say):
         batches={};warnings=[];self._check_cancel()
+        report={'videos_verified':False,'videos':0,'watched':0};self.course_checks[course.id]=report
         say(f'{course.name} / 동영상 조회')
         try:
             modules=self._paginated(f'/learningx/api/v1/courses/{course.id}/modules',{'include_detail':'true','per_page':100},collection='modules')
             batches[(course.id,'movie')]=parse_movies(course,modules)
+            report.update(videos_verified=True,videos=len(batches[(course.id,'movie')]),watched=sum(e.completed for e in batches[(course.id,'movie')]))
         except LearningXAuthenticationRequired:
             self.movie_auth_required=True;warnings.append(f'{course.name}: 동영상 인증을 자동으로 연결하고 있습니다.')
         except AuthenticationRequired:raise

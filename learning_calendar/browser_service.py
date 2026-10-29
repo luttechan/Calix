@@ -38,9 +38,9 @@ class BrowserService(QObject):
         except OSError:self.send('error',message='세션을 저장하지 못했습니다.');return False
     def authenticated(self,rows):
         if self.closing:return
-        if self._save(rows):self.send('authenticated',movies_ready=self.dialog._has_token())
+        if self._save(rows):self.send('authenticated',movies_ready=self.dialog.movies_verified and self.dialog._has_token())
     def updated(self,rows):
-        if not self.closing and self._save(rows):self.send('session_updated',movies_ready=self.dialog._has_token())
+        if not self.closing and self._save(rows):self.send('session_updated',movies_ready=self.dialog.movies_verified and self.dialog._has_token())
     def logged_out(self):
         self.output.unlink(missing_ok=True);self.send('logged_out')
     def shutdown(self):

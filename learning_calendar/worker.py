@@ -32,7 +32,7 @@ class SyncTask(QThread):
                 identity=client._get('/api/v1/users/self/profile').json()
                 uid=str(int(identity['id']))
                 courses,batches,warnings=client.fetch(progress)
-                value=(uid,courses,batches,warnings,getattr(client,'movie_auth_required',False))
+                value=(uid,courses,batches,warnings,getattr(client,'movie_auth_required',False),getattr(client,'course_checks',{}))
                 result.put((True,value))
             except Exception as exc:result.put((False,exc))
             finally:
@@ -48,7 +48,7 @@ class SyncTask(QThread):
     def run(self):
         store=None
         try:
-            uid,courses,batches,warnings,movie_auth_required=self._fetch_network()
+            uid,courses,batches,warnings,movie_auth_required,course_checks=self._fetch_network()
             if self.cancel_event.is_set():raise SyncCancelled('취소됨')
             if not batches:raise RuntimeError('일정을 가져오지 못했습니다. 다시 시도하세요.')
             store=Store(self.db_path)
@@ -71,7 +71,7 @@ class SyncTask(QThread):
             snapshot=Snapshot(store.events(),store.courses())
             self.success.emit({'path':str(store.path),'snapshot':snapshot,'stats':stats,
                                'last_sync':store.get_meta('last_sync'),'warnings':warnings,'sessions':store.timetable(),
-                               'movie_auth_required':movie_auth_required})
+                               'movie_auth_required':movie_auth_required,'course_checks':course_checks})
         except SyncCancelled:
             pass
         except AuthenticationRequired as exc:

@@ -42,6 +42,9 @@ def test_navigation_discovery_tries_another_course_when_first_has_no_weekly_tab(
         _learningx_token=None
         session=SimpleNamespace(close=lambda:None)
         def __init__(self,*args):pass
+        def _list_courses(self):
+            from learning_calendar.models import Course
+            return [Course(1,'첫 과목'),Course(2,'다음 과목')]
         def _get(self,path):
             data=({'id':3} if path.endswith('/profile') else [{'id':1},{'id':2}] if path.endswith('/dashboard_cards') else
                   [] if '/courses/1/tabs' in path else [{'label':'주차학습','html_url':'/courses/2/external_tools/9'}])

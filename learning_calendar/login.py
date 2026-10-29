@@ -67,7 +67,8 @@ class LoginValidation(QThread):
                     try:entry=learningx_entry(client._get(f'/api/v1/courses/{candidate}/tabs').json())
                     except Exception:continue
                     if entry:cid=candidate;break
-            self.checked.emit({'course_id':cid,'token_valid':token_valid,'learningx_url':entry})
+            self.checked.emit({'course_id':cid,'token_valid':token_valid,'learningx_url':entry,
+                               'checked_courses':len(course_ids),'verified_courses':len(course_ids)-len(failed),'failed_courses':failed})
         except AuthenticationRequired:
             self.failed.emit('로그인이 만료됐습니다. 학교 화면에서 다시 로그인해 주세요.')
         except Exception as exc:
@@ -87,7 +88,7 @@ class CampusLoginDialog(QDialog):
         self.setWindowTitle('Calix 로그인');self.resize(1040,760)
         self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint,True)
         self.existing=existing;self.ready_file=ready_file;self.rows={};self.session_rows=[]
-        self.resident=resident;self.authenticated=False;self._shutting_down=False;self._logout_pending=False
+        self.resident=resident;self.authenticated=False;self.movies_verified=False;self._shutting_down=False;self._logout_pending=False
         self._auto_validation_pending=False;self._token_check_pending=False;self._bootstrap_active=False
         self.view=None;self.page=None;self.profile=None;self._validator=None;self._profile_dir=None
         self._cancelled=False;self._pending_accept=False;self._validated=False;self._finish_after_validation=False;self._last_cookie=time.monotonic()
@@ -271,10 +272,12 @@ class CampusLoginDialog(QDialog):
     @Slot(object)
     def _checked(self,result):
         if self._cancelled or self._logout_pending:return
+        self.movies_verified=bool(result['token_valid'])
         self._validated=True;self._pending_accept=True
         if result['token_valid']:self._bootstrap_active=False;self._finish_after_validation=True;self._complete();return
-        for key in list(self.rows):
-            if key[1]=='xn_api_token':self.rows.pop(key,None)
+        if not result.get('verified_courses',0):
+            for key in list(self.rows):
+                if key[1]=='xn_api_token':self.rows.pop(key,None)
         cid=result.get('course_id')
         if not cid:self._finish_after_validation=True;self._complete();return
         self.message.setText('주차학습을 자동으로 연결하고 있어요…')
@@ -361,6 +364,7 @@ class CampusLoginDialog(QDialog):
         if self.authenticated and not self._logout_pending:self.session_changed.emit(list(self.rows.values()))
 
     def request_authentication(self):
+        self.movies_verified=False
         self._cancelled=False;self._finish_after_validation=False
         if self.authenticated:self.authenticated=False;self._validated=False;self._pending_accept=False
         if self.view and canvas_session_available(self.rows.values()):self.accept_after_cookie_capture()

@@ -728,6 +728,9 @@ class MainWindow(QMainWindow):
         self.demo=False;self.demo_snapshot=None;self.demo_badge.hide();self._timetable_signature=None
         self._reload_type_filter();self._reload_course_filter();self.refresh()
         stats=result['stats'];self.status.setText('일부 실패' if self.partial else f"완료 / 추가 {stats['new']} / 변경 {stats['updated']}")
+        checks=result.get('course_checks',{})
+        for cid,report in checks.items():
+            logging.info('영상 검증: 과목 %s / 확인 %s / 영상 %s / 완료 %s',cid,report['videos_verified'],report['videos'],report['watched'])
         movie_auth=result.get('movie_auth_required',False)
         if movie_auth and not self._movie_reauth_attempted:
             self._movie_reauth_attempted=True;self._reauth_requested=True
