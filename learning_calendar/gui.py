@@ -401,6 +401,8 @@ class MainWindow(QMainWindow):
         self.main_stack._settle();self.settings['glass']=bool(enabled);QApplication.instance().setProperty('calixGlass',bool(enabled))
         apply_palette(QApplication.instance(),self.theme_key);self.setStyleSheet(stylesheet(self.theme_key));self.centralWidget().invalidate();write_settings(self.settings_path,self.settings)
         for view in (self.video_list,self.assignment_list,self.day_list,self.home.upcoming,self.home.remaining_table):view.viewport().update()
+        self.home._snapshot_cache=None
+        if self.main_stack.currentIndex()==0:self.home.update_snapshot(self._current_snapshot())
 
     def set_notifications(self,enabled):
         self.settings['notifications']=bool(enabled);write_settings(self.settings_path,self.settings)
@@ -429,6 +431,8 @@ class MainWindow(QMainWindow):
         for view in (self.video_list,self.assignment_list,self.day_list,self.home.upcoming,self.home.remaining_table):view.viewport().update()
         self._timetable_signature=None
         if self._timetable_built:self._refresh_timetable()
+        self.home._snapshot_cache=None
+        if self.main_stack.currentIndex()==0:self.home.update_snapshot(self._current_snapshot())
 
     def _current_snapshot(self):return self.demo_snapshot if self.demo else self.snapshot
 
