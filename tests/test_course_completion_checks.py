@@ -34,10 +34,9 @@ def test_login_checks_every_course_and_does_not_accept_first_success(monkeypatch
         def _get(self,path):
             return SimpleNamespace(json=lambda:{'id':1} if path.endswith('/profile') else [{'label':'주차학습','html_url':f'/courses/{failed_course}/external_tools/1'}])
     monkeypatch.setattr(sync,'CampusClient',Client);task=LoginValidation([]);results=[];task.checked.connect(results.append);task.run()
-    assert seen==list(range(1,8)) and results[0]['checked_courses']==7
-    assert results[0]['token_valid']==(failed_course is None)
-    assert results[0]['failed_courses']==([] if failed_course is None else [failed_course])
-    if failed_course:assert results[0]['course_id']==failed_course and '/courses/6/' in results[0]['learningx_url']
+    assert seen==[] and results[0]['checked_courses']==7
+    assert results[0]['canvas_valid'] and len(results[0]['courses'])==7
+    assert not results[0]['videos_verified']
 
 def test_cookie_presence_alone_is_not_reported_as_verified():
     from learning_calendar.browser_service import BrowserService

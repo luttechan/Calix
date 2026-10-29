@@ -51,7 +51,7 @@ def test_navigation_discovery_tries_another_course_when_first_has_no_weekly_tab(
             return SimpleNamespace(json=lambda:data)
     monkeypatch.setattr(sync,'CampusClient',Client)
     task=LoginValidation([]);results=[];task.checked.connect(results.append);task.run()
-    assert results[0]['course_id']==2 and results[0]['learningx_url'].endswith('/courses/2/external_tools/9')
+    assert results[0]['canvas_valid'] and [c['id'] for c in results[0]['courses']]==[1,2]
 
 def test_repeated_token_events_do_not_restart_cookie_capture_deadline(app):
     d=CampusLoginDialog();d._browser_started=True;d.view=object();d.cookie_store=SimpleNamespace(loadAllCookies=lambda:None)

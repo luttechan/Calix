@@ -47,6 +47,8 @@ class Event:
     series_id: str = ''
     source_title: str = ''
     completion_verified: bool = True
+    start_at: str | None = None
+    lock_at: str | None = None
 
     @property
     def due(self) -> datetime | None:

@@ -135,6 +135,9 @@ class MainWindow(QMainWindow):
         if demo:self.preview()
         else:self.refresh()
         self.show_home(animate=False)
+        self._dom_collecting=False
+        self.collection_timer=QTimer(self);self.collection_timer.setSingleShot(True)
+        self.collection_timer.setInterval(150000);self.collection_timer.timeout.connect(self._collection_timeout)
         self._update_probe=None
         self.update_timer=QTimer(self);self.update_timer.setSingleShot(True)
         self.update_timer.timeout.connect(self._check_updates_in_background)
@@ -578,7 +581,8 @@ class MainWindow(QMainWindow):
         self._session_pending=False;self._logged_in=bool(value);self.login_button.setText('로그아웃' if value else '로그인')
 
     def _browser_command(self,command):
-        if self._login_socket:
+        from PySide6.QtNetwork import QLocalSocket
+        if self._login_socket and self._login_socket.state()==QLocalSocket.LocalSocketState.ConnectedState:
             self._login_socket.write((json.dumps({'command':command})+'\n').encode('utf-8'));self._login_socket.flush();return True
         return False
 
@@ -641,7 +645,8 @@ class MainWindow(QMainWindow):
     def _browser_read(self):
         if not self._login_socket:return
         self._browser_buffer.extend(bytes(self._login_socket.readAll()))
-        if len(self._browser_buffer)>16384:self._browser_buffer.clear();return
+        if len(self._browser_buffer)>4*1024*1024:
+            self._browser_buffer.clear();self._collection_timeout();return
         while b'\n' in self._browser_buffer:
             line,_,tail=self._browser_buffer.partition(b'\n');self._browser_buffer=bytearray(tail)
             try:event=json.loads(line)
@@ -650,6 +655,21 @@ class MainWindow(QMainWindow):
 
     def _browser_event(self,event):
         kind=event.get('event')
+        if kind=='collection_progress':
+            if self._dom_collecting and not self._closing:self.status.setText(str(event.get('message',''))[:200])
+            return
+        if kind in ('videos_collected','collection_error','collection_auth_required'):
+            if self._closing or not self._dom_collecting:return
+            self.collection_timer.stop();self._dom_collecting=False;self._set_busy(False)
+            if kind=='videos_collected':
+                snapshot=event.get('snapshot')
+                if not isinstance(snapshot,dict) or not isinstance(snapshot.get('results'),list):
+                    self._sync_failed('주차학습 화면 응답이 올바르지 않습니다.');return
+                self.manual_sync(auto=True,dom_snapshot=snapshot)
+            elif kind=='collection_auth_required':
+                self._set_logged_in(False);self._start_login(True)
+            else:self._sync_failed(str(event.get('message','주차학습 화면 조회 실패')))
+            return
         if kind=='ready':self._close_login_loading();return
         if kind in ('authenticated','session_updated'):
             if self._logging_out or self._closing:return
@@ -714,6 +734,7 @@ class MainWindow(QMainWindow):
     def _finish_login(self,accepted,message):
         proc=self._login_process
         if proc is None:return
+        collecting=self._dom_collecting;self._dom_collecting=False;self.collection_timer.stop()
         self._login_process=None;proc.deleteLater()
         self._close_login_loading()
         if self._login_socket:self._login_socket.abort();self._login_socket.deleteLater();self._login_socket=None
@@ -722,21 +743,35 @@ class MainWindow(QMainWindow):
         except OSError:logging.warning('로그인 임시 파일을 정리하지 못했습니다.')
         if self._logging_out:self._logging_out=False;self._set_logged_in(False)
         if self._thread is None:self._set_busy(False)
-        if not self._closing:self.status.setText('로그인 유지 중' if self._logged_in else message)
+        if not self._closing:self.status.setText('주차학습 수집 연결이 종료됐습니다.' if collecting else '로그인 유지 중' if self._logged_in else message)
         if self._closing:QTimer.singleShot(0,self.close)
 
-    def manual_sync(self,auto=False):
+    def manual_sync(self,auto=False,*,dom_snapshot=None):
         if self._busy or self._closing:return
         if not auto:self._movie_reauth_attempted=False
         from .cookies import read_cookies,canvas_session_available
         cookies=read_cookies(self.session_path)
         if not canvas_session_available(cookies):self._start_login(True);return
+        if dom_snapshot is None:
+            if not self._login_process:self._start_login(True);return
+            self._set_busy(True);self._dom_collecting=True;self.collection_timer.start()
+            self.status.setText('주차학습 화면 읽는 중')
+            if not self._browser_command('collect'):
+                self.collection_timer.stop();self._dom_collecting=False;self._set_busy(False)
+                self.status.setText('로그인 연결을 확인한 뒤 다시 시도하십시오.')
+            return
         from .worker import SyncTask
         self._set_busy(True);self.status.setText('수집 중')
-        task=SyncTask(cookies,self.store.path,self);self._thread=task
+        task=SyncTask(cookies,self.store.path,self,dom_snapshot=dom_snapshot);self._thread=task
         task.progress.connect(self._progress);task.success.connect(self._sync_ok);task.error.connect(self._sync_failed)
         task.authentication_required.connect(self._sync_auth_required)
         task.finished.connect(self._sync_finished);task.start()
+
+    def _collection_timeout(self):
+        self.collection_timer.stop()
+        if not self._dom_collecting:return
+        self._dom_collecting=False;self._browser_command('cancel_collection')
+        if not self._closing:self._set_busy(False);self.status.setText('주차학습 화면 조회 시간이 초과됐습니다.')
 
     @Slot(str)
     def _progress(self,text):
@@ -1198,6 +1233,7 @@ class MainWindow(QMainWindow):
         if not self._exit_confirmed:event.ignore();return
         if not self._shutdown_started:
             self._shutdown_started=True;self._closing=True
+            self.collection_timer.stop();self._dom_collecting=False
             self.update_timer.stop();self._cancel_update_probe()
             self.setEnabled(False)
             self.search_timer.stop();self.local_clock.stop();self.home.hero.clock.stop();self.main_stack._settle()

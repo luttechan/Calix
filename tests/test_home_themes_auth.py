@@ -114,13 +114,13 @@ def test_manual_sync_reuses_canvas_session_instead_of_opening_login(window,monke
     from PySide6.QtCore import QObject,Signal
     class Task(QObject):
         progress=Signal(str);success=Signal(object);error=Signal(str);authentication_required=Signal(str);finished=Signal()
-        def __init__(self,*args):super().__init__();self.started=False
+        def __init__(self,*args,**kwargs):super().__init__();self.started=False
         def start(self):self.started=True
     rows=[{'name':'_normandy_session','domain':'canvas.bufs.ac.kr','path':'/','value':'test-session'}]
     monkeypatch.setattr(cookies,'read_cookies',lambda path:rows)
     monkeypatch.setattr(worker,'SyncTask',Task)
     monkeypatch.setattr(window,'_start_login',lambda *args:pytest.fail('session cookie must be reused'))
-    window.manual_sync()
+    window.manual_sync(dom_snapshot={'owner':'1','results':[]})
     assert window._thread.started
     window._thread=None;window._set_busy(False)
 

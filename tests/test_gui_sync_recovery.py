@@ -124,7 +124,10 @@ def test_full_gui_sync_http_storage_and_restart(app,tmp_path,monkeypatch,tempora
                 if temporary_failure and cid==2 and attempt==1:status=503;body={}
                 else:body=[{'title':'Week 1','module_items':[{'completed':i==1,'content_data':{'item_id':i,'title':f'Video {i}','due_at':'2088-01-02T14:59:59Z','item_content_data':{'content_type':'movie'}}} for i in (1,2)]}]
             elif path.endswith('/assignments'):
-                cid=int(path.split('/')[-2]);body=[{'id':1,'name':f'Task {cid}','due_at':'2088-01-03T14:59:59Z','submission':{'workflow_state':'unsubmitted'}}]
+                cid=int(path.split('/')[-2])
+                if temporary_failure and cid==2 and attempt==1:
+                    self.send_response(503);self.send_header('Content-Length','0');self.end_headers();return
+                body=[{'id':1,'name':f'Task {cid}','due_at':'2088-01-03T14:59:59Z','submission':{'workflow_state':'unsubmitted'}}]
             else:status=404;body={}
             raw=json.dumps(body).encode();self.send_response(status);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw)
     server=ThreadingHTTPServer(('127.0.0.1',0),Handler);thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
@@ -134,16 +137,18 @@ def test_full_gui_sync_http_storage_and_restart(app,tmp_path,monkeypatch,tempora
     rows=[{'domain':'canvas.bufs.ac.kr','name':'_normandy_session','value':'synthetic','path':'/'},
           {'domain':'canvas.bufs.ac.kr','name':'xn_api_token','value':'synthetic','path':'/'}]
     monkeypatch.setattr(cookies,'read_cookies',lambda *_:rows)
+    dom={'owner':'1','results':[{'course_id':cid,'snapshot':{'state':'ready','owner':'1','course_id':cid,'term':'2088년 1학기','weeks':1,'expected':1,'items':[{'title':f'Video {i}','kind':'movie','url':f'/courses/{cid}/modules/items/{i}','week':'1주차','start':'1월 1일 오전 00:00','due':'1월 2일 오후 11:59','lock':'','completed':i==1} for i in (1,2)]}} for cid in (1,2)]}
     w=MainWindow(tmp_path)
     try:
-        w.manual_sync();deadline=time.monotonic()+8
+        w.manual_sync(dom_snapshot=dom);deadline=time.monotonic()+8
         while w._thread is not None and time.monotonic()<deadline:app.processEvents();time.sleep(.005)
         assert w._thread is None and not w._busy and not w.partial and not w._dialogs
         assert len(w.snapshot.events)==6 and len(w.store.events())==6 and w._logged_in
         assert len(w.snapshot.by_kind['movie'])==4 and len(w.snapshot.by_kind['assignment'])==2
-        w.store.set_note('movie:1:1','Keep note');w.manual_sync()
+        w.store.set_note('movie:1:1','Keep note');w.manual_sync(dom_snapshot=dom)
         while w._thread is not None and time.monotonic()<deadline:app.processEvents();time.sleep(.005)
         assert w._thread is None and len(w.store.events())==6
+        assert not any('/learningx/api/' in path for path in attempts)
         assert next(e for e in w.store.events() if e.key=='movie:1:1').note=='Keep note'
         dispose(w,app);w=MainWindow(tmp_path)
         assert len(w.snapshot.events)==6 and next(e for e in w.snapshot.events if e.key=='movie:1:1').note=='Keep note'

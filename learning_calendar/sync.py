@@ -29,11 +29,12 @@ class SyncTimeout(RuntimeError):pass
 
 class CampusClient:
     """Fetch only when explicitly invoked; never schedules background requests."""
-    def __init__(self, cookies: list[dict], cancel_event: threading.Event | None = None):
+    def __init__(self, cookies: list[dict], cancel_event: threading.Event | None = None,dom_snapshot=None):
         self.cancel_event = cancel_event or threading.Event()
         self.deadline=time.monotonic()+120
         self.movie_auth_required=False
         self.course_checks={}
+        self.dom_snapshot=dom_snapshot
         self.session = requests.Session()
         self.session.headers.update({
             'Accept': 'application/json',
@@ -248,6 +249,7 @@ class CampusClient:
                   for c in self.session.cookies if applies_to_canvas(c.domain)]
             def collect(course):
                 self._check_cancel();client=CampusClient(rows,self.cancel_event)
+                client.dom_snapshot=self.dom_snapshot
                 client.deadline=self.deadline
                 try:
                     part,notes=client._fetch_course(course,say)
@@ -288,7 +290,13 @@ class CampusClient:
         report={'videos_verified':False,'videos':0,'watched':0,'video_state':'pending','assignment_state':'pending'};self.course_checks[course.id]=report
         say(f'{course.name} / 동영상 조회')
         try:
-            events=self._course_movies(course);complete=getattr(events,'complete',True)
+            if self.dom_snapshot is not None:
+                from .dom_videos import parse_screen
+                result=next((r for r in self.dom_snapshot.get('results',[]) if isinstance(r,dict) and r.get('course_id')==course.id),None)
+                if result is None or 'snapshot' not in result:raise ValueError('주차학습 화면을 확인하지 못했습니다. 기존 영상을 유지합니다.')
+                events=parse_screen(course,result['snapshot'])
+            else:events=self._course_movies(course)
+            complete=getattr(events,'complete',True)
             if events or complete:batches[(course.id,'movie')]=events
             unknown=sum(not e.completion_verified for e in events)
             report.update(videos_verified=not unknown and complete,videos=len(events),watched=sum(e.completed for e in events),unknown=unknown)

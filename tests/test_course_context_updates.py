@@ -81,8 +81,8 @@ def test_login_uses_course_page_when_tabs_api_is_unavailable(app,monkeypatch):
         def _course_document(self,cid):return '<a href="/courses/12/external_tools/49">주차학습</a>'
     monkeypatch.setattr(sync,'CampusClient',Client)
     task=LoginValidation([]);results=[];task.checked.connect(results.append);task.run()
-    assert results[0]['learningx_url'].endswith('/courses/12/external_tools/49')
-    assert not results[0]['token_valid']
+    assert results[0]['canvas_valid'] and results[0]['courses']==[{'id':12,'name':'과목'}]
+    assert not results[0]['videos_verified']
 
 
 def test_expired_bootstrap_does_not_report_a_completed_login(app):

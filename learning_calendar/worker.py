@@ -14,9 +14,10 @@ class SyncTask(QThread):
     success=Signal(object)
     error=Signal(str)
     authentication_required=Signal(str)
-    def __init__(self,cookies,db_path,parent=None):
+    def __init__(self,cookies,db_path,parent=None,*,dom_snapshot=None):
         super().__init__(parent);self.cookies=cookies;self.db_path=Path(db_path)
         self.cancel_event=threading.Event()
+        self.dom_snapshot=dom_snapshot
 
     def cancel(self):self.cancel_event.set()
 
@@ -30,10 +31,13 @@ class SyncTask(QThread):
             client=None
             try:
                 client=CampusClient(cookies,cancel)
+                client.dom_snapshot=self.dom_snapshot
                 identity=client._get('/api/v1/users/self/profile').json()
                 identifier=identity.get('id') if isinstance(identity,dict) else None
                 if isinstance(identifier,bool) or not 0<int(identifier)<2**63:raise ValueError('학교 계정 정보가 올바르지 않습니다.')
                 uid=str(int(identifier))
+                if self.dom_snapshot is not None and str(self.dom_snapshot.get('owner'))!=uid:
+                    raise AuthenticationRequired('주차학습 화면의 학교 계정이 일치하지 않습니다.')
                 courses,batches,warnings=client.fetch(progress)
                 value=(uid,courses,batches,warnings,getattr(client,'movie_auth_required',False),getattr(client,'course_checks',{}))
                 result.put((True,value))

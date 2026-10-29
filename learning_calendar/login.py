@@ -61,35 +61,11 @@ class LoginValidation(QThread):
         try:
             identity=client._get('/api/v1/users/self/profile').json()
             if not isinstance(identity,dict) or not identity.get('id'):raise ValueError('학교 계정을 확인하지 못했습니다.')
-            cid=None;course_ids=[]
-            try:
-                course_ids=[course.id for course in client._list_courses()]
-                cid=next(iter(course_ids),None)
-            except Exception:pass
-            token_valid=False;states_verified=True
-            if client._learningx_token:
-                failed=[]
-                from .models import Course
-                for candidate in course_ids:
-                    try:
-                        events=client._course_movies(Course(candidate,''))
-                        states_verified=states_verified and getattr(events,'complete',True) and all(e.completion_verified for e in events)
-                    except Exception:failed.append(candidate)
-                token_valid=bool(course_ids) and not failed
-                if failed:cid=failed[0]
-            else:failed=course_ids
-            entry=None
-            if cid and not token_valid:
-                for candidate in failed:
-                    try:entry=learningx_entry(client._get(f'/api/v1/courses/{candidate}/tabs').json())
-                    except Exception:entry=None
-                    if not entry:
-                        try:entry=learningx_html_entry(client._course_document(candidate),candidate)
-                        except Exception:entry=None
-                    if entry:cid=candidate;break
-            self.checked.emit({'course_id':cid,'token_valid':token_valid,'learningx_url':entry,
-                               'checked_courses':len(course_ids),'verified_courses':len(course_ids)-len(failed),'failed_courses':failed,
-                               'videos_verified':token_valid and states_verified})
+            courses=client._list_courses()
+            if not courses:raise ValueError('수강 과목을 확인하지 못했습니다.')
+            self.checked.emit({'canvas_valid':True,'token_valid':True,'videos_verified':False,
+                               'owner':str(identity['id']),'courses':[{'id':c.id,'name':c.name} for c in courses],
+                               'course_id':courses[0].id,'checked_courses':len(courses)})
         except AuthenticationRequired:
             self.failed.emit('로그인이 만료됐습니다. 학교 화면에서 다시 로그인해 주세요.')
         except Exception as exc:
