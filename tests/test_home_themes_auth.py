@@ -97,8 +97,10 @@ def test_missing_learningx_token_still_fetches_assignments(monkeypatch):
     def fake_get(path,params=None):
         if path.endswith('/modules'):raise LearningXTokenMissing('token missing')
         return Response()
-    def paginate(path,params=None):
-        if path.endswith('assignment_groups'):return [{'assignments':[{'id':2,'name':'보고서'}]}]
+    def paginate(path,params=None,**kwargs):
+        if path.endswith('/courses'):return [{'id':1,'name':'과목'}]
+        if path.endswith('/modules'):raise LearningXTokenMissing('token missing')
+        if path.endswith('/assignments'):return [{'id':2,'name':'보고서'}]
         return []
     monkeypatch.setattr(client,'_get',fake_get);monkeypatch.setattr(client,'_paginated',paginate)
     courses,batches,warnings=client.fetch()

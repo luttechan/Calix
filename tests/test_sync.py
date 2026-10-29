@@ -10,7 +10,7 @@ def test_fetch_only_expected_content(monkeypatch):
         def json(self):return self.body
     def fake_get(path,params=None):
         requests_seen.append((path,params))
-        if path.endswith('dashboard_cards'):
+        if path.endswith('/courses'):
             return Response([{'id':33,'longName':'테스트 과목'}])
         if path.endswith('modules'):
             return Response([{'title':'주차학습','module_items':[
@@ -18,25 +18,19 @@ def test_fetch_only_expected_content(monkeypatch):
                    'due_at':'2026-10-15T14:59:59Z','item_content_data':{'content_type':'movie'}},'completed':False},
               {'content_id':11,'content_type':'assignment','title':'그룹 안 과제'}
             ]}])
-        raise AssertionError(path)
-    def fake_paginate(path,params=None):
-        requests_seen.append((path,params))
-        if path.endswith('assignment_groups'):
-            return [{'name':'일반 과제','assignments':[
+        if path.endswith('/assignments'):
+            return Response([
                 {'id':20,'name':'보고서','is_quiz_assignment':False,'due_at':'2026-10-17T14:59:59Z'},
                 {'id':21,'name':'퀴즈','is_quiz_assignment':True}
-            ]}]
-        if path.endswith('students/submissions'):
-            return [{'assignment_id':20,'workflow_state':'unsubmitted'}]
+            ])
         raise AssertionError(path)
     monkeypatch.setattr(client,'_get',fake_get)
-    monkeypatch.setattr(client,'_paginated',fake_paginate)
     courses,batches,warnings=client.fetch()
     assert not warnings
     assert len(courses)==1 and courses[0].id==33
     assert len(batches[(33,'movie')])==1
     assert len(batches[(33,'assignment')])==1
-    assert len(requests_seen)==4
+    assert len(requests_seen)==3
 
 
 def test_cookies_only_for_canvas():

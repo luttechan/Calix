@@ -46,6 +46,9 @@ class SchedulePreview(QFrame):
             if n>=len(events):continue
             event=events[n];values=[str(self.event_model.data(self.event_model.index(n,column)) or '') for column in range(5)]
             for label,value in zip(fields,values):label.setText(value);label.setToolTip(tooltip_text(value))
+            from .models import deadline_display
+            status_style='color:#D94B61;' if deadline_display(event,self.event_model.now)[1]=='red' else ''
+            if fields[4].styleSheet()!=status_style:fields[4].setStyleSheet(status_style)
             palette=category_colors();kind='assignment' if event.kind=='assignment' else 'movie';tokens=type_tokens(event.type_color) if event.type_id is not None else {key:palette[kind+'_'+key] for key in ('ink','bg','line')}
             style=f'color:{tokens["ink"]};background:{tokens["bg"]};border:1px solid {tokens["line"]};border-radius:5px;padding:3px;font-size:12px;'
             if fields[0].styleSheet()!=style:fields[0].setStyleSheet(style)

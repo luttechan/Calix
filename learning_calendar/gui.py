@@ -283,6 +283,7 @@ class MainWindow(QMainWindow):
         view.addAction('일기장',self.show_diary)
         view.addSeparator();view.addAction('샘플 화면',self.preview)
         help_menu=self.menuBar().addMenu('도움말');help_menu.addAction('크레딧',self.credits)
+        help_menu.addAction('업데이트 확인',self.check_updates)
         help_menu.addAction('로그 폴더',self.open_logs)
         menu=QMenu(self.command_menu)
         for action in self.menuBar().actions():
@@ -1096,6 +1097,19 @@ class MainWindow(QMainWindow):
         path=Path(os.environ.get('LOCALAPPDATA',str(Path.home())))/'Calix'/'logs'
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
 
+    def check_updates(self):
+        existing=self._dialogs.get('updates')
+        if existing:existing.show();existing.raise_();existing.activateWindow();return
+        from .update_dialog import UpdateDialog
+        dialog=UpdateDialog(self);self._dialogs['updates']=dialog
+        dialog.install_requested.connect(self._install_update)
+        dialog.destroyed.connect(lambda:self._dialogs.pop('updates',None));dialog.open()
+
+    def _install_update(self,path):
+        self._update_installer=path
+        self.request_exit()
+        if not self._exit_confirmed:self._update_installer=None
+
     def moveEvent(self,event):
         super().moveEvent(event)
         root=self.centralWidget()
@@ -1129,6 +1143,11 @@ class MainWindow(QMainWindow):
             event.ignore();return
         self._shutdown_poll.stop()
         if self._ready_dialogs:self._ready_dialogs.shutdown()
+        installer=getattr(self,'_update_installer',None)
+        if installer:
+            # Transfer the verified download to the installer before closing its dialog.
+            update=self._dialogs.get('updates')
+            if update:update.installer=None
         for dialog in list(self._dialogs.values()):dialog.close()
         try:
             self.settings.update(window_width=self.width(),window_height=self.height())
@@ -1140,6 +1159,10 @@ class MainWindow(QMainWindow):
         if self._tray:self._tray.hide()
         if self.diary:self.diary.shutdown()
         self.holiday_calendar.close();self.store.close();self._closed=True;event.accept()
+        if installer:
+            started=QProcess.startDetached(installer,[])[0]
+            if not started:
+                QMessageBox.warning(None,'업데이트','설치 프로그램을 실행하지 못했습니다. 릴리즈에서 다시 내려받으십시오.')
         if self._quit_on_close:QTimer.singleShot(0,QApplication.instance().quit)
 
     def _has_pending_changes(self):
@@ -1180,6 +1203,7 @@ class MainWindow(QMainWindow):
                 for timer in timers:timer.start()
 
     def _cancel_shutdown(self):
+        self._update_installer=None
         self._shutdown_poll.stop();self._shutdown_started=False;self._shutdown_forms_ready=False;self._closing=False;self._exit_confirmed=False
         self.setEnabled(True)
         self.exit_button.setEnabled(True);self.local_clock.start()

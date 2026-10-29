@@ -29,6 +29,7 @@ class ScheduleModel(QAbstractTableModel):
         if role in (Qt.ItemDataRole.DisplayRole,Qt.ItemDataRole.AccessibleTextRole):return texts[column]
         if role==Qt.ItemDataRole.TextAlignmentRole:return int(Qt.AlignmentFlag.AlignVCenter| (Qt.AlignmentFlag.AlignCenter if column==0 else Qt.AlignmentFlag.AlignLeft))
         if role==Qt.ItemDataRole.ForegroundRole:
+            if column==4 and tone=='red':return QColor('#D94B61')
             if column==0:return QColor(type_tokens(e.type_color)['ink'] if e.type_id is not None else category_colors()['assignment_ink' if e.kind=='assignment' else 'movie_ink'])
             return QColor(colors()['ink'] if column in (1,2) else colors()['muted'])
     def flags(self,index):

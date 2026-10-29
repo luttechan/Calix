@@ -31,8 +31,10 @@ def test_movie_authentication_failure_preserves_canvas_assignments(monkeypatch):
     def get(path,params=None):
         if path.endswith('/modules'):raise LearningXAuthenticationRequired('token expired')
         return Response()
-    def paginated(path,params=None):
-        if path.endswith('assignment_groups'):return [{'assignments':[{'id':2,'name':'과제'}]}]
+    def paginated(path,params=None,**kwargs):
+        if path.endswith('/courses'):return [{'id':1,'name':'과목'}]
+        if path.endswith('/modules'):raise LearningXAuthenticationRequired('token expired')
+        if path.endswith('/assignments'):return [{'id':2,'name':'과제'}]
         return []
     monkeypatch.setattr(client,'_get',get);monkeypatch.setattr(client,'_paginated',paginated)
     courses,batches,warnings=client.fetch()

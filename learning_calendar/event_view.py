@@ -64,7 +64,7 @@ class EventDelegate(QStyledItemDelegate):
         due=event.due.strftime('%m.%d %H:%M') if event.due else '기한 없음'
         lines=[(('★ ' if event.starred else '')+event.title,14,QFont.Weight.DemiBold,c['muted'] if event.completed else c['ink']),
                ((event.type_label+' / ' if event.type_id is not None else '')+event.course_name,12,QFont.Weight.Normal,c['muted']),
-               (due+'   '+deadline_display(event)[0],12,QFont.Weight.Normal,c['muted'])]
+               (due+'   '+deadline_display(event)[0],12,QFont.Weight.Normal,'#D94B61' if deadline_display(event)[1]=='red' else c['muted'])]
         for n,(value,size,weight,color) in enumerate(lines):
             text_option=QStyleOptionViewItem(option);text_option.rect=QRect(rect.left()+42,rect.top()+8+n*21,max(1,rect.width()-54),22)
             text_option.font,text_option.fontMetrics=self.text_style(option.font,size,weight)

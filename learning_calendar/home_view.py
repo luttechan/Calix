@@ -1,6 +1,6 @@
 """Animated welcome screen and reversible native page transitions."""
 import math
-from datetime import datetime
+from datetime import datetime,timedelta
 from PySide6.QtCore import (Qt,QTimer,QPoint,QRect,QPointF,QRectF,QElapsedTimer,Property,QPropertyAnimation,
     QVariantAnimation,QEasingCurve,Signal)
 from PySide6.QtGui import QColor,QFont,QFontMetrics,QLinearGradient,QPainter,QPen
@@ -140,7 +140,14 @@ class HomeView(QWidget):
         self.remaining_table=SchedulePreview(remaining_pane);remaining.addWidget(self.remaining_table,1)
         self.sections.addWidget(today_pane,2);self.sections.addWidget(remaining_pane,3);layout.addWidget(self.preview_area,1)
     def update_snapshot(self,snapshot,now=None):
-        now=now or datetime.now(KST);pending=snapshot.pending(now)
+        now=now or datetime.now(KST)
+        cached=getattr(self,'_snapshot_cache',None)
+        if cached and cached[0] is snapshot and cached[1]<=now<cached[2]:return
+        pending=snapshot.pending(now)
+        until=(now+timedelta(minutes=1)).replace(second=0,microsecond=0)
+        for event in pending:
+            if event.due and now<event.due<until:until=event.due
+        self._snapshot_cache=(snapshot,now,until)
         today=[event for event in pending if event.due is not None and event.due.date()==now.date()]
         self.hero.dateline.setText(f'{now.month}월 {now.day}일 {"월화수목금토일"[now.weekday()]}요일');self.hero.orbit.day.setText(str(now.day))
         self.today_card.set_count(len(today));self.remaining_card.set_count(len(pending))

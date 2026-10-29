@@ -101,35 +101,45 @@ class CampusClient:
             raise AuthenticationRequired(f'JSON이 아닌 응답: {endpoint}. 로그인 상태를 확인해 주세요.')
         return resp
 
-    def _paginated(self, path: str, params: dict | None = None) -> list:
+    def _paginated(self, path: str, params: dict | None = None, *, collection=None) -> list:
         result: list = []
         current_url = path
         current_params = params
-        for _ in range(35):
+        visited=set()
+        for _ in range(1000):
             self._check_cancel()
             resp = self._get(current_url, current_params)
             obj = resp.json()
+            if collection and isinstance(obj,dict):obj=obj.get(collection)
             if not isinstance(obj,list):
                 raise ValueError(f'예상하지 못한 JSON 응답: {path}')
             result.extend(obj)
+            if len(result)>100000:raise RuntimeError('조회 항목이 너무 많습니다. 기존 일정을 유지합니다.')
             # requests parses Link rel=next from Canvas automatically.
-            link = resp.links.get('next',{}).get('url')
+            link = getattr(resp,'links',{}).get('next',{}).get('url')
             if not link:
                 return result
-            link = urljoin(BASE_URL, link)
+            link = urljoin(urljoin(BASE_URL,current_url), link)
             parsed = urlparse(link)
-            if parsed.scheme != 'https' or parsed.hostname != 'canvas.bufs.ac.kr' or parsed.path != path:
+            if not safe_url(link) or parsed.path != urlparse(path).path:
                 raise RuntimeError('신뢰할 수 없는 다음 페이지 URL이 반환되었습니다.')
+            if link in visited:raise RuntimeError('다음 페이지가 반복됩니다. 기존 일정을 유지합니다.')
+            visited.add(link)
             current_url = link
             current_params = None
-        raise RuntimeError('페이지네이션 35페이지 초과: 수동으로 확인하세요.')
+        raise RuntimeError('페이지 수가 너무 많습니다. 기존 일정을 유지합니다.')
+
+    def _list_courses(self):
+        return course_list(self._paginated('/api/v1/courses',{
+            'enrollment_type':'student','enrollment_state':'active','per_page':100}))
 
     def fetch(self, progress=None) -> tuple[list[Course],dict[tuple[int,str],list[Event]],list[str]]:
         say = progress or (lambda *_:None)
+        self._check_cancel()
         say('전체 수강 과목 조회 중…')
-        courses = course_list(self._get('/api/v1/dashboard/dashboard_cards').json())
+        courses = self._list_courses()
         if not courses:
-            raise RuntimeError('수강 중인 과목을 찾지 못했습니다. 로그인 계정 또는 대시보드 설정을 확인하세요.')
+            raise RuntimeError('수강 중인 과목을 찾지 못했습니다.')
         batches: dict[tuple[int,str],list[Event]] = {}
         warnings: list[str] = []
         if len(courses)==1:
@@ -177,21 +187,20 @@ class CampusClient:
         batches={};warnings=[];self._check_cancel()
         say(f'{course.name} / 동영상 조회')
         try:
-            modules=self._get(f'/learningx/api/v1/courses/{course.id}/modules',{'include_detail':'true'}).json()
+            modules=self._paginated(f'/learningx/api/v1/courses/{course.id}/modules',{'include_detail':'true','per_page':100},collection='modules')
             batches[(course.id,'movie')]=parse_movies(course,modules)
         except LearningXAuthenticationRequired:
             self.movie_auth_required=True;warnings.append(f'{course.name}: 동영상 인증을 자동으로 연결하고 있습니다.')
         except AuthenticationRequired:raise
-        except (ValueError,requests.RequestException) as err:
+        except (ValueError,requests.RequestException,RuntimeError) as err:
             warnings.append(f'{course.name}: 동영상 조회 실패 ({str(err)[:110]})')
         self._check_cancel();say(f'{course.name} / 일반 과제 조회')
         try:
-            groups=self._paginated(f'/api/v1/courses/{course.id}/assignment_groups',{
+            assignments=self._paginated(f'/api/v1/courses/{course.id}/assignments',{
                 'exclude_response_fields[]':['description','rubric'],
-                'include[]':['assignments','discussion_topic'],
+                'include[]':['submission'],
                 'override_assignment_dates':'true','per_page':'100'})
-            subs=self._paginated(f'/api/v1/courses/{course.id}/students/submissions',{'per_page':'100'})
-            batches[(course.id,'assignment')]=parse_assignments(course,groups,subs)
+            batches[(course.id,'assignment')]=parse_assignments(course,[{'assignments':assignments}],[])
         except AuthenticationRequired:raise
         except (ValueError,requests.RequestException,RuntimeError) as err:
             warnings.append(f'{course.name}: 일반 과제 조회 실패 ({str(err)[:110]})')

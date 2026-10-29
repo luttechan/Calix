@@ -14,8 +14,9 @@ class DayBadges(QWidget):
         self.assignment=QLabel(self);self.assignment.setObjectName('assignmentBadge')
         self.assignment_done=QLabel(self);self.assignment_done.setObjectName('assignmentBadge')
         self.movie=QLabel(self);self.movie.setObjectName('movieBadge')
+        self.movie_done=QLabel(self);self.movie_done.setObjectName('movieBadge')
         self.custom=[QLabel(self) for _ in range(3)]
-        for label in (self.assignment,self.assignment_done,self.movie,*self.custom):
+        for label in (self.assignment,self.assignment_done,self.movie,self.movie_done,*self.custom):
             label.setTextFormat(Qt.TextFormat.PlainText);label.setAlignment(Qt.AlignmentFlag.AlignCenter);label.setCursor(Qt.CursorShape.PointingHandCursor);label.installEventFilter(self)
             font=QFont(label.font());font.setPixelSize(12);label.setFont(font)
         self.hide()
@@ -23,10 +24,10 @@ class DayBadges(QWidget):
     def matching(self,obj):
         group=self.filters.get(obj)
         if group in ('assignment','assignment_done'):return [e for e in self.events if e.kind=='assignment' and e.type_id is None and e.completed==(group=='assignment_done')]
-        if group=='movie':return [e for e in self.events if e.kind=='movie' and e.type_id is None]
+        if group in ('movie','movie_done'):return [e for e in self.events if e.kind=='movie' and e.type_id is None and e.completed==(group=='movie_done')]
         if isinstance(group,tuple):
             name,color,done=group
-            return [e for e in self.events if (e.type_label,e.type_color)==(name,color) and (e.kind=='assignment' and e.completed)==done]
+            return [e for e in self.events if (e.type_label,e.type_color)==(name,color) and e.completed==done]
         return self.events
     def eventFilter(self,obj,event):
         if event.type()==QEvent.Type.MouseButtonPress and event.button()==Qt.MouseButton.LeftButton:
@@ -37,13 +38,13 @@ class DayBadges(QWidget):
     def mousePressEvent(self,event):
         if self.day and self.events and event.button()==Qt.MouseButton.LeftButton:self.details_requested.emit(self.day,self.events,event.globalPosition().toPoint());event.accept()
         else:super().mousePressEvent(event)
-    def configure(self,assignment,movie,width,height,custom=(),*,assignment_done=0):
+    def configure(self,assignment,movie,width,height,custom=(),*,assignment_done=0,movie_done=0):
         custom=[tuple(row) if len(row)==4 else (*row,False) for row in custom]
-        raw=[(self.assignment,'과제',assignment,None,False),(self.assignment_done,'완료',assignment_done,None,True),(self.movie,'영상',movie,None,False)]+[(self.custom[i],name,count,color,done) for i,(name,count,color,done) in enumerate(custom[:3])]
+        raw=[(self.assignment,'과제',assignment,None,False),(self.assignment_done,'완료',assignment_done,None,True),(self.movie,'영상',movie,None,False),(self.movie_done,'시청',movie_done,None,True)]+[(self.custom[i],name,count,color,done) for i,(name,count,color,done) in enumerate(custom[:3])]
         active=[entry for entry in raw if entry[2]]
-        self.filters={self.assignment:'assignment',self.assignment_done:'assignment_done',self.movie:'movie'}
+        self.filters={self.assignment:'assignment',self.assignment_done:'assignment_done',self.movie:'movie',self.movie_done:'movie_done'}
         for i,(name,count,color,done) in enumerate(custom[:3]):self.filters[self.custom[i]]=(name,color,done)
-        all_labels=' / '.join([f'{"완료 과제" if label is self.assignment_done else name} {count}건'+(' (완료)' if done and label is not self.assignment_done else '') for label,name,count,_,done in active]+[f'{name} {count}건'+(' (완료)' if done else '') for name,count,color,done in custom[3:]])
+        all_labels=' / '.join([f'{"완료 과제" if label is self.assignment_done else "시청 완료 영상" if label is self.movie_done else name} {count}건'+(' (완료)' if done and label is not self.assignment_done else '') for label,name,count,_,done in active]+[f'{name} {count}건'+(' (완료)' if done else '') for name,count,color,done in custom[3:]])
         total=sum(entry[2] for entry in active)+sum(count for name,count,color,done in custom[3:])
         compact=height<18 or width<60
         capacity=min(3,max(1,(width+4)//48)) if not compact else 3
@@ -51,10 +52,10 @@ class DayBadges(QWidget):
             hidden=len(active)-capacity+1+len(custom[3:])
             active=active[:capacity-1]+[(self.custom[2],f'+{hidden}',0,colors()['muted'],False)] if capacity>1 else [(self.custom[2],'일정',total,colors()['muted'],False)]
             self.filters[self.custom[2]]=None
-        for label in (self.assignment,self.assignment_done,self.movie,*self.custom):label.hide()
+        for label in (self.assignment,self.assignment_done,self.movie,self.movie_done,*self.custom):label.hide()
         for label,title,count,color,done in active:
             label.show()
-            c=category_colors();prefix='movie' if label is self.movie else 'assignment';t=type_tokens(color) if color else {key:c[prefix+'_'+key] for key in ('ink','bg','line')}
+            c=category_colors();prefix='movie' if label in (self.movie,self.movie_done) else 'assignment';t=type_tokens(color) if color else {key:c[prefix+'_'+key] for key in ('ink','bg','line')}
             if done:
                 base=QColor(colors()['surface'])
                 t={key:QColor(*[round(QColor(value).getRgb()[i]*.38+base.getRgb()[i]*.62) for i in range(3)]).name() for key,value in t.items()}
@@ -172,13 +173,13 @@ class MonthCanvas(QCalendarWidget):
             badges.setProperty('calendarDate',day.isoformat())
             badges.set_events(day,rows)
             if day.month!=self.monthShown() or not rows:badges.hide();continue
-            a=sum(e.kind=='assignment' and e.type_id is None and not e.completed for e in rows);done=sum(e.kind=='assignment' and e.type_id is None and e.completed for e in rows);v=sum(e.kind=='movie' and e.type_id is None for e in rows)
+            a=sum(e.kind=='assignment' and e.type_id is None and not e.completed for e in rows);done=sum(e.kind=='assignment' and e.type_id is None and e.completed for e in rows);v=sum(e.kind=='movie' and e.type_id is None and not e.completed for e in rows);vd=sum(e.kind=='movie' and e.type_id is None and e.completed for e in rows)
             groups={}
             for event in rows:
                 if event.type_id is not None:
-                    key=(event.type_label,event.type_color,event.kind=='assignment' and event.completed);groups[key]=groups.get(key,0)+1
+                    key=(event.type_label,event.type_color,event.completed);groups[key]=groups.get(key,0)+1
             custom=[(name,count,color,completed) for (name,color,completed),count in groups.items()]
             available=max(1,rect.height()-25)
-            height=badges.configure(a,v,max(18,rect.width()-16),available,custom,assignment_done=done)
+            height=badges.configure(a,v,max(18,rect.width()-16),available,custom,assignment_done=done,movie_done=vd)
             badges.setGeometry(rect.left()+8,rect.bottom()-height-8,max(18,rect.width()-16),height)
             badges.show()

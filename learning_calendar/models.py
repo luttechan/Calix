@@ -68,7 +68,7 @@ def deadline_display(event: Event, now: datetime | None = None) -> tuple[str, st
     now = now or datetime.now(KST)
     seconds = (due - now).total_seconds()
     if seconds <= 0:
-        return ('기한 경과', 'red')
+        return ('미완료' if event.kind=='assignment' else '기한 경과', 'red')
     if seconds < 3600:
         return (f'마감 {max(1, math.ceil(seconds / 60))}분 전', 'red')
     if seconds < 86400:

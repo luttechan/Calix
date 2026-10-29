@@ -31,7 +31,7 @@ def test_complete_never_overdue():
     e=make_event(now-timedelta(days=5),True)
     assert e.status(now)=='완료'
     assert deadline_display(e,now)==('완료','done')
-    assert deadline_display(make_event(now-timedelta(days=2)),now)==('기한 경과','red')
+    assert deadline_display(make_event(now-timedelta(days=2)),now)==('미완료','red')
 
 
 def test_alias_sync_preserves_name(tmp_path):

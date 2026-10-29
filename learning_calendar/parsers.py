@@ -29,7 +29,7 @@ def course_list(payload: object) -> list[Course]:
             cid = int(row['id'])
         except (TypeError, ValueError, KeyError):
             continue
-        name = str(row.get('longName') or row.get('shortName') or row.get('originalName') or f'과목 {cid}')
+        name = str(row.get('name') or row.get('longName') or row.get('shortName') or row.get('originalName') or row.get('course_code') or f'과목 {cid}')
         found[cid] = Course(cid, name)
     return list(found.values())
 
