@@ -583,8 +583,12 @@ class MainWindow(QMainWindow):
         return False
 
     def logout(self):
+        try:self.session_path.unlink(missing_ok=True)
+        except OSError:
+            logging.exception('로그아웃 세션 정리 실패')
+            self.status.setText('로그아웃 실패 / 세션 파일 접근 거부');return
         self._logging_out=True;self._login_then_sync=False;self._sync_after_browser=False;self._movies_ready=False
-        self.session_path.unlink(missing_ok=True);self._set_logged_in(False)
+        self._set_logged_in(False)
         if self._login_process:
             self._set_busy(True);self.status.setText('로그아웃 중');self._browser_command('logout')
         else:self._logging_out=False;self.status.setText('로그아웃 완료')

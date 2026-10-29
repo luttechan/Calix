@@ -39,6 +39,19 @@ def test_session_write_failure_keeps_existing_session_and_unblocks_ui(app,tmp_pa
     dispose(w,app)
 
 
+def test_failed_logout_does_not_disable_future_login_events(app,tmp_path,monkeypatch):
+    w=MainWindow(tmp_path);w.session_path.write_bytes(b'protected session');w._set_logged_in(True)
+    unlink=Path.unlink
+    def locked(path,*args,**kwargs):
+        if path==w.session_path:raise PermissionError('locked')
+        return unlink(path,*args,**kwargs)
+    with monkeypatch.context() as patch:
+        patch.setattr(Path,'unlink',locked);w.logout()
+    assert w._logged_in and not w._logging_out and not w._busy and w.session_path.exists()
+    w.logout();assert not w._logged_in and not w.session_path.exists()
+    dispose(w,app)
+
+
 def test_account_database_open_failure_preserves_working_store(app,tmp_path,monkeypatch):
     import learning_calendar.gui as gui
     w=MainWindow(tmp_path);old=w.store
