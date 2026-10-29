@@ -3,7 +3,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor,QIcon,QPainter,QPalette,QPen,QPixmap
 from PySide6.QtWidgets import QApplication
 
-VERSION='1.0.9-r6'
+VERSION='1.0.9-r7'
 THEME_NAMES={'pink':'핑크','sky':'스카이블루','mint':'민트','purple':'퍼플','dark':'다크'}
 THEMES={
  'pink':dict(bg='#FFF6FA',side='#FFFDFE',surface='#FFFFFF',soft='#FCE7F0',hover='#FFF0F6',ink='#342431',muted='#836875',line='#EDDCE5',accent='#B13970',onaccent='#FFFFFF',hero='#F8D7E7',hero2='#FFEDF5'),

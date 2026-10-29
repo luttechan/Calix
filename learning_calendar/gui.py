@@ -4,6 +4,8 @@ import logging
 import json
 import os
 import sys
+import time
+import sqlite3
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -599,6 +601,7 @@ class MainWindow(QMainWindow):
         self._login_server.newConnection.connect(self._browser_connected)
         self._login_output=self.appdir/f'login-{uuid4().hex}.dpapi'
         self._login_ready=self.appdir/f'login-{uuid4().hex}.ready'
+        self._login_timed_out=False;self._login_ready_deadline=time.monotonic()+20
         self._login_loading=QDialog(self,Qt.WindowType.Tool|Qt.WindowType.WindowStaysOnTopHint)
         self._login_loading.setWindowTitle('Calix 로그인');self._login_loading.setFixedSize(340,130)
         loading=QVBoxLayout(self._login_loading);loading.setContentsMargins(24,20,24,20)
@@ -649,7 +652,14 @@ class MainWindow(QMainWindow):
             from .cookies import read_cookies,write_cookies,canvas_session_available
             rows=read_cookies(self._login_output)
             if not canvas_session_available(rows):return
-            write_cookies(self.session_path,rows);self._set_logged_in(True)
+            try:write_cookies(self.session_path,rows)
+            except OSError:
+                logging.exception('로그인 세션 저장 실패')
+                self._close_login_loading()
+                if self._thread is None:self._set_busy(False)
+                self.status.setText('로그인 세션 저장 실패')
+                return
+            self._set_logged_in(True)
             movie_became_ready=bool(event.get('movies_ready')) and not self._movies_ready
             self._movies_ready=bool(event.get('movies_ready'));self._close_login_loading()
             do_sync=(kind=='authenticated' and self._login_then_sync) or (movie_became_ready and self.partial)
@@ -673,7 +683,12 @@ class MainWindow(QMainWindow):
             ctypes.windll.user32.AllowSetForegroundWindow(int(self._login_process.processId()))
 
     def _check_login_ready(self):
-        if self._login_ready.exists():self._close_login_loading()
+        if self._login_ready.exists():self._close_login_loading();return
+        if time.monotonic()>=self._login_ready_deadline:
+            self._login_timed_out=True;self._login_then_sync=False;self._close_login_loading()
+            if self._thread is None:self._set_busy(False)
+            self.status.setText('로그인 창 연결 시간 초과')
+            if self._login_process:self._login_process.kill()
 
     def _close_login_loading(self):
         timer=getattr(self,'_login_ready_timer',None)
@@ -690,7 +705,7 @@ class MainWindow(QMainWindow):
             self._finish_login(False,'로그인 창을 열지 못했습니다')
 
     def _login_finished(self,code,status):
-        self._finish_login(False,'로그인 연결 종료')
+        self._finish_login(False,'로그인 창 연결 시간 초과' if getattr(self,'_login_timed_out',False) else '로그인 연결 종료')
 
     def _finish_login(self,accepted,message):
         proc=self._login_process
@@ -699,7 +714,8 @@ class MainWindow(QMainWindow):
         self._close_login_loading()
         if self._login_socket:self._login_socket.abort();self._login_socket.deleteLater();self._login_socket=None
         if self._login_server:self._login_server.close();self._login_server.deleteLater();self._login_server=None
-        if self._login_output.exists():self._login_output.unlink()
+        try:self._login_output.unlink(missing_ok=True)
+        except OSError:logging.warning('로그인 임시 파일을 정리하지 못했습니다.')
         if self._logging_out:self._logging_out=False;self._set_logged_in(False)
         if self._thread is None:self._set_busy(False)
         if not self._closing:self.status.setText('로그인 유지 중' if self._logged_in else message)
@@ -727,11 +743,20 @@ class MainWindow(QMainWindow):
         if self._closing:return
         self._reauth_attempted=False
         self._set_logged_in(True)
+        settings_failed=False
         if Path(result['path'])!=self.store.path:
+            try:new_store=Store(result['path'])
+            except (OSError,sqlite3.Error):
+                logging.exception('계정 일정 열기 실패')
+                self._show_sync_message('동기화 결과','새 계정 일정을 열지 못했습니다.','기존 일정은 유지했습니다.')
+                self.status.setText('계정 일정 열기 실패');return
             self._page_filters.clear()
             self._undo_stack.clear();self.undo_button.setEnabled(False)
-            self.store.close();self.store=Store(result['path'])
-            self.settings['active_db']=self.store.path.name;write_settings(self.settings_path,self.settings)
+            previous_store=self.store;self.store=new_store;previous_store.close()
+            self.settings['active_db']=self.store.path.name
+            try:write_settings(self.settings_path,self.settings)
+            except OSError:
+                logging.exception('계정 설정 저장 실패');settings_failed=True
         self.snapshot=result['snapshot'];self._sessions=result['sessions'];self.last_sync=result['last_sync'];self.partial=bool(result['warnings'])
         from .sync import sync_summary
         self.sync_summary=result.get('sync_summary',sync_summary(result['warnings'],result.get('course_checks',{})))
@@ -739,6 +764,7 @@ class MainWindow(QMainWindow):
         self.demo=False;self.demo_snapshot=None;self.demo_badge.hide();self._timetable_signature=None
         self._reload_type_filter();self._reload_course_filter();self.refresh()
         stats=result['stats'];self.status.setText(self.sync_summary if self.partial else f"완료 / 추가 {stats['new']} / 변경 {stats['updated']}")
+        if settings_failed:self.status.setText('일정 반영 완료 / 계정 설정 저장 실패')
         checks=result.get('course_checks',{})
         for cid,report in checks.items():
             logging.info('영상 검증: 과목 %s / 확인 %s / 영상 %s / 완료 %s',cid,report['videos_verified'],report['videos'],report['watched'])
@@ -747,8 +773,19 @@ class MainWindow(QMainWindow):
             self._movie_reauth_attempted=True;self._reauth_requested=True
         notes=[note for note in result['warnings'] if '동영상 인증' not in note]
         if notes:
-            box=QMessageBox(QMessageBox.Icon.Warning,'동기화 결과',self.sync_summary,parent=self)
-            box.setDetailedText('\n'.join(notes));box.exec();box.deleteLater()
+            self._show_sync_message('동기화 결과',self.sync_summary,'\n'.join(notes))
+
+    def _show_sync_message(self,title,summary,details):
+        box=self._dialogs.get('sync_result')
+        if box is None:
+            box=QMessageBox(QMessageBox.Icon.Warning,title,summary,parent=self)
+            box.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+            self._dialogs['sync_result']=box
+            def forget(*_):
+                if self._dialogs.get('sync_result') is box:self._dialogs.pop('sync_result',None)
+            box.finished.connect(forget);box.destroyed.connect(forget)
+        box.setWindowTitle(title);box.setTextFormat(Qt.TextFormat.PlainText)
+        box.setText(summary);box.setDetailedText(details);box.open()
 
     @Slot(str)
     def _sync_auth_required(self,message):
@@ -763,8 +800,8 @@ class MainWindow(QMainWindow):
     def _sync_failed(self,message):
         if self._closing:return
         self.status.setText('동기화 실패')
-        box=QMessageBox(QMessageBox.Icon.Warning,'동기화 실패','로그인 상태와 연결을 확인하세요.',parent=self)
-        box.setDetailedText(message);box.exec();box.deleteLater()
+        logging.warning('동기화 실패: %s',message)
+        self._show_sync_message('동기화 실패','일정을 가져오지 못했습니다.',message)
 
     @Slot()
     def _sync_finished(self):

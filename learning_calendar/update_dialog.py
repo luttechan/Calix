@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+import logging
 from pathlib import Path
 import tempfile
 from PySide6.QtCore import Qt,QUrl,Signal,QTimer
@@ -51,7 +52,10 @@ class UpdateDialog(QDialog):
         self.request(LATEST_API)
 
     def download(self):
-        self.cancel();self.mode='download';self.action.setEnabled(False);self.progress.setRange(0,100);self.progress.setValue(0);self.progress.show();self.message.setText('다운로드 중')
+        self.cancel()
+        if self.partial:
+            self.fail('임시 파일을 정리하지 못했습니다. 잠시 후 다시 시도하십시오.');return
+        self.mode='download';self.action.setEnabled(False);self.progress.setRange(0,100);self.progress.setValue(0);self.progress.show();self.message.setText('다운로드 중')
         self.received=0;self.redirects=0;self.hash=hashlib.sha256()
         try:
             # A unique per-user staging directory prevents overwrite of an existing download.
@@ -117,12 +121,21 @@ class UpdateDialog(QDialog):
 
     def cancel(self):
         self.timeout.stop();self.release_reply()
-        if self.file:self.file.close();self.file=None
+        if self.file:
+            try:self.file.close()
+            except OSError:logging.warning('업데이트 임시 파일 닫기 실패')
+            self.file=None
         if self.partial:
-            directory=self.partial.parent;self.partial.unlink(missing_ok=True)
-            try:directory.rmdir()
-            except OSError:pass
-            self.partial=None
+            if self._remove_staged(self.partial):self.partial=None
+
+    @staticmethod
+    def _remove_staged(path):
+        try:path.unlink(missing_ok=True)
+        except OSError:
+            logging.warning('업데이트 임시 파일 정리 실패');return False
+        try:path.parent.rmdir()
+        except OSError:pass
+        return True
 
     def fail(self,message):
         checking=self.mode=='check'
@@ -133,10 +146,7 @@ class UpdateDialog(QDialog):
         self.initial_check.stop()
         self.cancel()
         if self.installer:
-            self.installer.unlink(missing_ok=True)
-            try:self.installer.parent.rmdir()
-            except OSError:pass
-            self.installer=None
+            if self._remove_staged(self.installer):self.installer=None
 
     def done(self,result):
         self.cleanup();super().done(result)

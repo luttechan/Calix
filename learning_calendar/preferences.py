@@ -23,7 +23,18 @@ def read_settings(path: str | Path) -> dict:
     try:
         settings = json.loads(Path(path).read_text(encoding='utf-8'))
         if isinstance(settings,dict):
-            defaults.update({k:v for k,v in settings.items() if k in defaults})
+            for key in ('window_width','window_height'):
+                value=settings.get(key)
+                if type(value) is int and 240<=value<=16384:defaults[key]=value
+            for key in ('notifications','glass'):
+                if type(settings.get(key)) is bool:defaults[key]=settings[key]
+            if settings.get('theme') in ('pink','sky','mint','purple','dark'):defaults['theme']=settings['theme']
+            name=settings.get('active_db')
+            reserved={'CON','PRN','AUX','NUL',*(f'COM{i}' for i in range(1,10)),*(f'LPT{i}' for i in range(1,10))}
+            if (isinstance(name,str) and 3<len(name)<=128 and name.endswith('.db')
+                    and name[0].isalnum() and all(c.isascii() and (c.isalnum() or c in '._-') for c in name)
+                    and not any(c in name for c in '/\\:<>"|?*') and Path(name).name==name
+                    and name.split('.')[0].upper() not in reserved):defaults['active_db']=name
     except (OSError,ValueError):
         pass
     return defaults
