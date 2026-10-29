@@ -62,7 +62,7 @@ def parse_movies(course: Course, payload: object) -> list[Event]:
                 continue
             media = data.get('item_content_data') or {}
             if not isinstance(media, dict):media={}
-            if (media.get('content_type') or data.get('item_content_type')) not in ('movie','mp4'):
+            if (media.get('content_type') or data.get('item_content_type')) not in ('movie','mp4','zoom'):
                 continue
             identifier = data.get('item_id') or item.get('content_id') or item.get('module_item_id')
             if identifier is None:
