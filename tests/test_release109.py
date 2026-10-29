@@ -119,7 +119,7 @@ def test_failed_second_page_keeps_previous_video_batch(app,tmp_path,monkeypatch)
 
 def release_payload(blob=b'installer'):
     from learning_calendar.updates import RELEASES
-    tag='v1.0.10';name='Calix-1.0.10-Setup-x64.exe'
+    tag='v99.0.0';name='Calix-99.0.0-Setup-x64.exe'
     return dict(tag_name=tag,html_url=f'{RELEASES}/tag/{tag}',assets=[dict(name=name,browser_download_url=f'{RELEASES}/download/{tag}/{name}',digest='sha256:'+hashlib.sha256(blob).hexdigest(),size=len(blob))])
 
 def test_release_version_and_official_installer_validation():
