@@ -125,9 +125,15 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $package = Join-Path $env:RUNNER_TEMP 'calix-release'
-          $existing = gh release view v1.0.9 --repo $env:GITHUB_REPOSITORY --json targetCommitish --jq '.targetCommitish' 2>$null
-          if ($LASTEXITCODE -eq 0) {
-            if ($existing -eq $env:GITHUB_SHA) { exit 0 }
+          $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json' }
+          $existing = $null
+          try {
+            $existing = Invoke-RestMethod -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/releases/tags/v1.0.9" -Headers $headers
+          } catch {
+            if ([int]$_.Exception.Response.StatusCode -ne 404) { throw }
+          }
+          if ($null -ne $existing) {
+            if ($existing.target_commitish -eq $env:GITHUB_SHA) { exit 0 }
             throw 'This revision already exists. Do not move the old tag.'
           }
           gh release create v1.0.9 (Join-Path $package 'Calix-1.0.9-Windows-x64.zip') (Join-Path $package 'Calix-1.0.9-Setup-x64.exe') (Join-Path $package 'SHA256SUMS.txt') --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Calix 1.0.9' --notes '영상 완료 표시 및 강의 수집 누락 수정. 미제출 과제 표시 개선. 업데이트 확인 및 설치 추가.' --latest
