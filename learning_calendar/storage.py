@@ -222,8 +222,8 @@ class Store:
         r = self.db.execute('SELECT value FROM meta WHERE key=?',(key,)).fetchone()
         return r['value'] if r else default
 
-    def set_meta(self, key: str, value: str):
-        with self.db:
+    def set_meta(self, key: str, value: str,*,_commit=True):
+        with self.db if _commit else nullcontext():
             self.db.execute('INSERT OR REPLACE INTO meta VALUES (?,?)',(key,value))
 
     def set_starred(self, key: str, starred: bool):
@@ -239,13 +239,17 @@ class Store:
     def recent_changes(self, limit: int = 100) -> list[dict]:
         return [dict(x) for x in self.db.execute('SELECT * FROM changes ORDER BY id DESC LIMIT ?', (limit,))]
 
-    def apply_batch(self, courses: list[Course], batches: dict[tuple[int,str],list[Event]]) -> dict[str,int]:
+    def apply_batch(self, courses: list[Course], batches: dict[tuple[int,str],list[Event]],*,_commit=True) -> dict[str,int]:
         """Replace only fully retrieved course/kind data, preserving local notes and stars."""
         now = datetime.now(timezone.utc).isoformat()
         totals = {'new':0,'updated':0,'archived':0, 'unchanged':0}
         if not batches:
             return totals
-        with self.db:
+        for (cid,kind),entries in batches.items():
+            for entry in entries:
+                if not isinstance(entry,Event) or entry.course_id!=cid or entry.kind!=kind:
+                    raise ValueError('일정의 과목 또는 유형이 일치하지 않습니다.')
+        with self.db if _commit else nullcontext():
             for course in courses:
                 self.db.execute('INSERT INTO courses(id,name) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name',(course.id,course.name))
             for (cid,kind), entries in batches.items():
@@ -272,7 +276,7 @@ class Store:
                     if description:
                         self.db.execute('INSERT INTO changes(event_key,change_type,detail,changed_at) VALUES (?,?,?,?)',(e.key,ctype,description,now))
                 for key,old in existing.items():
-                    if key not in seen and old['active']:
+                    if key not in seen and old['active'] and getattr(entries,'complete',True):
                         totals['archived']+=1
                         self.db.execute('UPDATE events SET active=0 WHERE key=?',(key,))
                         self.db.execute('INSERT INTO changes(event_key,change_type,detail,changed_at) VALUES (?,?,?,?)',(key,'archived',f'목록에서 사라짐: {old["title"]}',now))

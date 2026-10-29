@@ -73,7 +73,7 @@ class LoginValidation(QThread):
                 for candidate in course_ids:
                     try:
                         events=client._course_movies(Course(candidate,''))
-                        states_verified=states_verified and all(e.completion_verified for e in events)
+                        states_verified=states_verified and getattr(events,'complete',True) and all(e.completion_verified for e in events)
                     except Exception:failed.append(candidate)
                 token_valid=bool(course_ids) and not failed
                 if failed:cid=failed[0]

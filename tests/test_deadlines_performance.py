@@ -49,7 +49,7 @@ def test_parallel_courses_bound_concurrency_and_close_owned_sessions(monkeypatch
     from learning_calendar.sync import CampusClient
     client=CampusClient([]);lock=threading.Lock();state={'active':0,'peak':0};owned=[];closed=[]
     class Response:
-        def json(self):return [{'id':i,'longName':f'과목 {i}'} for i in range(8)]
+        def json(self):return [{'id':i,'longName':f'과목 {i}'} for i in range(1,9)]
     monkeypatch.setattr(client,'_get',lambda *a,**k:Response())
     def collect(self,course,say):
         with lock:

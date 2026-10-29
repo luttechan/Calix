@@ -46,4 +46,4 @@ exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name=product,
           debug=False, bootloader_ignore_signals=False, strip=False, upx=False,
           console=debug, disable_windowed_traceback=False,
           icon=str(root / 'asset' / 'icons' / 'calix.ico'),version=str(root/'version_info.txt'))
-coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name=product+' 1.0.9-r5')
+coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name=product+' 1.0.9-r6')

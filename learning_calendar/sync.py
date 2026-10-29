@@ -1,6 +1,7 @@
 from __future__ import annotations
 import requests
 import threading
+import time
 from queue import Queue,Empty
 from urllib.parse import urljoin, urlparse
 from .models import Course, Event
@@ -23,10 +24,14 @@ class SyncCancelled(RuntimeError):
     pass
 
 
+class SyncTimeout(RuntimeError):pass
+
+
 class CampusClient:
     """Fetch only when explicitly invoked; never schedules background requests."""
     def __init__(self, cookies: list[dict], cancel_event: threading.Event | None = None):
         self.cancel_event = cancel_event or threading.Event()
+        self.deadline=time.monotonic()+120
         self.movie_auth_required=False
         self.course_checks={}
         self.session = requests.Session()
@@ -62,6 +67,32 @@ class CampusClient:
     def _check_cancel(self):
         if self.cancel_event.is_set():
             raise SyncCancelled('동기화를 취소했습니다.')
+        if time.monotonic()>self.deadline:raise SyncTimeout('학교 응답 대기 시간이 초과됐습니다.')
+
+    def _request_get(self,url,**kwargs):
+        for attempt in range(3):
+            self._check_cancel()
+            try:response=self.session.get(url,timeout=(5,12),allow_redirects=False,stream=True,**kwargs)
+            except requests.exceptions.SSLError:raise
+            except (requests.Timeout,requests.ConnectionError):
+                if attempt==2:raise
+            else:
+                if response.status_code not in (408,429,500,502,503,504) or attempt==2:return response
+                close=getattr(response,'close',None)
+                if close:close()
+            # Backoff is bounded and wakes immediately on cancellation.
+            self.cancel_event.wait(.25*(2**attempt));self._check_cancel()
+
+    def _read_response(self,response,limit):
+        if getattr(response,'raw',None) is None:return
+        try:
+            parts=[];size=0
+            for chunk in response.iter_content(64*1024):
+                self._check_cancel();size+=len(chunk)
+                if size>limit:raise ValueError('학교 응답이 너무 큽니다. 기존 일정을 유지합니다.')
+                parts.append(chunk)
+            response._content=b''.join(parts);response._content_consumed=True
+        finally:response.close()
 
     def _get(self, path: str, params: dict | None = None):
         self._check_cancel()
@@ -77,8 +108,8 @@ class CampusClient:
                     '주차학습 연결을 자동으로 준비하고 있습니다.'
                 )
             headers = {'Authorization': 'Bearer ' + self._learningx_token}
-        resp = self.session.get(url, params=params, timeout=(5, 12),
-                                allow_redirects=False, headers=headers)
+        resp = self._request_get(url,params=params,headers=headers)
+        self._read_response(resp,16*1024*1024)
         self._check_cancel()
         if is_learningx:
             for cookie in resp.cookies if hasattr(resp,'cookies') else ():
@@ -101,7 +132,7 @@ class CampusClient:
             )
         resp.raise_for_status()
         if 'json' not in resp.headers.get('content-type','').lower():
-            raise AuthenticationRequired(f'JSON이 아닌 응답: {endpoint}. 로그인 상태를 확인해 주세요.')
+            raise ValueError(f'학교 응답 형식이 올바르지 않습니다: {endpoint}')
         return resp
 
     def _paginated(self, path: str, params: dict | None = None, *, collection=None) -> list:
@@ -112,7 +143,10 @@ class CampusClient:
         for _ in range(1000):
             self._check_cancel()
             resp = self._get(current_url, current_params)
-            obj = resp.json()
+            try:obj = resp.json()
+            finally:
+                close=getattr(resp,'close',None)
+                if close:close()
             if collection and isinstance(obj,dict):obj=obj.get(collection)
             if not isinstance(obj,list):
                 raise ValueError(f'예상하지 못한 JSON 응답: {path}')
@@ -144,18 +178,6 @@ class CampusClient:
         try:
             modules=self._paginated(f'/learningx/api/v1/courses/{course.id}/modules',
                                     {'include_detail':'true','per_page':100},collection='modules')
-            for module in modules:
-                if not isinstance(module,dict) or module.get('published') is False:continue
-                # An incomplete outline must not erase previously collected videos.
-                if not isinstance(module.get('module_items'),list):
-                    raise ValueError('주차학습 상세 정보가 없습니다. 기존 영상을 유지합니다.')
-                for item in module.get('module_items') or []:
-                    if not isinstance(item,dict) or item.get('published') is False:continue
-                    data=item.get('content_data') or {}
-                    if not isinstance(data,dict):continue
-                    media=data.get('item_content_data') or {}
-                    if data.get('item_content_type')=='commons' and (not isinstance(media,dict) or not media.get('content_type')):
-                        raise ValueError('학습콘텐츠 상세 정보가 없습니다. 기존 영상을 유지합니다.')
             return parse_movies(course,modules)
         finally:
             if previous is None:self.session.headers.pop('Referer',None)
@@ -163,8 +185,8 @@ class CampusClient:
 
     def _course_document(self,course_id):
         self._check_cancel()
-        response=self.session.get(f'{BASE_URL}/courses/{int(course_id)}',
-                                  headers={'Accept':'text/html'},timeout=(5,12),allow_redirects=False)
+        response=self._request_get(f'{BASE_URL}/courses/{int(course_id)}',headers={'Accept':'text/html'})
+        self._read_response(response,4*1024*1024)
         self._check_cancel()
         if response.status_code in (301,302,303,307,308,401,403):
             raise AuthenticationRequired('과목 페이지에 접근할 수 없습니다.')
@@ -182,7 +204,7 @@ class CampusClient:
                 assignments=self._paginated(f'/api/v1/courses/{course.id}/assignments',{
                     'exclude_response_fields[]':['description','rubric'],
                     'include[]':['submission'],'override_assignment_dates':'true','per_page':100})
-            except AuthenticationRequired:raise
+            except (AuthenticationRequired,SyncCancelled,SyncTimeout):raise
             except (ValueError,requests.RequestException,RuntimeError):
                 assignments=None
             if not assignments:
@@ -191,13 +213,13 @@ class CampusClient:
                     'exclude_response_fields[]':['description','rubric'],
                     'include[]':['assignments','discussion_topic'],
                     'override_assignment_dates':'true','per_page':100})
-                if any(not isinstance(g,dict) or not isinstance(g.get('assignments'),list) for g in groups):
-                    raise ValueError('과제 목록이 불완전합니다. 기존 과제를 유지합니다.')
             else:groups=[{'assignments':assignments}]
-            entries=[a for g in groups for a in g['assignments'] if isinstance(a,dict)
+            entries=[a for g in groups if isinstance(g,dict) and isinstance(g.get('assignments'),list)
+                     for a in g['assignments'] if isinstance(a,dict)
                      and a.get('published') is not False and a.get('is_quiz_assignment') is not True
+                     and isinstance(a.get('submission_types') or [],list)
                      and 'online_quiz' not in (a.get('submission_types') or [])]
-            complete_states={'submitted','graded','pending_review','unsubmitted','untaken'}
+            complete_states=('submitted','graded','pending_review','unsubmitted','untaken')
             needs_submissions=any(not isinstance(a.get('submission'),dict)
                                   or a['submission'].get('workflow_state') not in complete_states for a in entries)
             submissions=self._paginated(f'/api/v1/courses/{course.id}/students/submissions',
@@ -226,6 +248,7 @@ class CampusClient:
                   for c in self.session.cookies if applies_to_canvas(c.domain)]
             def collect(course):
                 self._check_cancel();client=CampusClient(rows,self.cancel_event)
+                client.deadline=self.deadline
                 try:
                     part,notes=client._fetch_course(course,say)
                     return part,notes,client.movie_auth_required,client.course_checks
@@ -245,7 +268,9 @@ class CampusClient:
                     while True:
                         self._check_cancel()
                         try:ok,value=results.get(timeout=.025);break
-                        except Empty:continue
+                        except Empty:
+                            if not any(worker.is_alive() for worker in workers):raise RuntimeError('과목 조회 작업이 중단됐습니다. 기존 일정을 유지합니다.')
+                            continue
                     if not ok:raise value
                     part,notes,needs_auth,checks=value;batches.update(part);warnings.extend(notes);self.movie_auth_required|=needs_auth;self.course_checks.update(checks)
             finally:
@@ -263,10 +288,12 @@ class CampusClient:
         report={'videos_verified':False,'videos':0,'watched':0,'video_state':'pending','assignment_state':'pending'};self.course_checks[course.id]=report
         say(f'{course.name} / 동영상 조회')
         try:
-            batches[(course.id,'movie')]=self._course_movies(course)
-            events=batches[(course.id,'movie')];unknown=sum(not e.completion_verified for e in events)
-            report.update(videos_verified=not unknown,videos=len(events),watched=sum(e.completed for e in events),unknown=unknown)
-            report['video_state']='unverified' if unknown else 'complete'
+            events=self._course_movies(course);complete=getattr(events,'complete',True)
+            if events or complete:batches[(course.id,'movie')]=events
+            unknown=sum(not e.completion_verified for e in events)
+            report.update(videos_verified=not unknown and complete,videos=len(events),watched=sum(e.completed for e in events),unknown=unknown)
+            report['video_state']='failed' if not complete else 'unverified' if unknown else 'complete'
+            if not complete:warnings.append(f'{course.name}: 일부 영상 정보가 불완전합니다. 기존 항목을 유지합니다.')
             if unknown:warnings.append(f'{course.name}: 영상 {unknown}건의 시청 상태 미확인')
         except LearningXAuthenticationRequired:
             report['video_state']='authentication'
@@ -277,9 +304,11 @@ class CampusClient:
             warnings.append(f'{course.name}: 동영상 조회 실패 ({str(err)[:110]})')
         self._check_cancel();say(f'{course.name} / 일반 과제 조회')
         try:
-            batches[(course.id,'assignment')]=self._course_assignments(course)
-            unknown=sum(not e.completion_verified for e in batches[(course.id,'assignment')])
-            report['assignment_state']='unverified' if unknown else 'complete'
+            events=self._course_assignments(course);complete=getattr(events,'complete',True)
+            if events or complete:batches[(course.id,'assignment')]=events
+            unknown=sum(not e.completion_verified for e in events)
+            report['assignment_state']='failed' if not complete else 'unverified' if unknown else 'complete'
+            if not complete:warnings.append(f'{course.name}: 일부 과제 정보가 불완전합니다. 기존 항목을 유지합니다.')
             if unknown:warnings.append(f'{course.name}: 과제 {unknown}건의 제출 상태 미확인')
         except AuthenticationRequired:raise
         except (ValueError,requests.RequestException,RuntimeError) as err:

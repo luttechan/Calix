@@ -99,7 +99,7 @@ class MainWindow(QMainWindow):
         self.sync_summary=self.store.get_meta('sync_summary') or ('확인 필요' if self.partial else '')
         self.demo=False;self.demo_snapshot=None;self._thread=None;self._login_process=None
         self._login_server=None;self._login_socket=None;self._browser_buffer=bytearray()
-        self._logged_in=False;self._logging_out=False;self._movies_ready=False;self._sync_after_browser=False;self._movie_reauth_attempted=False
+        self._logged_in=False;self._session_pending=False;self._logging_out=False;self._movies_ready=False;self._sync_after_browser=False;self._movie_reauth_attempted=False
         self._closing=False;self._closed=False;self._login_then_sync=False;self._dialogs={}
         self.selected_date=datetime.now(KST).date();self.month=self.selected_date.replace(day=1)
         self._today=self.selected_date;self._filtered=[];self._buckets={};self._timetable_signature=None
@@ -117,7 +117,8 @@ class MainWindow(QMainWindow):
         self._build_ui();self._build_menus();self._reload_type_filter();self._reload_course_filter()
         if not demo:
             from .cookies import read_cookies,canvas_session_available
-            self._set_logged_in(canvas_session_available(read_cookies(self.session_path)))
+            self._session_pending=canvas_session_available(read_cookies(self.session_path))
+            self.login_button.setText('로그인 확인' if self._session_pending else '로그인')
         screen=QApplication.primaryScreen();area=screen.availableGeometry() if screen else None
         self.setMinimumSize(min(780,area.width()) if area else 780,min(520,area.height()) if area else 520)
         self.resize(min(int(self.settings.get('window_width',1240)),area.width() if area else 1240),
@@ -567,11 +568,12 @@ class MainWindow(QMainWindow):
 
     def login(self):
         if self._busy or self._closing:return
+        if self._session_pending:self.manual_sync();return
         if self._logged_in:self.logout();return
         self._reauth_attempted=False;self._start_login(True)
 
     def _set_logged_in(self,value):
-        self._logged_in=bool(value);self.login_button.setText('로그아웃' if value else '로그인')
+        self._session_pending=False;self._logged_in=bool(value);self.login_button.setText('로그아웃' if value else '로그인')
 
     def _browser_command(self,command):
         if self._login_socket:

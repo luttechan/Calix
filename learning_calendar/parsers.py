@@ -2,9 +2,34 @@
 from __future__ import annotations
 from collections.abc import Iterable
 from urllib.parse import urljoin, urlsplit
-from .models import Course, Event
+from .models import Course, Event,parse_datetime
 
 BASE_URL = 'https://canvas.bufs.ac.kr'
+
+
+class CollectedEvents(list):
+    """Usable records plus whether missing records can safely be archived."""
+    def __init__(self,values=(),*,complete=True):super().__init__(values);self.complete=complete
+
+
+def item_identifier(value):
+    if isinstance(value,bool) or not isinstance(value,(int,str)):raise ValueError('일정 ID가 올바르지 않습니다.')
+    value=str(value)
+    if not value or len(value)>128 or ':' in value or any(c.isspace() or ord(c)<32 for c in value):raise ValueError('일정 ID가 올바르지 않습니다.')
+    return value
+
+
+def due_value(value):
+    if value is None or value=='':return None
+    if not isinstance(value,str) or parse_datetime(value) is None:raise ValueError('일정 기한이 올바르지 않습니다.')
+    return value
+
+
+def record_event(found,blocked,event):
+    if event.key in blocked:return False
+    if event.key in found and found[event.key]!=event:
+        found.pop(event.key);blocked.add(event.key);return False
+    found[event.key]=event;return True
 
 
 def safe_url(url: object) -> str:
@@ -27,8 +52,9 @@ def course_list(payload: object) -> list[Course]:
             continue
         try:
             cid = int(row['id'])
-        except (TypeError, ValueError, KeyError):
+        except (TypeError, ValueError, KeyError,OverflowError):
             continue
+        if isinstance(row['id'],bool) or not 0<cid<2**63:continue
         name = str(row.get('name') or row.get('longName') or row.get('shortName') or row.get('originalName') or row.get('course_code') or f'과목 {cid}')
         found[cid] = Course(cid, name)
     return list(found.values())
@@ -49,34 +75,39 @@ def parse_movies(course: Course, payload: object) -> list[Event]:
         payload = payload.get('modules')
     if not isinstance(payload, list):
         raise ValueError('LearningX 주차학습 응답이 배열이 아닙니다.')
-    found: dict[str, Event] = {}
+    found: dict[str, Event] = {};blocked=set();complete=True
     for module in payload:
-        if not isinstance(module, dict) or module.get('published') is False:
-            continue
+        if not isinstance(module,dict):complete=False;continue
+        if module.get('published') is False:continue
         week = str(module.get('title') or '')
-        for item in module.get('module_items') or []:
-            if not isinstance(item, dict) or item.get('published') is False:
-                continue
-            data = item.get('content_data') or {}
-            if not isinstance(data, dict):
+        items=module.get('module_items')
+        if not isinstance(items,list):complete=False;continue
+        for item in items:
+            if not isinstance(item,dict):complete=False;continue
+            if item.get('published') is False:continue
+            data = item.get('content_data')
+            if not isinstance(data,dict):
+                if item.get('content_type') not in ('assignment','quiz','discussion','file','page'):complete=False
                 continue
             media = data.get('item_content_data') or {}
             if not isinstance(media, dict):media={}
+            if data.get('item_content_type')=='commons' and not media.get('content_type'):complete=False;continue
             if (media.get('content_type') or data.get('item_content_type')) not in ('movie','mp4','zoom'):
                 continue
             identifier = data.get('item_id') or item.get('content_id') or item.get('module_item_id')
-            if identifier is None:
-                continue
+            try:identifier=item_identifier(identifier);due=due_value(data.get('due_at'))
+            except ValueError:complete=False;continue
             key = f'movie:{course.id}:{identifier}'
             completion=movie_completion(item)
-            found[key] = Event(
+            event = Event(
                 key=key, course_id=course.id, course_name=course.name,
                 kind='movie',
                 title=str(data.get('title') or item.get('title') or media.get('title') or f'동영상 {identifier}'),
-                due_at=data.get('due_at'), completed=completion is True,completion_verified=completion is not None,
+                due_at=due, completed=completion is True,completion_verified=completion is not None,
                 url=safe_url(item.get('url')), week=week,
             )
-    return list(found.values())
+            if not record_event(found,blocked,event):complete=False
+    return CollectedEvents(found.values(),complete=complete)
 
 
 def parse_assignments(course: Course, groups: object, submissions: object) -> list[Event]:
@@ -84,36 +115,41 @@ def parse_assignments(course: Course, groups: object, submissions: object) -> li
         raise ValueError('과제 그룹 응답이 배열이 아닙니다.')
     if not isinstance(submissions, list):
         raise ValueError('제출 상태 응답이 배열이 아닙니다.')
-    submission_by_id = {}
+    submission_by_id = {};complete=True
     for sub in submissions:
         if isinstance(sub, dict) and sub.get('assignment_id') is not None:
             submission_by_id[str(sub['assignment_id'])] = sub
-    found: dict[str, Event] = {}
+        else:complete=False
+    found: dict[str, Event] = {};blocked=set()
     for group in groups:
         if not isinstance(group, dict):
-            continue
-        assignments = group.get('assignments') or []
+            complete=False;continue
+        assignments = group.get('assignments')
         if not isinstance(assignments, list):
-            continue
+            complete=False;continue
         for a in assignments:
-            if not isinstance(a, dict) or a.get('published') is False:
+            if not isinstance(a,dict):complete=False;continue
+            if a.get('published') is False:continue
+            types=a.get('submission_types') or []
+            if not isinstance(types,list):complete=False;continue
+            if a.get('is_quiz_assignment') is True or 'online_quiz' in types:
                 continue
-            if a.get('is_quiz_assignment') is True or 'online_quiz' in (a.get('submission_types') or []):
-                continue
-            if a.get('id') is None:
-                continue
-            aid = str(a['id'])
+            try:aid=item_identifier(a.get('id'))
+            except ValueError:complete=False;continue
             sub = submission_by_id.get(aid) or a.get('submission') or {}
             if not isinstance(sub,dict):sub={}
             state = sub.get('workflow_state')
             done = state in ('submitted', 'graded', 'pending_review') or bool(sub.get('submitted_at'))
             key = f'assignment:{course.id}:{aid}'
-            found[key] = Event(
+            try:due=due_value(a.get('due_at') or sub.get('cached_due_date'))
+            except ValueError:complete=False;continue
+            event = Event(
                 key=key, course_id=course.id, course_name=course.name,
                 kind='assignment', title=str(a.get('name') or f'과제 {aid}'),
-                due_at=a.get('due_at') or sub.get('cached_due_date'),
+                due_at=due,
                 completed=done,completion_verified=bool(sub.get('submitted_at')) or state in ('submitted','graded','pending_review','unsubmitted','untaken'),
                 url=safe_url(a.get('html_url') or f'/courses/{course.id}/assignments/{aid}'),
                 week=str(group.get('name') or ''),
             )
-    return list(found.values())
+            if not record_event(found,blocked,event):complete=False
+    return CollectedEvents(found.values(),complete=complete)
