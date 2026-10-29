@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "1.0.9-r1"
+  #define AppVersion "1.0.9-r2"
 #endif
 
 #ifndef BundleDir

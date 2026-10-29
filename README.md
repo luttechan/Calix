@@ -18,7 +18,7 @@ python tools/prepare_assets.py
 python main.py
 ```
 
-빌드: `build_windows.bat`. 출력: 저장소 밖 `../Calix-builds/Calix 1.0.9-r1/`.
+빌드: `build_windows.bat`. 출력: 저장소 밖 `../Calix-builds/Calix 1.0.9-r2/`.
 
 개발: Lutté Laurent
 
