@@ -34,6 +34,8 @@ class CampusClient:
             'Accept': 'application/json',
             'User-Agent': 'Mozilla/5.0 Calix/0.1',
             'Referer': BASE_URL + '/',
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
         })
         # LearningX uses BOTH the campus session cookies and a Bearer token.
         # The browser HAR confirms: Authorization == 'Bearer ' + xn_api_token.
@@ -134,6 +136,44 @@ class CampusClient:
         return course_list(self._paginated('/api/v1/courses',{
             'enrollment_type':'student','enrollment_state':'active','per_page':100}))
 
+    def _course_movies(self,course):
+        # Course context is required by some LearningX installations. Never use
+        # dashboard cards or planner items as the source of course contents.
+        previous=self.session.headers.get('Referer')
+        self.session.headers['Referer']=f'{BASE_URL}/courses/{int(course.id)}'
+        try:
+            modules=self._paginated(f'/learningx/api/v1/courses/{course.id}/modules',
+                                    {'include_detail':'true','per_page':100},collection='modules')
+            for module in modules:
+                if not isinstance(module,dict) or module.get('published') is False:continue
+                # An incomplete outline must not erase previously collected videos.
+                if not isinstance(module.get('module_items'),list):
+                    raise ValueError('주차학습 상세 정보가 없습니다. 기존 영상을 유지합니다.')
+                for item in module.get('module_items') or []:
+                    if not isinstance(item,dict) or item.get('published') is False:continue
+                    data=item.get('content_data') or {}
+                    if not isinstance(data,dict):continue
+                    media=data.get('item_content_data') or {}
+                    if data.get('item_content_type')=='commons' and (not isinstance(media,dict) or not media.get('content_type')):
+                        raise ValueError('학습콘텐츠 상세 정보가 없습니다. 기존 영상을 유지합니다.')
+            return parse_movies(course,modules)
+        finally:
+            if previous is None:self.session.headers.pop('Referer',None)
+            else:self.session.headers['Referer']=previous
+
+    def _course_document(self,course_id):
+        self._check_cancel()
+        response=self.session.get(f'{BASE_URL}/courses/{int(course_id)}',
+                                  headers={'Accept':'text/html'},timeout=(5,12),allow_redirects=False)
+        self._check_cancel()
+        if response.status_code in (301,302,303,307,308,401,403):
+            raise AuthenticationRequired('과목 페이지에 접근할 수 없습니다.')
+        response.raise_for_status()
+        if 'text/html' not in response.headers.get('Content-Type','').lower():
+            raise ValueError('과목 페이지 응답이 올바르지 않습니다.')
+        if len(response.content)>4*1024*1024:raise ValueError('과목 페이지가 너무 큽니다.')
+        return response.content.decode('utf-8',errors='replace')
+
     def fetch(self, progress=None) -> tuple[list[Course],dict[tuple[int,str],list[Event]],list[str]]:
         say = progress or (lambda *_:None)
         self._check_cancel()
@@ -189,8 +229,7 @@ class CampusClient:
         report={'videos_verified':False,'videos':0,'watched':0};self.course_checks[course.id]=report
         say(f'{course.name} / 동영상 조회')
         try:
-            modules=self._paginated(f'/learningx/api/v1/courses/{course.id}/modules',{'include_detail':'true','per_page':100},collection='modules')
-            batches[(course.id,'movie')]=parse_movies(course,modules)
+            batches[(course.id,'movie')]=self._course_movies(course)
             events=batches[(course.id,'movie')];unknown=sum(not e.completion_verified for e in events)
             report.update(videos_verified=not unknown,videos=len(events),watched=sum(e.completed for e in events),unknown=unknown)
             if unknown:warnings.append(f'{course.name}: 영상 {unknown}건의 시청 상태 미확인')

@@ -14,6 +14,7 @@ from .updates import LATEST_API,MAX_INSTALLER,RELEASES,parse_release,version_key
 
 class UpdateDialog(QDialog):
     install_requested=Signal(str)
+    check_finished=Signal(object)
     def __init__(self,parent=None):
         super().__init__(parent);self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setWindowTitle('업데이트');self.setMinimumWidth(400)
@@ -100,6 +101,7 @@ class UpdateDialog(QDialog):
             elif self.release.installer_url:
                 self.mode='download';self.message.setText(f'{self.release.tag.removeprefix("v")} 업데이트가 있습니다.');self.action.setText('다운로드')
             else:self.message.setText('새 버전이 있습니다. 릴리즈에서 확인하십시오.');self.action.setText('다시 확인')
+            self.check_finished.emit(self.release)
         else:
             try:
                 self.file.flush();os.fsync(self.file.fileno());self.file.close();self.file=None
@@ -123,7 +125,9 @@ class UpdateDialog(QDialog):
             self.partial=None
 
     def fail(self,message):
+        checking=self.mode=='check'
         self.cancel();self.mode='check';self.buffer.clear();self.message.setText(message);self.action.setText('다시 확인');self.action.setEnabled(True);self.progress.hide()
+        if checking:self.check_finished.emit(None)
 
     def cleanup(self):
         self.initial_check.stop()

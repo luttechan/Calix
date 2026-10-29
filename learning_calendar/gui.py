@@ -131,6 +131,10 @@ class MainWindow(QMainWindow):
         if demo:self.preview()
         else:self.refresh()
         self.show_home(animate=False)
+        self._update_probe=None
+        self.update_timer=QTimer(self);self.update_timer.setSingleShot(True)
+        self.update_timer.timeout.connect(self._check_updates_in_background)
+        if not self._isolated and not demo:self.update_timer.start(8000)
 
     def prepare_navigation(self):
         """Prepare native controls before the first interactive frame."""
@@ -218,7 +222,8 @@ class MainWindow(QMainWindow):
         credit_button=button('크레딧',self.credits,'quiet');credit_button.setIcon(icon('info'));side.addWidget(credit_button);side.addSpacing(10)
         self.exit_button=button('종료',self.request_exit,'quiet');self.exit_button.setIcon(icon('close'))
         self.exit_button.setAccessibleName('프로그램 종료');side.addWidget(self.exit_button)
-        side.addWidget(label('v'+VERSION,'muted'));outer.addWidget(rail)
+        self.update_button=button('v'+VERSION,self.check_updates,'quiet')
+        self.update_button.setAccessibleName('업데이트 확인');side.addWidget(self.update_button);outer.addWidget(rail)
         main=QWidget();main.setObjectName('page');v=QVBoxLayout(main);v.setContentsMargins(24,20,24,14);v.setSpacing(14)
         header=QHBoxLayout();self.heading=label('홈','heading');header.addWidget(self.heading);header.addStretch()
         self.demo_badge=button('샘플 닫기',self.end_preview,'ghost');self.demo_badge.hide();header.addWidget(self.demo_badge)
@@ -1105,12 +1110,31 @@ class MainWindow(QMainWindow):
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
 
     def check_updates(self):
+        self.update_timer.stop()
+        self._cancel_update_probe()
         existing=self._dialogs.get('updates')
         if existing:existing.show();existing.raise_();existing.activateWindow();return
         from .update_dialog import UpdateDialog
         dialog=UpdateDialog(self);self._dialogs['updates']=dialog
         dialog.install_requested.connect(self._install_update)
         dialog.destroyed.connect(lambda:self._dialogs.pop('updates',None));dialog.open()
+
+    def _cancel_update_probe(self):
+        probe=self._update_probe;self._update_probe=None
+        if probe:probe.close()
+
+    def _check_updates_in_background(self):
+        if self._closed or self._closing or self._dialogs.get('updates') or self._update_probe:return
+        from .update_dialog import UpdateDialog
+        self._update_probe=UpdateDialog(self)
+        self._update_probe.check_finished.connect(self._update_checked)
+
+    def _update_checked(self,release):
+        from .updates import version_key
+        if release and version_key(release.tag)>version_key(VERSION):
+            self.update_button.setText('업데이트 가능')
+            self.update_button.setToolTip(release.tag.removeprefix('v'))
+        self._cancel_update_probe()
 
     def _install_update(self,path):
         self._update_installer=path
@@ -1127,6 +1151,7 @@ class MainWindow(QMainWindow):
         if not self._exit_confirmed:event.ignore();return
         if not self._shutdown_started:
             self._shutdown_started=True;self._closing=True
+            self.update_timer.stop();self._cancel_update_probe()
             self.setEnabled(False)
             self.search_timer.stop();self.local_clock.stop();self.home.hero.clock.stop();self.main_stack._settle()
             self.exit_button.setEnabled(False);self.status.setText('종료 중')

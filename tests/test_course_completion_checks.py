@@ -24,6 +24,9 @@ def test_login_checks_every_course_and_does_not_accept_first_success(monkeypatch
         session=SimpleNamespace(close=lambda:None)
         def __init__(self,*args):pass
         def _list_courses(self):return [Course(i,f'과목 {i}') for i in range(1,8)]
+        def _course_movies(self,course):
+            from learning_calendar.parsers import parse_movies
+            return parse_movies(course,self._paginated(f'/learningx/api/v1/courses/{course.id}/modules'))
         def _paginated(self,path,*args,**kwargs):
             cid=int(path.split('/')[-2]);seen.append(cid)
             if cid==failed_course:raise sync.LearningXAuthenticationRequired('test')

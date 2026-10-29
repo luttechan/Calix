@@ -6,6 +6,7 @@ import logging
 import time
 from pathlib import Path
 from urllib.parse import urlparse,urljoin
+from html.parser import HTMLParser
 from PySide6.QtCore import Qt,QUrl,QTimer,QThread,Signal,Slot,QTemporaryDir,QDir
 from PySide6.QtWidgets import QDialog,QVBoxLayout,QHBoxLayout,QLabel,QPushButton,QMessageBox,QWidget,QApplication
 from .cookies import cookie_record,read_cookies,canvas_session_available,applies_to_canvas,campus_domain
@@ -14,12 +15,29 @@ COOKIE_PROBE=b'_bufs_cookie_probe'
 LOGIN_URL='https://canvas.bufs.ac.kr/login'
 
 def learningx_entry(tabs):
+    from .parsers import safe_url
     for tab in tabs if isinstance(tabs,list) else ():
         if not isinstance(tab,dict) or tab.get('hidden'):continue
         label=str(tab.get('label','')).casefold()
         if not any(word in label for word in ('주차학습','강의콘텐츠','학습콘텐츠','learningx')):continue
         url=urljoin('https://canvas.bufs.ac.kr/',str(tab.get('html_url','')));parsed=urlparse(url)
-        if parsed.scheme=='https' and parsed.hostname=='canvas.bufs.ac.kr' and ('/external_tools/' in parsed.path or parsed.path.startswith('/learningx/')):return url
+        if safe_url(url) and ('/external_tools/' in parsed.path or parsed.path.startswith('/learningx/')):return url
+    return None
+
+def learningx_html_entry(document,course_id):
+    class Links(HTMLParser):
+        def __init__(self):super().__init__();self.links=[];self.href=None;self.text=[]
+        def handle_starttag(self,tag,attrs):
+            if tag=='a':self.href=dict(attrs).get('href');self.text=[]
+        def handle_data(self,data):
+            if self.href:self.text.append(data)
+        def handle_endtag(self,tag):
+            if tag=='a' and self.href:
+                self.links.append({'html_url':self.href,'label':''.join(self.text)})
+                self.href=None;self.text=[]
+    parser=Links();parser.feed(document)
+    url=learningx_entry(parser.links)
+    if url and urlparse(url).path.startswith(f'/courses/{int(course_id)}/'):return url
     return None
 
 def allow_login_storage(request):
@@ -51,12 +69,10 @@ class LoginValidation(QThread):
             token_valid=False;states_verified=True
             if client._learningx_token:
                 failed=[]
-                from .parsers import parse_movies
                 from .models import Course
                 for candidate in course_ids:
                     try:
-                        modules=client._paginated(f'/learningx/api/v1/courses/{candidate}/modules',{'include_detail':'true','per_page':100},collection='modules')
-                        events=parse_movies(Course(candidate,''),modules)
+                        events=client._course_movies(Course(candidate,''))
                         states_verified=states_verified and all(e.completion_verified for e in events)
                     except Exception:failed.append(candidate)
                 token_valid=bool(course_ids) and not failed
@@ -66,7 +82,10 @@ class LoginValidation(QThread):
             if cid and not token_valid:
                 for candidate in failed:
                     try:entry=learningx_entry(client._get(f'/api/v1/courses/{candidate}/tabs').json())
-                    except Exception:continue
+                    except Exception:entry=None
+                    if not entry:
+                        try:entry=learningx_html_entry(client._course_document(candidate),candidate)
+                        except Exception:entry=None
                     if entry:cid=candidate;break
             self.checked.emit({'course_id':cid,'token_valid':token_valid,'learningx_url':entry,
                                'checked_courses':len(course_ids),'verified_courses':len(course_ids)-len(failed),'failed_courses':failed,
@@ -92,6 +111,7 @@ class CampusLoginDialog(QDialog):
         self.existing=existing;self.ready_file=ready_file;self.rows={};self.session_rows=[]
         self.resident=resident;self.authenticated=False;self.movies_verified=False;self._shutting_down=False;self._logout_pending=False
         self._auto_validation_pending=False;self._token_check_pending=False;self._bootstrap_active=False
+        self._next_token_check=0.
         self.view=None;self.page=None;self.profile=None;self._validator=None;self._profile_dir=None
         self._cancelled=False;self._pending_accept=False;self._validated=False;self._finish_after_validation=False;self._last_cookie=time.monotonic()
         self._routed=set();self._student_id='';self._password='';self._browser_started=False
@@ -250,7 +270,10 @@ class CampusLoginDialog(QDialog):
 
     def _check_movie_token(self):
         self._token_check_pending=False
-        if self._pending_accept and self._validated and not self._validator:self.accept_after_cookie_capture()
+        if time.monotonic()<self._next_token_check:return
+        if self._pending_accept and self._validated and not self._validator:
+            self._next_token_check=time.monotonic()+3
+            self.accept_after_cookie_capture()
 
     def _has_token(self):
         return any(r['name']=='xn_api_token' and r['value'] and applies_to_canvas(r['domain']) for r in self.rows.values())
@@ -277,11 +300,11 @@ class CampusLoginDialog(QDialog):
         self.movies_verified=bool(result.get('videos_verified',result['token_valid']))
         self._validated=True;self._pending_accept=True
         if result['token_valid']:self._bootstrap_active=False;self._finish_after_validation=True;self._complete();return
-        if not result.get('verified_courses',0):
-            for key in list(self.rows):
-                if key[1]=='xn_api_token':self.rows.pop(key,None)
+        # Keep the token until the course launch replaces it. Removing a cookie
+        # snapshot here cannot remove its browser counterpart and causes loops.
         cid=result.get('course_id')
-        if not cid:self._finish_after_validation=True;self._complete();return
+        if not cid:
+            self._validation_failed('수강 과목을 확인하지 못했습니다. 다시 시도하십시오.');return
         self.message.setText('주차학습을 자동으로 연결하고 있어요…')
         self.done_btn.setText('연결 중');self.done_btn.setEnabled(False)
         if not self._bootstrap_active or getattr(self,'_bootstrap_course',None)!=cid:
@@ -322,17 +345,19 @@ class CampusLoginDialog(QDialog):
             if not self._pending_accept or not isinstance(links,list):return
             for link in links:
                 parsed=urlparse(str(link))
-                if parsed.scheme=='https' and parsed.hostname=='canvas.bufs.ac.kr' and ('/external_tools/' in parsed.path or parsed.path.startswith('/learningx/')) and link not in self._routed:
+                from .parsers import safe_url
+                if safe_url(str(link)) and ('/external_tools/' in parsed.path or parsed.path.startswith('/learningx/')) and link not in self._routed:
                     self._routed.add(link);self.view.setUrl(QUrl(link));break
         self.page.runJavaScript(script,follow)
 
     def _bootstrap_tick(self):
         now=time.monotonic()
         if now>=self._bootstrap_deadline:
-            self._finish_after_validation=True;self._bootstrap_active=False;self._complete();return
-        if self._has_token() and not self._validator:self._check_movie_token()
-        elif now>=self._link_check_at:
+            self._finish_after_validation=False
+            self._validation_failed('주차학습 연결을 확인하지 못했습니다. 다시 시도하십시오.');return
+        if now>=self._link_check_at:
             self._link_check_at=now+.5;self._find_learningx_link()
+        if self._has_token() and not self._validator:self._check_movie_token()
 
     @Slot(str)
     def _validation_failed(self,message):

@@ -15,10 +15,10 @@ set "CALIX_DEBUG="
 set "CALIX_OUTPUT=%~dp0..\Calix-builds"
 %CALIX_PYTHON% -m PyInstaller --noconfirm --clean --distpath "%CALIX_OUTPUT%" --workpath "%CALIX_OUTPUT%\.build-cache" "%~dp0Calix.spec"
 if errorlevel 1 goto BUILD_FAILED
-%CALIX_PYTHON% "%~dp0tools\check_bundle.py" "%CALIX_OUTPUT%\Calix 1.0.9-r3"
+%CALIX_PYTHON% "%~dp0tools\check_bundle.py" "%CALIX_OUTPUT%\Calix 1.0.9-r4"
 if errorlevel 1 goto BUILD_FAILED
 echo.
-echo [OK] EXE: "%CALIX_OUTPUT%\Calix 1.0.9-r3\Calix.exe"
+echo [OK] EXE: "%CALIX_OUTPUT%\Calix 1.0.9-r4\Calix.exe"
 pause
 exit /b 0
 :BAD_DIRECTORY
