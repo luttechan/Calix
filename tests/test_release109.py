@@ -51,6 +51,19 @@ def test_overdue_assignment_is_red_in_list_and_table(app):
     assert model.index(0,4).data()=='미완료' and model.index(0,4).data(Qt.ItemDataRole.ForegroundRole).name()=='#d94b61'
     model=EventListModel();model.set_events([row]);assert '미완료' in model.index(0).data()
 
+def test_overdue_calendar_badge_separates_submitted_and_pending(app):
+    now=datetime.now(KST)
+    late=Event('late',1,'과목','assignment','지난 과제',(now-timedelta(minutes=1)).isoformat(),False)
+    pending=replace(late,key='pending',due_at=(now+timedelta(days=1)).isoformat())
+    done=replace(late,key='done',completed=True)
+    badge=DayBadges();badge.set_events(now.date(),[late,pending,done]);badge.configure(1,0,400,22,assignment_overdue=1,assignment_done=1)
+    assert badge.assignment_overdue.text()=='미완료 1' and not badge.assignment_overdue.isHidden()
+    assert '#d94b61' in badge.assignment_overdue.styleSheet().lower()
+    assert badge.matching(badge.assignment_overdue)==[late] and badge.matching(badge.assignment)==[pending]
+    assert badge.matching(badge.assignment_done)==[done] and badge.assignment_done.property('calendarOpacity')==.38
+    badge.configure(0,0,400,22);assert badge.assignment_overdue.isHidden()
+    dispose(badge,app)
+
 def response(body,next_url=None):return SimpleNamespace(json=lambda:body,links={'next':{'url':next_url}} if next_url else {})
 
 def test_full_course_api_follows_next_page_without_using_dashboard(monkeypatch):
