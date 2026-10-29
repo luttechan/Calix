@@ -4,7 +4,7 @@ import threading
 from queue import Queue,Empty
 from pathlib import Path
 from PySide6.QtCore import QThread, Signal
-from .sync import CampusClient, SyncCancelled, AuthenticationRequired
+from .sync import CampusClient, SyncCancelled, AuthenticationRequired,sync_summary
 from .storage import Store
 from .snapshot import Snapshot
 
@@ -68,10 +68,11 @@ class SyncTask(QThread):
             store.set_meta('canvas_user_id',uid)
             stats=store.apply_batch(courses,batches)
             store.set_meta('sync_partial','1' if warnings else '0')
+            summary=sync_summary(warnings,course_checks);store.set_meta('sync_summary',summary)
             snapshot=Snapshot(store.events(),store.courses())
             self.success.emit({'path':str(store.path),'snapshot':snapshot,'stats':stats,
                                'last_sync':store.get_meta('last_sync'),'warnings':warnings,'sessions':store.timetable(),
-                               'movie_auth_required':movie_auth_required,'course_checks':course_checks})
+                               'movie_auth_required':movie_auth_required,'course_checks':course_checks,'sync_summary':summary})
         except SyncCancelled:
             pass
         except AuthenticationRequired as exc:

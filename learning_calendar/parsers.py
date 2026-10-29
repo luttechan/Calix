@@ -104,6 +104,7 @@ def parse_assignments(course: Course, groups: object, submissions: object) -> li
                 continue
             aid = str(a['id'])
             sub = submission_by_id.get(aid) or a.get('submission') or {}
+            if not isinstance(sub,dict):sub={}
             state = sub.get('workflow_state')
             done = state in ('submitted', 'graded', 'pending_review') or bool(sub.get('submitted_at'))
             key = f'assignment:{course.id}:{aid}'
@@ -111,7 +112,7 @@ def parse_assignments(course: Course, groups: object, submissions: object) -> li
                 key=key, course_id=course.id, course_name=course.name,
                 kind='assignment', title=str(a.get('name') or f'과제 {aid}'),
                 due_at=a.get('due_at') or sub.get('cached_due_date'),
-                completed=done,
+                completed=done,completion_verified=bool(sub.get('submitted_at')) or state in ('submitted','graded','pending_review','unsubmitted','untaken'),
                 url=safe_url(a.get('html_url') or f'/courses/{course.id}/assignments/{aid}'),
                 week=str(group.get('name') or ''),
             )

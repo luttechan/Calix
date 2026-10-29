@@ -96,6 +96,7 @@ class MainWindow(QMainWindow):
         self.snapshot=Snapshot(self.store.events(),self.store.courses())
         self._sessions=self.store.timetable()
         self.last_sync=self.store.get_meta('last_sync');self.partial=self.store.get_meta('sync_partial')=='1'
+        self.sync_summary=self.store.get_meta('sync_summary') or ('확인 필요' if self.partial else '')
         self.demo=False;self.demo_snapshot=None;self._thread=None;self._login_process=None
         self._login_server=None;self._login_socket=None;self._browser_buffer=bytearray()
         self._logged_in=False;self._logging_out=False;self._movies_ready=False;self._sync_after_browser=False;self._movie_reauth_attempted=False
@@ -547,7 +548,7 @@ class MainWindow(QMainWindow):
             kind={1:'movie',2:'assignment'}.get(self.tabs.currentIndex())
             total=sum(not kind or e.kind==kind for e in self._current_snapshot().events)
             stamp+=f' / 표시 {len(self._filtered)} / 불러옴 {total}건'
-        self.sync_info.setText(stamp+(' / 일부 실패' if self.partial else ''))
+        self.sync_info.setText(stamp+(' / '+self.sync_summary if self.partial else ''))
 
     def select_day(self,day):
         self.selected_date=day;self.month=day.replace(day=1);self._render_visible()
@@ -730,9 +731,12 @@ class MainWindow(QMainWindow):
             self.store.close();self.store=Store(result['path'])
             self.settings['active_db']=self.store.path.name;write_settings(self.settings_path,self.settings)
         self.snapshot=result['snapshot'];self._sessions=result['sessions'];self.last_sync=result['last_sync'];self.partial=bool(result['warnings'])
+        from .sync import sync_summary
+        self.sync_summary=result.get('sync_summary',sync_summary(result['warnings'],result.get('course_checks',{})))
+        for note in result['warnings']:logging.warning('동기화: %s',note)
         self.demo=False;self.demo_snapshot=None;self.demo_badge.hide();self._timetable_signature=None
         self._reload_type_filter();self._reload_course_filter();self.refresh()
-        stats=result['stats'];self.status.setText('일부 실패' if self.partial else f"완료 / 추가 {stats['new']} / 변경 {stats['updated']}")
+        stats=result['stats'];self.status.setText(self.sync_summary if self.partial else f"완료 / 추가 {stats['new']} / 변경 {stats['updated']}")
         checks=result.get('course_checks',{})
         for cid,report in checks.items():
             logging.info('영상 검증: 과목 %s / 확인 %s / 영상 %s / 완료 %s',cid,report['videos_verified'],report['videos'],report['watched'])
@@ -741,7 +745,7 @@ class MainWindow(QMainWindow):
             self._movie_reauth_attempted=True;self._reauth_requested=True
         notes=[note for note in result['warnings'] if '동영상 인증' not in note]
         if notes:
-            box=QMessageBox(QMessageBox.Icon.Warning,'일부 조회 실패','일부 항목을 확인하지 못했습니다.',parent=self)
+            box=QMessageBox(QMessageBox.Icon.Warning,'동기화 결과',self.sync_summary,parent=self)
             box.setDetailedText('\n'.join(notes));box.exec();box.deleteLater()
 
     @Slot(str)

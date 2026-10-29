@@ -174,6 +174,40 @@ class CampusClient:
         if len(response.content)>4*1024*1024:raise ValueError('과목 페이지가 너무 큽니다.')
         return response.content.decode('utf-8',errors='replace')
 
+    def _course_assignments(self,course):
+        previous=self.session.headers.get('Referer')
+        self.session.headers['Referer']=f'{BASE_URL}/courses/{int(course.id)}/assignments'
+        try:
+            try:
+                assignments=self._paginated(f'/api/v1/courses/{course.id}/assignments',{
+                    'exclude_response_fields[]':['description','rubric'],
+                    'include[]':['submission'],'override_assignment_dates':'true','per_page':100})
+            except AuthenticationRequired:raise
+            except (ValueError,requests.RequestException,RuntimeError):
+                assignments=None
+            if not assignments:
+                # This is the route used by the course's own assignments page.
+                groups=self._paginated(f'/api/v1/courses/{course.id}/assignment_groups',{
+                    'exclude_response_fields[]':['description','rubric'],
+                    'include[]':['assignments','discussion_topic'],
+                    'override_assignment_dates':'true','per_page':100})
+                if any(not isinstance(g,dict) or not isinstance(g.get('assignments'),list) for g in groups):
+                    raise ValueError('과제 목록이 불완전합니다. 기존 과제를 유지합니다.')
+            else:groups=[{'assignments':assignments}]
+            entries=[a for g in groups for a in g['assignments'] if isinstance(a,dict)
+                     and a.get('published') is not False and a.get('is_quiz_assignment') is not True
+                     and 'online_quiz' not in (a.get('submission_types') or [])]
+            complete_states={'submitted','graded','pending_review','unsubmitted','untaken'}
+            needs_submissions=any(not isinstance(a.get('submission'),dict)
+                                  or a['submission'].get('workflow_state') not in complete_states for a in entries)
+            submissions=self._paginated(f'/api/v1/courses/{course.id}/students/submissions',
+                                       {'per_page':100}) if needs_submissions else []
+            events=parse_assignments(course,groups,submissions)
+            return events
+        finally:
+            if previous is None:self.session.headers.pop('Referer',None)
+            else:self.session.headers['Referer']=previous
+
     def fetch(self, progress=None) -> tuple[list[Course],dict[tuple[int,str],list[Event]],list[str]]:
         say = progress or (lambda *_:None)
         self._check_cancel()
@@ -226,26 +260,43 @@ class CampusClient:
 
     def _fetch_course(self,course,say):
         batches={};warnings=[];self._check_cancel()
-        report={'videos_verified':False,'videos':0,'watched':0};self.course_checks[course.id]=report
+        report={'videos_verified':False,'videos':0,'watched':0,'video_state':'pending','assignment_state':'pending'};self.course_checks[course.id]=report
         say(f'{course.name} / 동영상 조회')
         try:
             batches[(course.id,'movie')]=self._course_movies(course)
             events=batches[(course.id,'movie')];unknown=sum(not e.completion_verified for e in events)
             report.update(videos_verified=not unknown,videos=len(events),watched=sum(e.completed for e in events),unknown=unknown)
+            report['video_state']='unverified' if unknown else 'complete'
             if unknown:warnings.append(f'{course.name}: 영상 {unknown}건의 시청 상태 미확인')
         except LearningXAuthenticationRequired:
+            report['video_state']='authentication'
             self.movie_auth_required=True;warnings.append(f'{course.name}: 동영상 인증을 자동으로 연결하고 있습니다.')
         except AuthenticationRequired:raise
         except (ValueError,requests.RequestException,RuntimeError) as err:
+            report['video_state']='failed'
             warnings.append(f'{course.name}: 동영상 조회 실패 ({str(err)[:110]})')
         self._check_cancel();say(f'{course.name} / 일반 과제 조회')
         try:
-            assignments=self._paginated(f'/api/v1/courses/{course.id}/assignments',{
-                'exclude_response_fields[]':['description','rubric'],
-                'include[]':['submission'],
-                'override_assignment_dates':'true','per_page':'100'})
-            batches[(course.id,'assignment')]=parse_assignments(course,[{'assignments':assignments}],[])
+            batches[(course.id,'assignment')]=self._course_assignments(course)
+            unknown=sum(not e.completion_verified for e in batches[(course.id,'assignment')])
+            report['assignment_state']='unverified' if unknown else 'complete'
+            if unknown:warnings.append(f'{course.name}: 과제 {unknown}건의 제출 상태 미확인')
         except AuthenticationRequired:raise
         except (ValueError,requests.RequestException,RuntimeError) as err:
+            report['assignment_state']='failed'
             warnings.append(f'{course.name}: 일반 과제 조회 실패 ({str(err)[:110]})')
         return batches,warnings
+
+
+def sync_summary(warnings,checks):
+    if not warnings:return ''
+    states=[r.get(k) for r in checks.values() for k in ('video_state','assignment_state')]
+    failed=states.count('failed')
+    if failed:return f'조회 실패 {failed}건'
+    if 'authentication' in states:return '영상 인증 필요'
+    video_unknown=any(r.get('video_state')=='unverified' for r in checks.values())
+    assignment_unknown=any(r.get('assignment_state')=='unverified' for r in checks.values())
+    if video_unknown and assignment_unknown:return '완료 상태 미확인'
+    if video_unknown:return '시청 상태 미확인'
+    if assignment_unknown:return '제출 상태 미확인'
+    return '확인 필요'

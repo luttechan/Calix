@@ -20,7 +20,7 @@ def test_fetch_only_expected_content(monkeypatch):
             ]}])
         if path.endswith('/assignments'):
             return Response([
-                {'id':20,'name':'보고서','is_quiz_assignment':False,'due_at':'2026-10-17T14:59:59Z'},
+                {'id':20,'name':'보고서','is_quiz_assignment':False,'due_at':'2026-10-17T14:59:59Z','submission':{'workflow_state':'unsubmitted'}},
                 {'id':21,'name':'퀴즈','is_quiz_assignment':True}
             ])
         raise AssertionError(path)
