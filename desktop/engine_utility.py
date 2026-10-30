@@ -19,6 +19,8 @@ def install(path,digest,parent):
             try:
                 if kernel.WaitForSingleObject(handle,30000)!=0:return 2
             finally:kernel.CloseHandle(handle)
+    with path.open('rb') as stream:
+        if hashlib.file_digest(stream,'sha256').hexdigest()!=digest:return 2
     subprocess.Popen([str(path)],cwd=path.parent)
     return 0
 
