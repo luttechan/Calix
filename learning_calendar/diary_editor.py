@@ -6,6 +6,8 @@ from PySide6.QtWidgets import QTextEdit,QWidget,QHBoxLayout,QToolButton,QColorDi
 
 class DiaryEditor(QTextEdit):
     def __init__(self,parent=None):
+        from .fonts import ensure_rich_fonts
+        ensure_rich_fonts(QApplication.instance())
         super().__init__(parent);self.setAcceptRichText(False);self.setObjectName('diaryBody')
         self.setTabChangesFocus(False)
     def loadResource(self,kind,url):

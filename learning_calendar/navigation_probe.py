@@ -28,7 +28,7 @@ class NavigationProbe(QObject):
         try:page=next(self.pages)
         except StopIteration:self.finish();return
         w=self.window
-        target=w.checklist_holder if page=='checklist' else w.home if page=='home' else w.diary if page=='diary' else w.assignment_list if page==2 else w.video_list if page==1 else w.calendar if page==0 else w.timetable
+        target=w.checklist_holder if page=='checklist' else w.home if page=='home' else w.diary_holder if page=='diary' else w.tabs.widget(page)
         self.active=dict(page=page,started=time.perf_counter(),target=target,painted=False)
         QApplication.instance().installEventFilter(self);self.timer.start(4000)
         button=w.checklist_nav if page=='checklist' else w.home_nav if page=='home' else w.diary_nav if page=='diary' else w.nav[page]

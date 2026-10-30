@@ -8,11 +8,12 @@ NAMES=('settings','theme','credits','aliases','types','manual','session','holida
 
 
 class ReadyDialogs(QObject):
-    def __init__(self,factory,parent):
-        super().__init__(parent);self.factory=factory;self.cache={};self.generation=0;self.closed=False;self.pending=set();self.warmed=set()
+    def __init__(self,factory,parent,limit=2):
+        super().__init__(parent);self.factory=factory;self.cache={};self.generation=0;self.closed=False;self.pending=set();self.warmed=set();self.limit=max(0,int(limit))
 
     def prepare(self,name):
-        if self.closed or name in self.cache:return
+        if self.closed or name in self.cache or not self.limit:return
+        while len(self.cache)>=self.limit:self.cache.pop(next(iter(self.cache))).deleteLater()
         dialog=self.factory(name)
         dialog.ensurePolished()
         if dialog.layout():dialog.layout().activate()
@@ -27,7 +28,7 @@ class ReadyDialogs(QObject):
         self.cache[name]=dialog
 
     def prime(self):
-        for name in NAMES:self.prepare(name)
+        for name in NAMES[:self.limit]:self.prepare(name)
 
     def take(self,name):
         dialog=self.cache.pop(name,None)
@@ -42,6 +43,9 @@ class ReadyDialogs(QObject):
 
     def _refill(self,generation,names):
         if self.closed or generation!=self.generation:return
+        if not self.parent().isVisible() or self.parent().isMinimized():
+            for name in names:self.pending.discard(name)
+            return
         if QApplication.activeModalWidget() or getattr(self.parent(),'_busy',False) or getattr(self.parent(),'_closing',False):
             QTimer.singleShot(250,self,lambda:self._refill(generation,names));return
         name,*remaining=names;self.pending.discard(name)
@@ -53,9 +57,8 @@ class ReadyDialogs(QObject):
         self.generation+=1;self.pending.clear()
         for dialog in self.cache.values():dialog.deleteLater()
         self.cache.clear()
-        if not self.closed:
-            generation=self.generation;self.pending.update(NAMES)
-            QTimer.singleShot(250,self,lambda:self._refill(generation,list(NAMES)))
+        # Do not rebuild every dialog after a theme/snapshot change. The next
+        # requested dialog is created with fresh data and then cached on close.
 
     def shutdown(self):
         self.closed=True;self.invalidate()

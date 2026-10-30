@@ -8,17 +8,29 @@ from .design import colors
 def belongs_to(obj,owner):
     # QWidget.isAncestorOf excludes child windows such as combo popup lists.
     # Their QObject ownership chain still identifies them as internal controls.
+    original=obj
     while obj is not None:
         if obj is owner:return True
         obj=obj.parent()
+    # Some native popup windows are transient children without QObject parents.
+    if isinstance(original,QWidget) and isinstance(owner,QWidget):
+        target=owner.window().windowHandle();handle=original.window().windowHandle();seen=set()
+        while handle is not None and id(handle) not in seen:
+            if handle is target and target is not None:return True
+            seen.add(id(handle));handle=handle.transientParent()
     return False
 
 
 def dismiss_on_deactivation(widget,event):
     # Headless Qt emits platform focus changes without a real user/window.
     # Explicit events remain testable; desktop focus loss always dismisses.
-    if QApplication.platformName()=='offscreen' and event.spontaneous():return
-    QTimer.singleShot(0,widget,widget.close)
+    spontaneous=event.spontaneous()
+    if QApplication.platformName()=='offscreen' and spontaneous:return
+    def settled():
+        # Opening an owned tool/combo window can briefly deactivate its owner.
+        # Only dismiss once focus really belongs to another application.
+        if not spontaneous or QApplication.applicationState()!=Qt.ApplicationState.ApplicationActive:widget.close()
+    QTimer.singleShot(100 if spontaneous else 0,widget,settled)
 
 
 def round_window(widget,radius=16):

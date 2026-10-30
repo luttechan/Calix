@@ -79,7 +79,7 @@ class MainWindow(QMainWindow):
     def __init__(self,data_dir=None,demo=False):
         super().__init__();self.setWindowTitle('Calix')
         self._isolated=data_dir is not None;self._ready_dialogs=None
-        self.setWindowFlag(Qt.WindowType.WindowCloseButtonHint,False)
+        self.setWindowFlag(Qt.WindowType.WindowCloseButtonHint,True)
         self._exit_confirmed=False;self._quit_on_close=False;self._exit_prompt_open=False
         self._shutdown_started=False;self._shutdown_forms_ready=False
         from .app_identity import app_icon
@@ -149,46 +149,12 @@ class MainWindow(QMainWindow):
         if not self._isolated and not demo:self.update_timer.start(8000)
 
     def prepare_navigation(self):
-        """Prepare native controls before the first interactive frame."""
-        from .preferences import prepare_credentials
-        try:prepare_credentials()
-        except Exception:logging.warning('계정 보관함 준비 실패')
-        self.calendar
-        if not self._timetable_built:self._build_timetable()
-        self._refresh_timetable()
-        self._ensure_diary()
-        self.ensurePolished()
-        self.layout().activate();self.centralWidget().layout().activate()
-        self.main_stack.setCurrentIndex(1)
-        original=self.tabs.currentIndex()
-        for index in range(self.tabs.count()):
-            self.tabs.setCurrentIndex(index)
-            self.refresh()
-            page=self.tabs.widget(index);page.ensurePolished()
-            if page.layout():page.layout().activate()
-            for child in page.findChildren(QWidget):
-                child.ensurePolished()
-                if child.layout():child.layout().activate()
-        self.tabs.setCurrentIndex(original)
-        self.refresh()
-        self.main_stack.setCurrentIndex(2)
-        self.diary_holder.layout().activate()
-        self._ensure_checklist();self._refresh_checklist();self.main_stack.setCurrentIndex(3)
-        self.checklist_holder.layout().activate();self.checklist.ensurePolished();self.checklist.layout().activate()
-        self.main_stack.setCurrentIndex(0)
-        for view in (self.video_list,self.assignment_list):
-            delegate=view.itemDelegate()
-            for size,weight in ((14,QFont.Weight.DemiBold),(12,QFont.Weight.Normal)):
-                _,metrics=delegate.text_style(view.font(),size,weight)
-                for event in view.event_model.rows[:8]:metrics.horizontalAdvance(event.title+' '+event.course_name)
-        self.calendar.badge_timer.stop();self.calendar._layout_badges()
-        # A temporary warm-up surface is released here. Live pages remain
-        # native widgets; page transitions never display cached images.
-        for page in (self.tabs.widget(0),self.assignment_list,self.timetable_page,self.diary_holder):
-            surface=QImage(page.size(),QImage.Format.Format_ARGB32_Premultiplied);surface.fill(Qt.GlobalColor.transparent);page.render(surface)
+        """Polish the initial page without constructing unused workspaces."""
+        self.ensurePolished();self.layout().activate();self.centralWidget().layout().activate()
+        self.home.ensurePolished();self.home.layout().activate()
         if self._ready_dialogs is None:
             from .ready_dialogs import ReadyDialogs
-            self._ready_dialogs=ReadyDialogs(self._make_ready_dialog,self);self._ready_dialogs.prime()
+            self._ready_dialogs=ReadyDialogs(self._make_ready_dialog,self,limit=2)
 
     def _make_ready_dialog(self,name):
         if name=='settings':return SettingsDialog(self,account='' if self._isolated else None)
@@ -435,15 +401,40 @@ class MainWindow(QMainWindow):
 
     def set_notifications(self,enabled):
         self.settings['notifications']=bool(enabled);write_settings(self.settings_path,self.settings)
-        if not enabled and self._tray:self._tray.hide();self._tray.deleteLater();self._tray=None
         if enabled:self._notify_due()
+
+    def _ensure_tray(self):
+        if not QSystemTrayIcon.isSystemTrayAvailable():return False
+        QApplication.instance().setQuitOnLastWindowClosed(False)
+        if self._tray is None:
+            self._tray=QSystemTrayIcon(self.windowIcon(),self);self._tray.setToolTip('Calix')
+            menu=QMenu(self);menu.addAction('열기',self._restore_from_tray);menu.addSeparator();menu.addAction('종료',self.request_exit)
+            self._tray.setContextMenu(menu);self._tray_menu=menu;self._tray.activated.connect(self._tray_activated)
+        self._tray.show();return True
+
+    def _tray_activated(self,reason):
+        if reason in (QSystemTrayIcon.ActivationReason.Trigger,QSystemTrayIcon.ActivationReason.DoubleClick):self._restore_from_tray()
+
+    def _restore_from_tray(self):
+        if getattr(self,'_tray_restore_maximized',False):self.showMaximized()
+        else:self.showNormal()
+        self.raise_();self.activateWindow()
+        if self.main_stack.currentIndex()==0:self.home.hero.clock.start()
+
+    def _hide_to_tray(self):
+        if not self._dismiss_transients():return
+        if self.diary:
+            if not self.diary.flush():return
+            self.diary.lock()
+        self._tray_restore_maximized=self.isMaximized();self.main_stack._settle();self.home.hero.clock.stop()
+        if self._ensure_tray():self.hide()
+        else:self.showMinimized()
 
     def _notify_due(self):
         if self._closing or self.demo or not self.settings.get('notifications',False):return
         rows=self.reminders.pending(self.snapshot.events)
         if not rows or not QSystemTrayIcon.isSystemTrayAvailable():return
-        if self._tray is None:
-            self._tray=QSystemTrayIcon(self.windowIcon(),self);self._tray.setToolTip('Calix');self._tray.activated.connect(lambda reason:(self.showNormal(),self.activateWindow()));self._tray.show()
+        if not self._ensure_tray():return
         title=rows[0].title if len(rows)==1 else f'{len(rows)}개의 일정'
         self._tray.showMessage('곧 마감됩니다',title+' / 15분 이내',QSystemTrayIcon.MessageIcon.Information,7000)
 
@@ -1305,7 +1296,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self,event):
         if self._closed:event.accept();return
-        if not self._exit_confirmed:event.ignore();return
+        if not self._exit_confirmed:event.ignore();self._hide_to_tray();return
         if not self._shutdown_started:
             self._shutdown_started=True;self._closing=True
             self.collection_timer.stop();self._dom_collecting=False

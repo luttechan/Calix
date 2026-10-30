@@ -25,11 +25,14 @@ def read_diary(folder,key):
     try:return store.read(key)
     finally:store.close()
 
-def test_x_does_not_close_and_sidebar_exit_is_available(window):
-    assert not window.windowFlags() & Qt.WindowType.WindowCloseButtonHint
+def test_x_does_not_close_and_sidebar_exit_is_available(window,monkeypatch):
+    from PySide6.QtWidgets import QSystemTrayIcon
+    monkeypatch.setattr(QSystemTrayIcon,'isSystemTrayAvailable',staticmethod(lambda:False))
+    assert window.windowFlags() & Qt.WindowType.WindowCloseButtonHint
     assert window.exit_button.isVisible() and window.exit_button.text()=='종료'
     window.close();QApplication.processEvents()
     assert window.isVisible() and not window._closed and not window._closing
+    assert window.isMinimized()
 
 @pytest.mark.parametrize('pending',[False,True])
 def test_exit_dialog_exact_copy_buttons_and_default_cancel(window,pending):

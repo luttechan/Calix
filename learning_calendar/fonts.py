@@ -12,16 +12,18 @@ def choose_font_family(families):
     installed = {f.casefold(): f for f in families}
     return installed.get('calix sans') or installed.get('pretendard variable') or installed.get('pretendard') or installed.get('malgun gothic') or installed.get('맑은 고딕')
 
-def apply_korean_font(app):
+def apply_korean_font(app,*,compact=False):
     from PySide6.QtGui import QFont, QFontDatabase
     if app.property('bufsFontFamily'):
+        if not compact:ensure_rich_fonts(app)
         return app.property('bufsFontFamily')
     path = font_path()
-    static=[path.with_name(f'CalixSans-{style}.ttf') for style in ('Regular','Medium','SemiBold','Bold')]
+    static=[path.with_name(f'CalixSans-{style}.ttf') for style in (('Regular','SemiBold') if compact else ('Regular','Medium','SemiBold','Bold'))]
     candidates=static if all(face.is_file() for face in static) else [path]
-    if candidates==static:
+    if candidates==static and not compact:
         candidates += [face for style in ('Italic','BoldItalic') if (face:=path.with_name(f'CalixSans-{style}.ttf')).is_file()]
     ids=[QFontDatabase.addApplicationFont(str(face)) for face in candidates if face.is_file()]
+    app.setProperty('bufsFontPaths',[str(face) for face in candidates if face.is_file()])
     font_id=next((value for value in ids if value>=0),-1)
     families=[family for value in ids if value>=0 for family in QFontDatabase.applicationFontFamilies(value)]
     if not families and path.name!='malgun.ttf':
@@ -40,9 +42,20 @@ def apply_korean_font(app):
     return family
 
 
+def ensure_rich_fonts(app):
+    from PySide6.QtGui import QFontDatabase
+    if not app.property('bufsBundledFontFamily'):apply_korean_font(app,compact=True)
+    paths=list(app.property('bufsFontPaths') or []);base=font_path()
+    for style in ('Medium','Bold','Italic','BoldItalic'):
+        face=base.with_name(f'CalixSans-{style}.ttf')
+        if face.is_file() and str(face) not in paths:
+            if QFontDatabase.addApplicationFont(str(face))>=0:paths.append(str(face))
+    app.setProperty('bufsFontPaths',paths)
+
+
 def set_text_style(app,mode='pretendard'):
     from PySide6.QtGui import QFont
-    bundled=app.property('bufsBundledFontFamily') or apply_korean_font(app)
+    bundled=app.property('bufsBundledFontFamily') or apply_korean_font(app,compact=True)
     family='Malgun Gothic' if mode=='windows' else bundled
     font=QFont(family);font.setPointSizeF(10);font.setStyleStrategy(QFont.StyleStrategy.PreferDefault);font.setHintingPreference(QFont.HintingPreference.PreferFullHinting)
     app.setFont(font);app.setProperty('bufsFontFamily',family)

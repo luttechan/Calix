@@ -44,7 +44,8 @@ class ColorPicker(QWidget):
         self.value=normalize_color(value) or PALETTE[0][0];self.hex.setText(self.value)
         for color,b in self.buttons.items():
             selected=color==self.value;b.setChecked(selected);b.setText('✓' if selected else '')
-            b.setStyleSheet(f'QPushButton {{background:{color};color:#FFFFFF;border:2px solid {colors()["ink"] if selected else color};border-radius:10px;padding:0;}}')
+            style=f'QPushButton {{background:{color};color:#FFFFFF;border:2px solid {colors()["ink"] if selected else color};border-radius:10px;padding:0;}}'
+            if b.styleSheet()!=style:b.setStyleSheet(style)
     def choose(self,value):self.set_color(value);self.changed.emit(self.value)
     def _custom(self):
         try:self.choose(self.hex.text())
@@ -117,7 +118,8 @@ class SessionBlock(QFrame):
         dark=base.lightness()<128;mix=.21 if dark else .13
         bg=QColor(*[round(accent.getRgb()[i]*mix+base.getRgb()[i]*(1-mix)) for i in range(3)]).name()
         edge=QColor('#8B9CBB') if dark and accent.lightness()<55 else accent.darker(190) if not dark and accent.lightness()>215 else accent
-        self.setStyleSheet(f'QFrame#classBlock {{background:{bg};border:{2 if selected else 1}px solid {edge.name()};border-left:4px solid {edge.name()};border-radius:12px;}}')
+        style=f'QFrame#classBlock {{background:{bg};border:{2 if selected else 1}px solid {edge.name()};border-left:4px solid {edge.name()};border-radius:12px;}}'
+        if self.styleSheet()!=style:self.setStyleSheet(style)
         self.fit_content()
     def resizeEvent(self,event):
         super().resizeEvent(event);self.fit_content()
@@ -206,11 +208,16 @@ class WeekSurface(QWidget):
         c=colors();p=QPainter(self);p.fillRect(self.rect(),QColor(c['surface']));width=(self.width()-self.AXIS)/self.days;now=datetime.now(KST)
         if now.weekday()<self.days:
             shade=QColor(c['soft']);shade.setAlpha(110);p.fillRect(QRectF(self.AXIS+now.weekday()*width,0,width,self.height()),shade)
+        for day in self.off_days:
+            if 0<=day<self.days:
+                shade=QColor(c['soft']);p.fillRect(QRectF(self.AXIS+day*width,0,width,self.height()),shade)
         p.setPen(QPen(QColor(c['line']),1))
         for day in range(self.days+1):p.drawLine(round(self.AXIS+day*width),0,round(self.AXIS+day*width),self.height())
         for hour in range(self.start//60,self.end//60+1):
-            y=round(self.TOP+(hour*60-self.start)*self.hour_height/60);p.drawLine(self.AXIS,y,self.width(),y)
-        if now.weekday()<self.days and self.start<now.hour*60+now.minute<self.end:
+            y=round(self.TOP+(hour*60-self.start)*self.hour_height/60)
+            for day in range(self.days):
+                if day not in self.off_days:p.drawLine(round(self.AXIS+day*width),y,round(self.AXIS+(day+1)*width),y)
+        if now.weekday()<self.days and now.weekday() not in self.off_days and self.start<now.hour*60+now.minute<self.end:
             y=self.TOP+(now.hour*60+now.minute-self.start)*self.hour_height/60;p.setPen(QPen(QColor(c['accent']),1.5));p.drawLine(round(self.AXIS+now.weekday()*width),round(y),round(self.AXIS+(now.weekday()+1)*width),round(y))
         p.end()
 

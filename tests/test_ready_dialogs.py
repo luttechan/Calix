@@ -16,11 +16,15 @@ def test_prepared_dialogs_are_single_use_and_bounded():
     def factory(name):
         dialog=QDialog(root);dialog.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen,True)
         dialog.field=QLineEdit();QVBoxLayout(dialog).addWidget(dialog.field);created.append(dialog);return dialog
-    ready=ReadyDialogs(factory,root);ready.prime();assert len(ready.cache)==len(NAMES)
+    ready=ReadyDialogs(factory,root);ready.prime();assert len(ready.cache)==2
     used=ready.take('settings');used.field.setText('synthetic private draft')
     ready.prepare('settings');fresh=ready.take('settings')
     assert fresh is not used and fresh.field.text()==''
-    assert len(ready.cache)==len(NAMES)-1
+    assert len(ready.cache)==1
+    for name in NAMES:
+        ready.prepare(name);assert len(ready.cache)<=2
+    collect(app)
+    assert sum(dialog.isWidgetType() for dialog in ready.cache.values())==2
     used.deleteLater();fresh.deleteLater();ready.shutdown();root.deleteLater();collect(app)
 
 
@@ -38,10 +42,9 @@ def test_isolated_startup_prepares_menus_without_reading_real_account(tmp_path,m
     def forbidden():raise AssertionError('diagnostics must not read real saved accounts')
     monkeypatch.setattr(dialogs,'read_account',forbidden)
     window=MainWindow(tmp_path);window.prepare_navigation()
-    assert window.main_stack.currentIndex()==0 and window.diary.vault is None
-    assert set(window._ready_dialogs.cache)==set(NAMES)
+    assert window.main_stack.currentIndex()==0 and window.diary is None and window._calendar is None
+    assert not window._ready_dialogs.cache
     assert all(not dialog.isVisible() for dialog in window._ready_dialogs.cache.values())
-    assert window._ready_dialogs.cache['settings'].student.text()==''
-    settings=window._take_ready_dialog('settings');settings.password.setText('synthetic private password');settings.reject()
+    settings=window._take_ready_dialog('settings');assert settings.student.text()=='';settings.password.setText('synthetic private password');settings.reject()
     assert settings.password.text()==''
     settings.deleteLater();window.dispose();window.deleteLater();collect(app)

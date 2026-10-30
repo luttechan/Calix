@@ -121,7 +121,7 @@ def main():
     app.setStyle('Fusion')
     from learning_calendar.design import apply_palette
     apply_palette(app)
-    logger.info('UI 글꼴: %s', apply_korean_font(app))
+    logger.info('UI 글꼴: %s', apply_korean_font(app,compact=True))
     app.setApplicationName('Calix')
     app.setOrganizationName('LutteLaurent')
     app.setQuitOnLastWindowClosed(True)

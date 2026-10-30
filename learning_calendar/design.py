@@ -3,7 +3,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor,QIcon,QPainter,QPalette,QPen,QPixmap
 from PySide6.QtWidgets import QApplication
 
-VERSION='1.2.0-r4'
+VERSION='1.3.0'
 THEME_NAMES={'pink':'핑크','sky':'스카이블루','mint':'민트','purple':'퍼플','dark':'다크'}
 THEMES={
  'pink':dict(bg='#FFF6FA',side='#FFFDFE',surface='#FFFFFF',soft='#FCE7F0',hover='#FFF0F6',ink='#342431',muted='#836875',line='#EDDCE5',accent='#B13970',onaccent='#FFFFFF',hero='#F8D7E7',hero2='#FFEDF5'),
@@ -245,6 +245,9 @@ def icon(name,tint=None):
         p.drawRoundedRect(5,3,15,18,2,2);p.drawLine(9,3,9,21);p.drawLine(12,8,17,8);p.drawLine(12,12,17,12)
     elif name=='close':
         p.drawLine(5,5,15,15);p.drawLine(15,5,5,15)
+    elif name=='trash':
+        p.drawLine(3,5,17,5);p.drawLine(7,2,13,2);p.drawLine(7,2,7,5);p.drawLine(13,2,13,5)
+        p.drawLine(5,5,6,18);p.drawLine(6,18,14,18);p.drawLine(14,18,15,5);p.drawLine(8,8,8,15);p.drawLine(12,8,12,15)
     elif name=='menu':
         p.drawLine(3,5,17,5);p.drawLine(3,10,17,10);p.drawLine(3,15,17,15)
     elif name=='info':

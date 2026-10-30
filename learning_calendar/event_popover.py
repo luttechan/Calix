@@ -1,6 +1,6 @@
 """Cursor-anchored native property editor for synchronized and personal events."""
 import sqlite3
-from PySide6.QtCore import Qt,QTimer,QPoint,Signal,QEvent,QRectF
+from PySide6.QtCore import Qt,QTimer,QPoint,Signal,QEvent,QRectF,QElapsedTimer
 from PySide6.QtGui import QGuiApplication,QPainter,QColor,QPen
 from PySide6.QtWidgets import QFrame,QWidget,QVBoxLayout,QHBoxLayout,QLabel,QLineEdit,QPlainTextEdit,QComboBox,QPushButton,QToolButton,QScrollArea,QApplication
 from .event_view import EVENT_ROLE
@@ -24,7 +24,7 @@ class EventPopover(QFrame):
     advanced_requested=Signal(object)
     def __init__(self,day,events,types,save,parent=None,read_only=False):
         super().__init__(parent,Qt.WindowType.Tool|Qt.WindowType.FramelessWindowHint);self.setObjectName('eventPopover');self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose);self.setAttribute(Qt.WidgetAttribute.WA_QuitOnClose,False)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground);self._watching=False;self.setWindowTitle('상세 일정')
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground);self._watching=False;self.setWindowTitle('상세 일정');self._opening_point=None;self._opening_clock=QElapsedTimer()
         self.rows=list(events);self.save_callback=save;self.current=None;self.loading=False;self.dirty=False;self.read_only=read_only
         self.timer=QTimer(self);self.timer.setSingleShot(True);self.timer.setInterval(650);self.timer.timeout.connect(self.flush)
         self.setFrameShape(QFrame.Shape.NoFrame)
@@ -85,7 +85,9 @@ class EventPopover(QFrame):
         if event.type()==QEvent.Type.ApplicationDeactivate:
             from .popup_tools import dismiss_on_deactivation
             dismiss_on_deactivation(self,event)
-        elif event.type()==QEvent.Type.MouseButtonPress and isinstance(obj,QWidget) and not belongs_to(obj,self):self.close()
+        elif event.type()==QEvent.Type.MouseButtonPress and isinstance(obj,QWidget) and not belongs_to(obj,self):
+            opening=self._opening_point is not None and self._opening_clock.isValid() and self._opening_clock.elapsed()<100 and (event.globalPosition().toPoint()-self._opening_point).manhattanLength()<=3
+            if not opening:self.close()
         return False
     @staticmethod
     def _type_key(event):return f'type:{event.type_id}' if event.type_id is not None else event.kind
@@ -147,6 +149,7 @@ class EventPopover(QFrame):
         for i,row in enumerate(self.list.event_model.rows):
             if row.key==event.key:self._select(self.list.model().index(i));break
     def show_near(self,point):
+        self._opening_point=QPoint(point);self._opening_clock.start()
         screen=QGuiApplication.screenAt(point) or self.screen();area=screen.availableGeometry();self.resize(min(self.width(),area.width()-16),min(self.height(),area.height()-16));self.move(popup_position(point,self.size(),area));self.show();self.raise_();self.activateWindow()
     def keyPressEvent(self,event):
         if event.key()==Qt.Key.Key_Escape:self.close();event.accept()

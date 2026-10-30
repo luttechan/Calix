@@ -142,7 +142,8 @@ def test_transient_menus_are_released_and_hints_present(window,app):
         QTimer.singleShot(0,view,lambda:QApplication.activePopupWidget().close() if QApplication.activePopupWidget() else None)
         view.context_menu(pos);pump(app)
     assert not view.findChildren(QMenu)
-    for button in [window.checklist_nav,window.home_nav,window.sync_btn,view.add_button,view.trash_button]:assert button.toolTip() and button.accessibleName()
+    for button in [window.checklist_nav,window.home_nav,window.sync_btn,view.add_button]:assert button.toolTip() and button.accessibleName()
+    assert not hasattr(view,'trash_button') and view.model.headerData(7,Qt.Orientation.Horizontal,Qt.ItemDataRole.ToolTipRole)=='삭제'
 
 
 def test_completion_and_previous_status_are_atomic_on_disk_failure(window):
