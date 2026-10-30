@@ -1,0 +1,146 @@
+{
+  "groups": [
+    {
+      "name": "Assignments",
+      "assignments": []
+    },
+    {
+      "name": "Assignments",
+      "assignments": []
+    },
+    {
+      "name": "Assignments",
+      "assignments": []
+    },
+    {
+      "name": "Assignments",
+      "assignments": [
+        {
+          "id": "101",
+          "name": "Task 101",
+          "due_at": "2026-09-15T09:00:00Z",
+          "published": true,
+          "is_quiz_assignment": false,
+          "submission_types": [
+            "online_upload"
+          ],
+          "html_url": "/courses/1/assignments/101"
+        },
+        {
+          "id": "102",
+          "name": "Task 102",
+          "due_at": "2026-09-22T09:00:00Z",
+          "published": true,
+          "is_quiz_assignment": false,
+          "submission_types": [
+            "online_upload"
+          ],
+          "html_url": "/courses/1/assignments/102"
+        },
+        {
+          "id": "103",
+          "name": "Task 103",
+          "due_at": "2026-09-29T09:00:00Z",
+          "published": true,
+          "is_quiz_assignment": false,
+          "submission_types": [
+            "online_upload"
+          ],
+          "html_url": "/courses/1/assignments/103"
+        },
+        {
+          "id": "104",
+          "name": "Task 104",
+          "due_at": "2026-10-06T09:00:00Z",
+          "published": true,
+          "is_quiz_assignment": false,
+          "submission_types": [
+            "online_upload"
+          ],
+          "html_url": "/courses/1/assignments/104"
+        },
+        {
+          "id": "105",
+          "name": "Task 105",
+          "due_at": "2026-10-13T09:00:00Z",
+          "published": true,
+          "is_quiz_assignment": false,
+          "submission_types": [
+            "online_upload"
+          ],
+          "html_url": "/courses/1/assignments/105"
+        },
+        {
+          "id": "106",
+          "name": "Task 106",
+          "due_at": "2026-10-20T09:00:00Z",
+          "published": true,
+          "is_quiz_assignment": false,
+          "submission_types": [
+            "online_text_entry"
+          ],
+          "html_url": "/courses/1/assignments/106"
+        },
+        {
+          "id": "107",
+          "name": "Task 107",
+          "due_at": "2026-11-03T09:00:00Z",
+          "published": true,
+          "is_quiz_assignment": false,
+          "submission_types": [
+            "online_upload"
+          ],
+          "html_url": "/courses/1/assignments/107"
+        }
+      ]
+    },
+    {
+      "name": "Assignments",
+      "assignments": []
+    }
+  ],
+  "submissions": [
+    {
+      "assignment_id": 101,
+      "workflow_state": "graded",
+      "submitted_at": "2026-10-10T01:00:00Z",
+      "cached_due_date": "2026-09-15T09:00:00Z"
+    },
+    {
+      "assignment_id": 102,
+      "workflow_state": "graded",
+      "submitted_at": "2026-10-10T01:00:00Z",
+      "cached_due_date": "2026-09-22T09:00:00Z"
+    },
+    {
+      "assignment_id": 103,
+      "workflow_state": "graded",
+      "submitted_at": "2026-10-10T01:00:00Z",
+      "cached_due_date": "2026-09-29T09:00:00Z"
+    },
+    {
+      "assignment_id": 104,
+      "workflow_state": "graded",
+      "submitted_at": "2026-10-10T01:00:00Z",
+      "cached_due_date": "2026-10-06T09:00:00Z"
+    },
+    {
+      "assignment_id": 105,
+      "workflow_state": "submitted",
+      "submitted_at": "2026-10-10T01:00:00Z",
+      "cached_due_date": "2026-10-13T09:00:00Z"
+    },
+    {
+      "assignment_id": 106,
+      "workflow_state": "graded",
+      "submitted_at": "2026-10-10T01:00:00Z",
+      "cached_due_date": "2026-10-20T09:00:00Z"
+    },
+    {
+      "assignment_id": 107,
+      "workflow_state": "unsubmitted",
+      "submitted_at": null,
+      "cached_due_date": "2026-11-03T09:00:00Z"
+    }
+  ]
+}

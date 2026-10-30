@@ -1,0 +1,1181 @@
+import { useMemo, useState } from "react";
+import {
+  Plus,
+  Trash2,
+  Download,
+  Sun,
+  Check,
+  Palette,
+  CalendarDays,
+  SlidersHorizontal,
+  ArrowUpRight,
+} from "lucide-react";
+import { Modal, TypeBadge, useCalix } from "./App";
+import { rpc } from "./bridge";
+import { InlineCell } from "./InlineCell";
+import { isTauri, invoke } from "@tauri-apps/api/core";
+import { UpdateDialog } from "./UpdateDialog";
+import { useTimetableScale } from "./useTimetableScale";
+import { dateKey, dueText, localInput, status, weekdays } from "./dates";
+import type { Task, Session, Preferences } from "./types";
+const taskCollator = new Intl.Collator("ko", { numeric: true });
+export function ChecklistPage() {
+  const { data, mutate, notify } = useCalix();
+  const [listPage, setListPage] = useState(0),
+    [section, setSection] = useState(1),
+    [search, setSearch] = useState(""),
+    [pending, setPending] = useState(false),
+    [batch, setBatch] = useState(false),
+    [remove, setRemove] = useState<Task | null>(null),
+    [sectionEdit, setSectionEdit] = useState(false),
+    [statusEdit, setStatusEdit] = useState(false),
+    [sort, setSort] = useState<{ key: keyof Task; descending: boolean }>({
+      key: "due_at",
+      descending: false,
+    });
+  const rows = useMemo(
+    () =>
+      data.tasks
+        .filter(
+          (t) =>
+            t.section_id === section &&
+            (!pending || t.status_kind === "open") &&
+            [t.title, t.category, t.role, t.professor, t.note]
+              .join(" ")
+              .toLocaleLowerCase()
+              .includes(search.toLocaleLowerCase()),
+        )
+        .sort((a, b) => {
+          const x = a[sort.key] ?? "",
+            y = b[sort.key] ?? "";
+          return (
+            taskCollator.compare(String(x), String(y)) *
+            (sort.descending ? -1 : 1)
+          );
+        }),
+    [data.tasks, section, search, pending, sort],
+  );
+  const pageCount = Math.max(1, Math.ceil(rows.length / 25)),
+    currentPage = Math.min(listPage, pageCount - 1),
+    visibleRows = rows.slice(currentPage * 25, currentPage * 25 + 25);
+  const save = (task: Task, field: string, value: unknown) => {
+    if (task[field as keyof Task] !== value)
+      void mutate("checklist.save", { id: task.id, field, value }).catch(
+        () => {},
+      );
+  };
+  return (
+    <>
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow">한 번에 하나씩</p>
+          <h1>체크리스트</h1>
+        </div>
+        <button
+          className="primary"
+          onClick={() =>
+            void mutate("checklist.add", { section_id: section }).catch(
+              () => {},
+            )
+          }
+        >
+          <Plus size={17} />할 일 추가
+        </button>
+      </div>
+      <div className="checklist-top">
+        <div className="section-tabs">
+          {data.sections.map((s) => (
+            <button
+              className={s.id === section ? "selected" : ""}
+              key={s.id}
+              onClick={() => setSection(s.id)}
+            >
+              {s.name}
+              <small>
+                {data.tasks.filter((t) => t.section_id === s.id).length}
+              </small>
+            </button>
+          ))}
+          {data.sections.length < 5 && (
+            <button
+              className="icon-button"
+              aria-label="섹션 추가"
+              title="섹션 추가"
+              onClick={() => setSectionEdit(true)}
+            >
+              <Plus size={17} />
+            </button>
+          )}
+        </div>
+        <div className="toolbar">
+          <button onClick={() => setStatusEdit(true)}>
+            <SlidersHorizontal size={15} />
+            상태 편집
+          </button>
+          {section === 1 && (
+            <button onClick={() => setBatch(true)}>
+              <Download size={15} />
+              일괄 가져오기
+            </button>
+          )}
+        </div>
+      </div>
+      <section className="glass checklist-panel">
+        <div className="checklist-tools">
+          <input
+            aria-label="할 일 검색"
+            placeholder="할 일 검색"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={pending}
+              onChange={(e) => setPending(e.target.checked)}
+            />
+            미완료만
+          </label>
+          <span className="muted">{rows.length}개</span>
+        </div>
+        <div className="table-scroll">
+          <table className="checklist-table">
+            <thead>
+              <tr>
+                {[
+                  ["title", "할 일"],
+                  ["due_at", "기한"],
+                  ["category", "분류"],
+                  ["role", "내 역할"],
+                  ["professor", "담당 교수"],
+                  ["status_name", "상태"],
+                  ["note", "비고"],
+                ].map(([key, title]) => (
+                  <th key={key}>
+                    <button
+                      onClick={() =>
+                        setSort({
+                          key: key as keyof Task,
+                          descending:
+                            sort.key === key ? !sort.descending : false,
+                        })
+                      }
+                    >
+                      {title}
+                      {sort.key === key ? (
+                        <span>{sort.descending ? "↓" : "↑"}</span>
+                      ) : null}
+                    </button>
+                  </th>
+                ))}
+                <th className="delete-cell" aria-label="삭제" />
+              </tr>
+            </thead>
+            <tbody>
+              {visibleRows.map((task) => (
+                <tr key={task.id}>
+                  <td>
+                    <div className="task-title">
+                      <input
+                        aria-label={`${task.title} 완료`}
+                        type="checkbox"
+                        checked={task.status_kind === "done"}
+                        onChange={(e) =>
+                          void mutate("checklist.toggle", {
+                            id: task.id,
+                            checked: e.target.checked,
+                          }).catch(() => {})
+                        }
+                      />
+                      <InlineCell
+                        label="할 일"
+                        value={task.title}
+                        onCommit={(value) =>
+                          save(task, "title", value || "새 할 일")
+                        }
+                      />
+                    </div>
+                  </td>
+                  <td>
+                    <InlineCell
+                      label="기한"
+                      type="datetime-local"
+                      value={localInput(task.due_at)}
+                      display={dueText(task.due_at)}
+                      onCommit={(value) =>
+                        save(task, "due_at", value ? value + ":00+09:00" : null)
+                      }
+                    />
+                  </td>
+                  {(["category", "role", "professor"] as const).map((field) => (
+                    <td key={field}>
+                      <InlineCell
+                        label={
+                          field === "category"
+                            ? "분류"
+                            : field === "role"
+                              ? "내 역할"
+                              : "담당 교수"
+                        }
+                        value={task[field]}
+                        list={`choices-${field}`}
+                        maxLength={field === "professor" ? 120 : 100}
+                        onCommit={(value) => save(task, field, value || "")}
+                      />
+                    </td>
+                  ))}
+                  <td>
+                    <InlineCell
+                      label="상태"
+                      value={task.status_id}
+                      display={task.status_name}
+                      color={task.status_color}
+                      options={data.statuses.map((s) => ({
+                        value: s.id,
+                        label: s.name,
+                      }))}
+                      onCommit={(value) => save(task, "status_id", value)}
+                    />
+                  </td>
+                  <td>
+                    <InlineCell
+                      label="비고"
+                      value={task.note}
+                      maxLength={20000}
+                      onCommit={(value) => save(task, "note", value || "")}
+                    />
+                  </td>
+                  <td className="delete-cell">
+                    <button
+                      className="icon-button row-delete"
+                      title="삭제"
+                      aria-label={`${task.title} 삭제`}
+                      onClick={() => setRemove(task)}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!rows.length && <div className="empty">할 일이 없습니다.</div>}
+        </div>
+        {pageCount > 1 && (
+          <div className="pagination">
+            <span>
+              {currentPage + 1} / {pageCount}
+            </span>
+            <button
+              disabled={!currentPage}
+              onClick={() => setListPage(currentPage - 1)}
+            >
+              이전
+            </button>
+            <button
+              disabled={currentPage >= pageCount - 1}
+              onClick={() => setListPage(currentPage + 1)}
+            >
+              다음
+            </button>
+          </div>
+        )}
+      </section>
+      {(["category", "role", "professor"] as const).map((field) => (
+        <datalist id={`choices-${field}`} key={field}>
+          {Array.from(
+            new Set([
+              ...data.tasks.map((t) => t[field]),
+              ...(field === "category"
+                ? data.courses.map((c) => c.name)
+                : field === "role"
+                  ? ["작성", "자료 조사", "발표", "검토"]
+                  : data.sessions.map((s) => s.professor)),
+            ]),
+          )
+            .filter(Boolean)
+            .map((value) => (
+              <option key={value} value={value} />
+            ))}
+        </datalist>
+      ))}
+      {batch && <BatchImport onClose={() => setBatch(false)} />}
+      {remove && (
+        <Modal title="정말 삭제하시겠습니까?" onClose={() => setRemove(null)}>
+          <p className="muted">{remove.title}</p>
+          <div className="dialog-actions">
+            <span />
+            <button onClick={() => setRemove(null)}>취소</button>
+            <button
+              className="primary"
+              onClick={() =>
+                void mutate("checklist.delete", { id: remove.id })
+                  .then(() => {
+                    setRemove(null);
+                    notify("삭제됨");
+                  })
+                  .catch(() => {})
+              }
+            >
+              삭제
+            </button>
+          </div>
+        </Modal>
+      )}
+      {sectionEdit && (
+        <Modal title="섹션 추가" onClose={() => setSectionEdit(false)}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const name = new FormData(e.currentTarget).get("name");
+              void mutate("section.save", { name })
+                .then((id) => {
+                  setSection(Number(id));
+                  setSectionEdit(false);
+                })
+                .catch(() => {});
+            }}
+          >
+            <label>
+              이름
+              <input name="name" autoFocus required maxLength={32} />
+            </label>
+            <div className="dialog-actions">
+              <span />
+              <button className="primary">추가</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+      {statusEdit && (
+        <Modal title="상태 편집" onClose={() => setStatusEdit(false)}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const f = new FormData(e.currentTarget);
+              void mutate("status.save", {
+                id: f.get("id") ? Number(f.get("id")) : null,
+                name: f.get("name"),
+                color: f.get("color"),
+                kind: f.get("kind"),
+              })
+                .then(() => setStatusEdit(false))
+                .catch(() => {});
+            }}
+          >
+            <label>
+              상태
+              <select
+                name="id"
+                onChange={(e) => {
+                  const s = data.statuses.find(
+                    (s) => s.id === Number(e.target.value),
+                  );
+                  const form = e.currentTarget.form!;
+                  for (const [key, value] of Object.entries({
+                    name: s?.name || "",
+                    color: s?.color || "#af527f",
+                    kind: s?.kind || "open",
+                  })) {
+                    (form.elements.namedItem(key) as HTMLInputElement).value =
+                      value;
+                  }
+                }}
+              >
+                <option value="">새 상태</option>
+                {data.statuses.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              이름
+              <input name="name" maxLength={24} required />
+            </label>
+            <div className="form-grid">
+              <label>
+                색상
+                <input name="color" type="color" defaultValue="#af527f" />
+              </label>
+              <label>
+                처리
+                <select name="kind">
+                  <option value="open">진행할 일</option>
+                  <option value="done">완료</option>
+                  <option value="cancel">취소</option>
+                </select>
+              </label>
+            </div>
+            <div className="dialog-actions">
+              <span />
+              <button className="primary">저장</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </>
+  );
+}
+function BatchImport({ onClose }: { onClose: () => void }) {
+  const { data, mutate, notify } = useCalix(),
+    [page, setPage] = useState(0),
+    [query, setQuery] = useState(""),
+    [kind, setKind] = useState("all"),
+    [keys, setKeys] = useState(new Set<string>()),
+    [saving, setSaving] = useState(false);
+  const imported = new Set(data.tasks.map((t) => t.source_key));
+  const rows = data.events.filter(
+    (e) =>
+      !e.manual &&
+      !imported.has(e.key) &&
+      (kind === "all" || e.kind === kind) &&
+      (e.title + " " + e.course_name).includes(query),
+  );
+  const pageCount = Math.max(1, Math.ceil(rows.length / 50)),
+    currentPage = Math.min(page, pageCount - 1);
+  const toggle = (key: string) =>
+    setKeys((previous) => {
+      const next = new Set(previous);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  return (
+    <Modal title="일괄 가져오기" onClose={onClose} wide>
+      <div className="import-toolbar">
+        <input
+          aria-label="가져올 일정 검색"
+          placeholder="일정 또는 과목 검색"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <select
+          aria-label="가져올 유형"
+          value={kind}
+          onChange={(e) => setKind(e.target.value)}
+        >
+          <option value="all">모든 유형</option>
+          <option value="assignment">과제</option>
+          <option value="movie">영상</option>
+        </select>
+      </div>
+      <div className="import-list">
+        {rows.slice(currentPage * 50, currentPage * 50 + 50).map((e) => (
+          <label key={e.key} className="import-row">
+            <input
+              type="checkbox"
+              checked={keys.has(e.key)}
+              onChange={() => toggle(e.key)}
+            />
+            <TypeBadge event={e} />
+            <span>
+              <strong>{e.title}</strong>
+              <small>{e.course_name}</small>
+            </span>
+            <small>{dueText(e.due_at)}</small>
+          </label>
+        ))}
+        {!rows.length && <div className="empty">가져올 일정이 없습니다.</div>}
+      </div>
+      {pageCount > 1 && (
+        <div className="pagination">
+          <span>
+            {currentPage + 1} / {pageCount}
+          </span>
+          <button
+            disabled={!currentPage}
+            onClick={() => setPage(currentPage - 1)}
+          >
+            이전
+          </button>
+          <button
+            disabled={currentPage >= pageCount - 1}
+            onClick={() => setPage(currentPage + 1)}
+          >
+            다음
+          </button>
+        </div>
+      )}
+      <div className="dialog-actions">
+        <button
+          onClick={() => setKeys(new Set([...keys, ...rows.map((e) => e.key)]))}
+        >
+          전체 선택
+        </button>
+        <button
+          onClick={() =>
+            setKeys(
+              (previous) =>
+                new Set(
+                  [...previous].filter(
+                    (key) => !rows.some((e) => e.key === key),
+                  ),
+                ),
+            )
+          }
+        >
+          선택 해제
+        </button>
+        <span />
+        <small>{keys.size}개 선택</small>
+        <button
+          className="primary"
+          disabled={!keys.size || saving}
+          onClick={() => {
+            setSaving(true);
+            void mutate("checklist.import", { keys: [...keys] })
+              .then((count) => {
+                notify(`${count}개 추가됨`);
+                onClose();
+              })
+              .catch(() => {})
+              .finally(() => setSaving(false));
+          }}
+        >
+          가져오기
+        </button>
+      </div>
+    </Modal>
+  );
+}
+const minute = (value: string) => {
+  const [h, m] = value.split(":").map(Number);
+  return h * 60 + m;
+};
+export function TimetablePage() {
+  const { data, mutate } = useCalix(),
+    [days, setDays] = useState(5),
+    [edit, setEdit] = useState<Session | null | undefined>(undefined),
+    [off, setOff] = useState(false),
+    [selectedDays, setSelectedDays] = useState(data.offDays),
+    [deleteId, setDeleteId] = useState<number | null>(null);
+  const start = Math.min(
+      480,
+      ...data.sessions.map((s) => Math.floor(minute(s.start_time) / 60) * 60),
+    ),
+    end = Math.max(
+      1140,
+      ...data.sessions.map((s) => Math.ceil(minute(s.end_time) / 60) * 60),
+    );
+  const { panel, unit, height } = useTimetableScale(start, end);
+  const workloads = (cid: number, kind: string) =>
+    data.events.filter(
+      (e) =>
+        e.course_id === cid &&
+        e.kind === kind &&
+        !e.completed &&
+        (!e.due_at || new Date(e.due_at).getTime() > Date.now()),
+    ).length;
+  return (
+    <>
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow">이번 주</p>
+          <h1>시간표</h1>
+        </div>
+        <div className="toolbar">
+          <div className="segmented">
+            <button
+              className={days === 5 ? "selected" : ""}
+              onClick={() => setDays(5)}
+            >
+              주중
+            </button>
+            <button
+              className={days === 7 ? "selected" : ""}
+              onClick={() => setDays(7)}
+            >
+              주간
+            </button>
+          </div>
+          <button
+            onClick={() => {
+              setSelectedDays(data.offDays);
+              setOff(true);
+            }}
+          >
+            공강 설정
+          </button>
+          <button
+            className="primary"
+            disabled={!data.courses.length}
+            onClick={() => setEdit(null)}
+          >
+            <Plus size={17} />
+            수업 추가
+          </button>
+        </div>
+      </div>
+      <section
+        ref={panel}
+        className="glass timetable-panel"
+        style={{ "--hour-unit": `${unit}px` } as React.CSSProperties}
+      >
+        <div
+          className="week-headers"
+          style={{
+            gridTemplateColumns: `48px repeat(${days},minmax(105px,1fr))`,
+          }}
+        >
+          <span />
+          {weekdays.slice(0, days).map((name, day) => (
+            <div
+              key={name}
+              className={data.offDays.includes(day) ? "off-header" : ""}
+            >
+              {name}
+              <small>{data.offDays.includes(day) ? "공강" : ""}</small>
+            </div>
+          ))}
+        </div>
+        <div
+          className="week-body"
+          style={{
+            gridTemplateColumns: `48px repeat(${days},minmax(105px,1fr))`,
+            height,
+          }}
+        >
+          <div className="time-axis">
+            {Array.from({ length: (end - start) / 60 }, (_, i) => (
+              <span key={i} style={{ top: i * unit }}>
+                {String(start / 60 + i).padStart(2, "0")}:00
+              </span>
+            ))}
+          </div>
+          {weekdays.slice(0, days).map((name, day) => (
+            <div
+              key={name}
+              className={`week-column ${data.offDays.includes(day) ? "off-column" : ""}`}
+              onDoubleClick={(e) => {
+                if (e.target === e.currentTarget && !data.offDays.includes(day))
+                  setEdit(null);
+              }}
+            >
+              {data.offDays.includes(day) ? (
+                <div className="off-marker">
+                  <span>
+                    <Sun size={30} />
+                  </span>
+                  <strong>공강</strong>
+                </div>
+              ) : (
+                data.sessions
+                  .filter((s) => s.day === day)
+                  .map((s) => (
+                    <button
+                      key={s.id}
+                      className={`session-card ${((minute(s.end_time) - minute(s.start_time)) / 60) * unit < 90 ? "compact" : ""} ${((minute(s.end_time) - minute(s.start_time)) / 60) * unit < 68 ? "short" : ""}`}
+                      title={`${data.courses.find((c) => c.id === s.course_id)?.name || "수업"} / ${s.professor} / ${s.room} / 과제 ${workloads(s.course_id, "assignment")} / 영상 ${workloads(s.course_id, "movie")}`}
+                      style={{
+                        top: ((minute(s.start_time) - start) / 60) * unit,
+                        height: Math.max(
+                          20,
+                          ((minute(s.end_time) - minute(s.start_time)) / 60) *
+                            unit -
+                            4,
+                        ),
+                        borderLeftColor: s.color || "var(--accent)",
+                        background: `color-mix(in srgb,${s.color || "var(--accent)"} 12%,var(--surface))`,
+                      }}
+                      onClick={() => setEdit(s)}
+                    >
+                      <strong>
+                        {data.courses.find((c) => c.id === s.course_id)?.name ||
+                          "수업"}
+                      </strong>
+                      <small>
+                        {s.start_time} – {s.end_time}
+                      </small>
+                      {(s.professor || s.room) && (
+                        <small className="session-detail">
+                          {[s.professor, s.room].filter(Boolean).join(" / ")}
+                        </small>
+                      )}
+                      <div className="session-work">
+                        <span>과제 {workloads(s.course_id, "assignment")}</span>
+                        <span>영상 {workloads(s.course_id, "movie")}</span>
+                      </div>
+                    </button>
+                  ))
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+      {edit !== undefined && (
+        <Modal
+          title={edit ? "수업 수정" : "수업 추가"}
+          onClose={() => setEdit(undefined)}
+        >
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const f = new FormData(e.currentTarget);
+              void mutate("timetable.save", {
+                id: edit?.id,
+                course_id: Number(f.get("course")),
+                day: Number(f.get("day")),
+                start_time: f.get("start"),
+                end_time: f.get("end"),
+                professor: f.get("professor"),
+                room: f.get("room"),
+                color: f.get("color"),
+              })
+                .then(() => setEdit(undefined))
+                .catch(() => {});
+            }}
+          >
+            <label>
+              수업
+              <select
+                name="course"
+                defaultValue={edit?.course_id || ""}
+                required
+              >
+                <option value="" disabled>
+                  수업 선택
+                </option>
+                {data.courses.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="form-grid">
+              <label>
+                요일
+                <select name="day" defaultValue={edit?.day || 0}>
+                  {weekdays.map((name, i) => (
+                    <option key={name} value={i}>
+                      {name}요일
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                색상
+                <input
+                  type="color"
+                  name="color"
+                  defaultValue={edit?.color || "#af527f"}
+                />
+              </label>
+            </div>
+            <div className="form-grid">
+              <label>
+                시작
+                <input
+                  type="time"
+                  name="start"
+                  defaultValue={edit?.start_time || "09:00"}
+                  required
+                />
+              </label>
+              <label>
+                종료
+                <input
+                  type="time"
+                  name="end"
+                  defaultValue={edit?.end_time || "10:30"}
+                  required
+                />
+              </label>
+            </div>
+            <label>
+              담당 교수
+              <input
+                name="professor"
+                maxLength={120}
+                defaultValue={edit?.professor || ""}
+              />
+            </label>
+            <label>
+              강의실
+              <input
+                name="room"
+                maxLength={100}
+                defaultValue={edit?.room || ""}
+              />
+            </label>
+            <div className="dialog-actions">
+              {edit && (
+                <button
+                  type="button"
+                  className="danger"
+                  onClick={() => setDeleteId(edit.id)}
+                >
+                  <Trash2 size={16} />
+                  삭제
+                </button>
+              )}
+              <span />
+              <button className="primary">저장</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+      {off && (
+        <Modal title="공강 설정" onClose={() => setOff(false)}>
+          <div className="off-choices">
+            {weekdays.map((name, day) => (
+              <button
+                key={name}
+                className={selectedDays.includes(day) ? "selected" : ""}
+                onClick={() =>
+                  setSelectedDays((value) =>
+                    value.includes(day)
+                      ? value.filter((d) => d !== day)
+                      : [...value, day],
+                  )
+                }
+              >
+                {name}
+                <Sun size={16} />
+              </button>
+            ))}
+          </div>
+          <div className="dialog-actions">
+            <span />
+            <button
+              className="primary"
+              onClick={() =>
+                void mutate("timetable.off", { days: selectedDays })
+                  .then(() => setOff(false))
+                  .catch(() => {})
+              }
+            >
+              저장
+            </button>
+          </div>
+        </Modal>
+      )}
+      {deleteId !== null && (
+        <Modal title="정말 삭제하시겠습니까?" onClose={() => setDeleteId(null)}>
+          <div className="dialog-actions">
+            <span />
+            <button onClick={() => setDeleteId(null)}>취소</button>
+            <button
+              className="primary"
+              onClick={() =>
+                void mutate("timetable.delete", { id: deleteId })
+                  .then(() => {
+                    setDeleteId(null);
+                    setEdit(undefined);
+                  })
+                  .catch(() => {})
+              }
+            >
+              삭제
+            </button>
+          </div>
+        </Modal>
+      )}
+    </>
+  );
+}
+export function SettingsPage() {
+  const { data, mutate, notify, requestInstall } = useCalix(),
+    [type, setType] = useState(false),
+    [holiday, setHoliday] = useState(false),
+    [special, setSpecial] = useState(false),
+    [updates, setUpdates] = useState(false),
+    [restore, setRestore] = useState<string | null>(null),
+    [fileBusy, setFileBusy] = useState(false);
+  const requestFile = async (mode: string) => {
+    if (!isTauri()) {
+      notify("파일 선택은 Windows 앱에서 진행합니다.");
+      return;
+    }
+    setFileBusy(true);
+    try {
+      const path = await invoke<string | null>("backup_file", { mode });
+      if (!path) return;
+      if (mode === "restore") setRestore(path);
+      else {
+        await mutate("backup.export", { path });
+        notify("백업됨");
+      }
+    } catch (error) {
+      notify(String(error));
+    } finally {
+      setFileBusy(false);
+    }
+  };
+  const themes: [Preferences["theme"], string, string][] = [
+    ["pink", "핑크", "#d09bb7"],
+    ["sky", "스카이블루", "#9bb8db"],
+    ["mint", "민트", "#9bcdb9"],
+    ["purple", "퍼플", "#b7a0d4"],
+    ["dark", "다크", "#333242"],
+  ];
+  return (
+    <>
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow">나에게 맞게</p>
+          <h1>설정</h1>
+        </div>
+      </div>
+      <section className="glass settings-panel">
+        <div className="settings-heading">
+          <Palette size={20} />
+          <h2>화면</h2>
+        </div>
+        <div className="theme-picker">
+          {themes.map(([id, name, color]) => (
+            <button
+              key={id}
+              className={data.preferences.theme === id ? "selected" : ""}
+              onClick={() =>
+                void mutate("preferences.save", { theme: id }).catch(() => {})
+              }
+            >
+              <span style={{ background: color }}>
+                {data.preferences.theme === id && <Check size={20} />}
+              </span>
+              {name}
+            </button>
+          ))}
+        </div>
+        <div className="setting-row">
+          <div>
+            <strong>글래스</strong>
+            <small>배경 블러와 반투명 패널</small>
+          </div>
+          <button
+            className={`switch ${data.preferences.glass ? "on" : ""}`}
+            role="switch"
+            aria-checked={data.preferences.glass}
+            aria-label="글래스"
+            onClick={() =>
+              void mutate("preferences.save", {
+                glass: !data.preferences.glass,
+              }).catch(() => {})
+            }
+          >
+            <i />
+          </button>
+        </div>
+        <div className="setting-row">
+          <strong>글꼴</strong>
+          <select
+            aria-label="글꼴"
+            value={data.preferences.font_mode}
+            onChange={(e) =>
+              void mutate("preferences.save", {
+                font_mode: e.target.value,
+              }).catch(() => {})
+            }
+          >
+            <option value="pretendard">Pretendard</option>
+            <option value="windows">Windows 기본</option>
+          </select>
+        </div>
+      </section>
+      <section className="glass settings-panel">
+        <div className="settings-heading">
+          <CalendarDays size={20} />
+          <h2>일정</h2>
+        </div>
+        <button className="settings-link" onClick={() => setType(true)}>
+          사용자 유형
+          <ArrowUpRight size={17} />
+        </button>
+        <button className="settings-link" onClick={() => setHoliday(true)}>
+          공휴일 등록
+          <ArrowUpRight size={17} />
+        </button>
+        <button className="settings-link" onClick={() => setSpecial(true)}>
+          특수 일정 등록
+          <ArrowUpRight size={17} />
+        </button>
+      </section>
+      <section className="glass settings-panel">
+        <div className="settings-heading">
+          <Download size={20} />
+          <h2>앱 관리</h2>
+        </div>
+        {[
+          ["updates", "업데이트 확인"],
+          ["backup", "개인 자료 백업"],
+          ["restore", "백업 복원"],
+        ].map(([mode, label]) => (
+          <button
+            key={mode}
+            className="settings-link"
+            disabled={fileBusy}
+            onClick={() => {
+              if (mode === "updates") setUpdates(true);
+              else void requestFile(mode);
+            }}
+          >
+            {label}
+            <ArrowUpRight size={17} />
+          </button>
+        ))}
+        <button
+          className="settings-link"
+          onClick={() =>
+            void rpc("app.open", { page: "guide" }).catch((e) =>
+              notify(e.message),
+            )
+          }
+        >
+          사용 설명서
+          <ArrowUpRight size={17} />
+        </button>
+      </section>
+      {type && (
+        <Modal title="사용자 유형" onClose={() => setType(false)}>
+          <div className="type-list">
+            {data.types.map((t) => (
+              <div key={t.id}>
+                <span style={{ background: t.color }} />
+                {t.name}
+              </div>
+            ))}
+          </div>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const f = new FormData(e.currentTarget);
+              void mutate("type.save", {
+                name: f.get("name"),
+                color: f.get("color"),
+              })
+                .then(() => setType(false))
+                .catch(() => {});
+            }}
+          >
+            <div className="form-grid">
+              <label>
+                이름
+                <input name="name" required maxLength={40} />
+              </label>
+              <label>
+                색상
+                <input type="color" name="color" defaultValue="#af527f" />
+              </label>
+            </div>
+            <div className="dialog-actions">
+              <span />
+              <button className="primary">추가</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+      {holiday && (
+        <Modal title="공휴일 등록" onClose={() => setHoliday(false)}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const f = new FormData(e.currentTarget);
+              void mutate("holiday.save", {
+                date: f.get("date"),
+                name: f.get("name"),
+                enabled: true,
+              })
+                .then(() => setHoliday(false))
+                .catch(() => {});
+            }}
+          >
+            <label>
+              날짜
+              <input
+                type="date"
+                name="date"
+                defaultValue={dateKey()}
+                required
+              />
+            </label>
+            <label>
+              이름
+              <input name="name" maxLength={80} required />
+            </label>
+            <div className="dialog-actions">
+              <span />
+              <button className="primary">등록</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+      {updates && (
+        <UpdateDialog
+          onClose={() => setUpdates(false)}
+          onInstall={() => {
+            setUpdates(false);
+            requestInstall();
+          }}
+        />
+      )}
+      {restore && (
+        <Modal
+          title="백업을 복원하시겠습니까?"
+          onClose={() => setRestore(null)}
+        >
+          <p className="muted">현재 자료를 백업 파일로 바꿉니다.</p>
+          <div className="dialog-actions">
+            <span />
+            <button onClick={() => setRestore(null)}>취소</button>
+            <button
+              className="primary"
+              disabled={fileBusy}
+              onClick={() => {
+                setFileBusy(true);
+                void mutate("backup.restore", { path: restore })
+                  .then(() => {
+                    setRestore(null);
+                    notify("복원됨");
+                  })
+                  .catch(() => {})
+                  .finally(() => setFileBusy(false));
+              }}
+            >
+              복원
+            </button>
+          </div>
+        </Modal>
+      )}
+      {special && (
+        <Modal title="특수 일정 등록" onClose={() => setSpecial(false)}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const f = new FormData(e.currentTarget);
+              void mutate("special.save", {
+                catholic: f.has("catholic"),
+                birthday: f.has("birthday"),
+              })
+                .then(() => setSpecial(false))
+                .catch(() => {});
+            }}
+          >
+            <label className="checkbox-label">
+              <input
+                name="catholic"
+                type="checkbox"
+                defaultChecked={data.preferences.catholic}
+              />
+              가톨릭 일정
+            </label>
+            <label className="checkbox-label">
+              <input
+                name="birthday"
+                type="checkbox"
+                defaultChecked={data.preferences.birthday}
+              />
+              ???
+            </label>
+            <div className="dialog-actions">
+              <span />
+              <button className="primary">저장</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </>
+  );
+}

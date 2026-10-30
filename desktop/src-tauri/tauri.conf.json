@@ -1,0 +1,47 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Calix",
+  "version": "1.4.1",
+  "identifier": "io.github.luttechan.calix",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build",
+    "devUrl": "http://127.0.0.1:5173",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Calix",
+        "width": 1440,
+        "height": 960,
+        "minWidth": 820,
+        "minHeight": 640,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "backgroundColor": "#17141c"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: asset: http://asset.localhost; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["../../asset/icons/calix.ico"],
+    "externalBin": ["binaries/calix-engine"],
+    "resources": { "engine/_internal/": "_internal/" },
+    "publisher": "Lutté Laurent",
+    "shortDescription": "일정 관리",
+    "windows": {
+      "webviewInstallMode": { "type": "downloadBootstrapper" },
+      "nsis": {
+        "languages": ["Korean"],
+        "displayLanguageSelector": false,
+        "installMode": "currentUser"
+      }
+    }
+  }
+}
