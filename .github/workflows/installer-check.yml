@@ -45,9 +45,20 @@ jobs:
           $portableUi = [IO.File]::ReadAllBytes((Join-Path $expected 'Calix.exe'))
           $uiMatches = (Get-FileHash -LiteralPath (Join-Path $target 'calix-desktop.exe')).Hash -eq (Get-FileHash -LiteralPath (Join-Path $expected 'Calix.exe')).Hash
           if (-not $uiMatches) {
-            $differences = for ($i=0; $i -lt [Math]::Min($installedUi.Length,$portableUi.Length); $i++) { if ($installedUi[$i] -ne $portableUi[$i]) { $i } }
-            Write-Output "UI lengths: $($installedUi.Length) / $($portableUi.Length). Changed byte count: $($differences.Count)."
-            foreach ($offset in $differences | Select-Object -First 20) { Write-Output "Byte $offset : $($portableUi[$offset]) -> $($installedUi[$offset])" }
+            # Tauri changes only its bundle marker from UNK to NSS for the NSIS payload.
+            # https://github.com/tauri-apps/tauri/blob/dev/crates/tauri-bundler/src/bundle.rs
+            $marker = '__TAURI_BUNDLE_TYPE_VAR_UNK'
+            $raw = [Text.Encoding]::ASCII.GetString($portableUi)
+            $offset = $raw.IndexOf($marker,[StringComparison]::Ordinal)
+            if ($offset -lt 0 -or $raw.LastIndexOf($marker,[StringComparison]::Ordinal) -ne $offset) { throw 'Expected one bundle marker.' }
+            $normalized = [byte[]]$portableUi.Clone()
+            $replacement = [Text.Encoding]::ASCII.GetBytes('__TAURI_BUNDLE_TYPE_VAR_NSS')
+            [Array]::Copy($replacement,0,$normalized,$offset,$replacement.Length)
+            $expectedHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($normalized))
+            $installedHash = (Get-FileHash -LiteralPath (Join-Path $target 'calix-desktop.exe')).Hash
+            if ($expectedHash -ne $installedHash) { throw 'Unexpected installed UI code difference.' }
+            $uiMatches = $true
+            Write-Output 'Installed UI exactly matches portable UI with the expected Tauri NSIS marker.'
           }
           foreach ($file in Get-ChildItem -LiteralPath $expected -File -Recurse) {
             $relative = [IO.Path]::GetRelativePath($expected,$file.FullName)
