@@ -2,7 +2,7 @@ name: Desktop 1.4 validation
 on:
   workflow_dispatch:
   push:
-    branches: ['codex/calix-140',main]
+    branches: ['codex/calix-140']
     paths: ['desktop/**','learning_calendar/**','tests/test_desktop_engine.py','.github/workflows/desktop.yml']
 permissions:
   contents: read
