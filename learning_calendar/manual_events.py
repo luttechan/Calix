@@ -79,6 +79,7 @@ class ManualEventDialog(QDialog):
         return dict(title=self.title.text().strip(),type_id=self.type.currentData(),course_id=self.course.currentData(),due_at=due,note=self.note.toPlainText(),completed=self.completed_box.isChecked(),key=self.source_event.key if self.source_event else None)
     def _save(self):
         if not self.title.text().strip():self.error.setText('일정명을 입력하세요.');self.title.setFocus();return
+        if not self.no_due.isChecked() and not self.time.time().isValid():self.error.setText('시간을 00:00~23:59로 입력하세요.');self.time.setFocus();return
         if self.type.currentData() is None:self.error.setText('유형을 선택하세요.');return
         self.accept()
 

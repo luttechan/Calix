@@ -78,8 +78,8 @@ class WelcomeHero(QFrame):
         now=datetime.now(KST);days='월화수목금토일'
         self.dateline=QLabel(f'{now.month}월 {now.day}일 {days[now.weekday()]}요일');self.dateline.setObjectName('muted')
         self.greeting=QLabel('오셨군요!');self.greeting.setObjectName('homeGreeting');self.greeting.setTextFormat(Qt.TextFormat.PlainText)
-        self.hint=QLabel('오늘의 일정부터 가볍게 시작해요.');self.hint.setObjectName('muted');self.hint.setWordWrap(True)
-        text.addStretch();text.addWidget(self.dateline);text.addWidget(self.greeting);text.addWidget(self.hint);text.addStretch()
+        self.hint=QLabel('');self.hint.setObjectName('muted');self.hint.hide()
+        text.addStretch();text.addWidget(self.dateline);text.addWidget(self.greeting);text.addStretch()
         outer.addLayout(text,1);self.orbit=AmbientOrbit();outer.addWidget(self.orbit);self.clock=self.orbit.clock
     def resizeEvent(self,event):
         super().resizeEvent(event);self.orbit.setVisible(self.width()>=650)

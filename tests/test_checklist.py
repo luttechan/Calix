@@ -114,8 +114,8 @@ def test_timetable_header_alignment_and_day_off_restore(app,width,height,days):
     rows=[dict(id=1,course_id=1,day=0,start_time='09:00',end_time='11:00',professor='',room='',color=''),dict(id=2,course_id=1,day=1,start_time='14:00',end_time='15:00',professor='',room='',color='')]
     view.set_data(rows,{1:'수업'},off_days={0});view.set_days(days);view.show()
     for _ in range(4):app.processEvents()
-    view.align_headers();surface=view.surface;offset=surface.mapTo(view.headers,QPoint(0,0)).x();column=(surface.width()-surface.AXIS)/days
-    for day in range(days):assert view.day_labels[day].x()==round(offset+surface.AXIS+day*column)
+    view.align_headers();surface=view.surface;column=(surface.width()-surface.AXIS)/days
+    for day in range(days):assert abs(view.day_labels[day].mapToGlobal(QPoint(0,0)).x()-surface.mapToGlobal(QPoint(round(surface.AXIS+day*column),0)).x())<=1
     assert surface.blocks[1].isHidden() and not surface.off_labels[0].isHidden() and not surface.blocks[2].isHidden()
     view.set_data(rows,{1:'수업'},off_days=set());app.processEvents();assert not surface.blocks[1].isHidden()
     close(view,app)

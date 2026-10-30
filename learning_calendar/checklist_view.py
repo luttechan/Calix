@@ -1,6 +1,6 @@
 """A native editable table with persistent sections and colored statuses."""
 import sqlite3
-from PySide6.QtCore import Qt,QAbstractTableModel,QSortFilterProxyModel,QModelIndex,QDateTime,Signal,QTimer,QUrl
+from PySide6.QtCore import Qt,QAbstractTableModel,QSortFilterProxyModel,QModelIndex,QDateTime,Signal,QTimer,QUrl,QEvent,QRect
 from PySide6.QtGui import QColor,QDesktopServices,QKeySequence,QShortcut
 from PySide6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QPushButton,QLabel,QLineEdit,QCheckBox,QTabBar,QTableView,QHeaderView,QAbstractItemView,QStyledItemDelegate,QComboBox,QDateTimeEdit,QInputDialog,QMenu,QDialog,QDialogButtonBox,QFormLayout)
 from .checklist_store import ChecklistStore
@@ -28,6 +28,7 @@ class ChecklistModel(QAbstractTableModel):
     def columnCount(self,parent=QModelIndex()):return 0 if parent.isValid() else len(COLUMNS)
     def headerData(self,section,orientation,role=Qt.ItemDataRole.DisplayRole):
         if role==Qt.ItemDataRole.DisplayRole and orientation==Qt.Orientation.Horizontal:return COLUMNS[section][0]
+        if role==Qt.ItemDataRole.ToolTipRole and orientation==Qt.Orientation.Horizontal:return COLUMNS[section][0]+' / 클릭하여 정렬'
     def data(self,index,role=Qt.ItemDataRole.DisplayRole):
         if not index.isValid() or not 0<=index.row()<len(self.rows):return None
         row=self.rows[index.row()];column=index.column();key=COLUMNS[column][1];value=row.get(key)
@@ -43,7 +44,7 @@ class ChecklistModel(QAbstractTableModel):
                 due=parse_datetime(value);return due.timestamp() if due else None
             return row['status_id'] if column==5 else str(value or '').casefold()
         if role==Qt.ItemDataRole.ToolTipRole:
-            if column==5 and row.get('source_key'):return '내 진행 상태 / 학교 제출·시청 상태는 변경되지 않습니다.'
+            if column==5 and row.get('source_key'):return '내 진행 상태 / 학교 제출 상태와 시청 기록은 별도로 관리합니다.'
             return tooltip_text(self.data(index))
         if role==Qt.ItemDataRole.ForegroundRole:
             if row['status_kind'] in ('done','cancel'):return QColor(colors()['muted'])
@@ -155,7 +156,7 @@ class StatusEditor(QDialog):
 
 class ChecklistView(QWidget):
     def __init__(self,store,parent=None):
-        super().__init__(parent);self.repo=ChecklistStore(store);self.events=[];self.sessions=[];self.courses=[];self.read_only=False;self.show_trash=False;self.undo_rows=[]
+        super().__init__(parent);self.repo=ChecklistStore(store);self.events=[];self.sessions=[];self.courses=[];self.read_only=False;self.show_trash=False;self.undo_rows=[];self.popup=None;self._checkbox_click=False
         layout=QVBoxLayout(self);layout.setContentsMargins(0,0,0,0);layout.setSpacing(12)
         top=QHBoxLayout();self.sections=QTabBar();self.sections.setExpanding(False);self.sections.setDrawBase(False);top.addWidget(self.sections);add=QPushButton('+ 섹션');add.clicked.connect(self.add_section);self.add_section_button=add;top.addWidget(add);top.addStretch();self.section_menu=QPushButton('섹션 편집');self.section_menu.clicked.connect(self.edit_section);top.addWidget(self.section_menu);layout.addLayout(top)
         tools=QHBoxLayout();self.import_assignment=QCheckBox('과제 불러오기');self.import_movie=QCheckBox('영상 불러오기')
@@ -167,43 +168,98 @@ class ChecklistView(QWidget):
         self.table=QTableView();self.table.setObjectName('checklistTable');self.table.setAccessibleName('할 일 체크리스트');self.model=ChecklistModel(self.repo,self);self.proxy=ChecklistFilter(self);self.proxy.setSourceModel(self.model);self.table.setModel(self.proxy)
         self.table.setItemDelegate(ChecklistDelegate(self));self.table.setSortingEnabled(True);self.table.sortByColumn(1,Qt.SortOrder.AscendingOrder)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows);self.table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
-        self.table.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked|QAbstractItemView.EditTrigger.EditKeyPressed);self.table.verticalHeader().hide();self.table.verticalHeader().setDefaultSectionSize(44);self.table.setAlternatingRowColors(False);self.table.setShowGrid(False)
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers);self.table.verticalHeader().hide();self.table.verticalHeader().setDefaultSectionSize(44);self.table.setAlternatingRowColors(False);self.table.setShowGrid(False)
+        self.table.viewport().installEventFilter(self);self.table.clicked.connect(self.open_field);self.table.activated.connect(self.open_field)
+        shortcut=QShortcut(QKeySequence('F2'),self.table,activated=lambda:self.open_field(self.table.currentIndex()));shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         header=self.table.horizontalHeader();header.setSectionsMovable(False);header.setMinimumSectionSize(90)
         for i,width in enumerate((240,152,150,110,110,110,200)):self.table.setColumnWidth(i,width)
-        header.setStretchLastSection(True);layout.addWidget(self.table,1)
+        header.setStretchLastSection(True);header.sectionClicked.connect(lambda *_:self.close_popup());layout.addWidget(self.table,1)
         foot=QHBoxLayout();self.count=QLabel();self.count.setTextFormat(Qt.TextFormat.PlainText);foot.addWidget(self.count);foot.addStretch();self.message=QLabel();self.message.setTextFormat(Qt.TextFormat.PlainText);foot.addWidget(self.message);layout.addLayout(foot)
         self.model.failed.connect(self.message.setText);self.model.changed.connect(self.update_count);self.sections.currentChanged.connect(self.refresh)
         self.search_timer=QTimer(self);self.search_timer.setSingleShot(True);self.search_timer.setInterval(100);self.search_timer.timeout.connect(self.filter_changed);self.search.textChanged.connect(lambda:self.search_timer.start());self.pending.toggled.connect(self.filter_changed)
         self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu);self.table.customContextMenuRequested.connect(self.context_menu)
-        QShortcut(QKeySequence('Delete'),self.table,activated=self.delete_selected);QShortcut(QKeySequence('Ctrl+Z'),self.table,activated=self.undo_delete)
+        for key,action in [('Delete',self.delete_selected),('Ctrl+Z',self.undo_delete)]:
+            shortcut=QShortcut(QKeySequence(key),self.table,activated=action);shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        self.table.viewport().setMouseTracking(True)
         self.reload_sections()
+        from .popup_tools import add_hints
+        add_hints(self);self.search.setToolTip('할 일, 분류, 역할, 교수, 비고 검색');self.table.setToolTip('항목 클릭: 편집 / 열 제목 클릭: 정렬')
+        self.add_button.setToolTip('할 일 추가 (Ctrl+N)');self.trash_button.setToolTip('삭제한 할 일 확인 및 복원')
     def section_id(self):return self.sections.tabData(self.sections.currentIndex()) or 1
     def flush_editor(self):
+        self.close_popup()
         from PySide6.QtWidgets import QApplication
         focus=QApplication.focusWidget()
         if focus and self.table.isAncestorOf(focus):self.table.setFocus(Qt.FocusReason.OtherFocusReason)
+    def close_popup(self,commit=True):
+        popup=self.popup
+        if popup:
+            if commit:popup.close()
+            else:popup.reject()
+    def hideEvent(self,event):self.close_popup();super().hideEvent(event)
+    def eventFilter(self,obj,event):
+        if obj is self.table.viewport() and event.type()==QEvent.Type.MouseButtonPress:
+            index=self.table.indexAt(event.position().toPoint());self._checkbox_click=index.isValid() and index.column()==0 and event.position().x()<self.table.visualRect(index).left()+30
+        elif obj is self.table.viewport() and event.type()==QEvent.Type.MouseMove:
+            self.table.viewport().setCursor(Qt.CursorShape.PointingHandCursor if self.table.indexAt(event.position().toPoint()).isValid() else Qt.CursorShape.ArrowCursor)
+        return super().eventFilter(obj,event)
+    def open_field(self,index):
+        if self._checkbox_click:self._checkbox_click=False;return
+        if self.read_only or not index.isValid():return
+        row=index.data(ROW_ROLE)
+        if not row:return
+        key=row['id'];column=index.column();rect=self.table.visualRect(index);anchor=QRect(self.table.viewport().mapToGlobal(rect.topLeft()),rect.size())
+        self.close_popup();row=next((r for r in self.model.rows if r['id']==key),None)
+        if not row:return
+        choices=[]
+        if column==5:choices=self.repo.statuses()
+        elif column in (2,3,4):
+            key=COLUMNS[column][1];values={str(r.get(key) or '') for r in self.model.rows}
+            if column==2:values.update(c.name for c in self.courses)
+            elif column==3:values.update(('작성','자료 조사','발표','검토'))
+            elif column==4:values.update(s.get('professor','') for s in self.sessions)
+            choices=sorted(filter(None,values),key=str.casefold)
+        from .checklist_popup import FieldPopup
+        popup=FieldPopup(column,dict(row),choices,lambda value:self.save_field(row['id'],column,value),self);self.popup=popup;token=id(popup)
+        popup.failed.connect(self.message.setText)
+        def clear(*args):
+            if self.popup is not None and id(self.popup)==token:self.popup=None
+        popup.finished.connect(clear);popup.destroyed.connect(clear)
+        from .popup_tools import place_popup
+        place_popup(popup,anchor);popup.show()
+    def save_field(self,key,column,value):
+        if self.read_only:return False
+        row=next((i for i,r in enumerate(self.model.rows) if r['id']==key),None)
+        if row is None:return False
+        saved=self.model.setData(self.model.index(row,column),value)
+        if saved:self.message.setText('저장됨')
+        return saved
     def reload_sections(self,selected=None):
         selected=selected or self.section_id();self.sections.blockSignals(True)
         while self.sections.count():self.sections.removeTab(0)
         for row in self.repo.sections():i=self.sections.addTab(row['name']);self.sections.setTabData(i,row['id']);self.sections.setCurrentIndex(i if row['id']==selected else self.sections.currentIndex())
         self.sections.blockSignals(False);self.add_section_button.setEnabled(not self.read_only and self.sections.count()<5);self.refresh()
     def set_data(self,store,events,courses,sessions,read_only=False):
+        self.close_popup(commit=self.repo.store is store)
         if self.repo.store is not store:self.undo_rows=[]
         self.repo=ChecklistStore(store);self.model.repo=self.repo;self.events=list(events);self.courses=list(courses);self.sessions=list(sessions);self.read_only=read_only;self.model.read_only=read_only
         for widget in (self.import_assignment,self.import_movie,self.add_button,self.status_button,self.section_menu):widget.setEnabled(not read_only)
         for box,kind in [(self.import_assignment,'assignment'),(self.import_movie,'movie')]:box.blockSignals(True);box.setChecked(kind in self.repo.included());box.blockSignals(False)
         self.reload_sections()
     def refresh(self,*args):
+        self.close_popup()
         school=self.section_id()==1
         self.import_assignment.setVisible(school);self.import_movie.setVisible(school)
         self.model.load(self.repo.rows(self.section_id(),self.events,self.sessions,self.show_trash),self.events,self.sessions,self.show_trash);self.update_count()
     def update_count(self):
-        self.count.setText(f'{self.proxy.rowCount()}개 / 완료 {sum(r["status_kind"]=="done" for r in self.model.rows)}개')
+        total=self.proxy.rowCount();done=sum(self.model.rows[self.proxy.mapToSource(self.proxy.index(i,0)).row()]['status_kind']=='done' for i in range(total))
+        self.count.setText(f'{total}개 / 완료 {done}개')
     def import_changed(self):
         if self.read_only:return
         try:self.repo.set_included([kind for box,kind in [(self.import_assignment,'assignment'),(self.import_movie,'movie')] if box.isChecked()]);self.refresh()
         except (ValueError,sqlite3.Error):self.message.setText('설정을 저장하지 못했습니다.')
     def filter_changed(self):
+        self.close_popup()
         modern=hasattr(self.proxy,'beginFilterChange') and hasattr(self.proxy,'endFilterChange')
         if modern:self.proxy.beginFilterChange()
         self.proxy.query=self.search.text().strip().casefold();self.proxy.pending_only=self.pending.isChecked()
@@ -219,7 +275,7 @@ class ChecklistView(QWidget):
             except (ValueError,sqlite3.Error) as exc:self.message.setText(str(exc) if isinstance(exc,ValueError) else '저장하지 못했습니다.')
     def edit_section(self):
         if self.read_only:return
-        menu=QMenu(self);rename=menu.addAction('이름 변경');remove=menu.addAction('섹션 삭제');remove.setEnabled(self.section_id()!=1);choice=menu.exec(self.section_menu.mapToGlobal(self.section_menu.rect().bottomLeft()))
+        menu=QMenu(self);rename=menu.addAction('이름 변경');remove=menu.addAction('섹션 삭제');remove.setEnabled(self.section_id()!=1);choice=menu.exec(self.section_menu.mapToGlobal(self.section_menu.rect().bottomLeft()));menu.deleteLater()
         if choice==rename:
             name,ok=QInputDialog.getText(self,'섹션 이름','이름',text=self.sections.tabText(self.sections.currentIndex()))
             if ok:
@@ -235,11 +291,12 @@ class ChecklistView(QWidget):
         dialog.deleteLater()
     def add_task(self):
         if self.read_only:return
+        self.close_popup();self.search.clear();self.pending.setChecked(False);self.filter_changed()
         if self.show_trash:self.trash_button.setChecked(False)
         try:key=self.repo.add(self.section_id());self.refresh()
         except (ValueError,sqlite3.Error):self.message.setText('할 일을 저장하지 못했습니다.');return
         for i,row in enumerate(self.model.rows):
-            if row['id']==key:index=self.proxy.mapFromSource(self.model.index(i,0));self.table.setCurrentIndex(index);self.table.scrollTo(index);self.table.edit(index);break
+            if row['id']==key:index=self.proxy.mapFromSource(self.model.index(i,0));self.table.setCurrentIndex(index);self.table.scrollTo(index);self.open_field(index);break
     def selected_rows(self):return [index.data(ROW_ROLE) for index in self.table.selectionModel().selectedRows()]
     def delete_selected(self):
         if self.read_only:return
@@ -258,6 +315,7 @@ class ChecklistView(QWidget):
         row=index.data(ROW_ROLE);menu=QMenu(self);original=menu.addAction('학교에서 열기');original.setEnabled(bool(row.get('url')))
         date=menu.addAction('기한 없음');date.setEnabled(not self.read_only);remove=menu.addAction('복원' if self.show_trash else '휴지통으로 이동');remove.setEnabled(not self.read_only)
         chosen=menu.exec(self.table.viewport().mapToGlobal(pos))
+        menu.deleteLater()
         if chosen==original:QDesktopServices.openUrl(QUrl(row['url']))
         elif chosen==date:self.model.setData(self.proxy.mapToSource(index.siblingAtColumn(1)),'')
         elif chosen==remove:self.delete_selected()

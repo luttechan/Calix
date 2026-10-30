@@ -1,8 +1,8 @@
 """Cursor-anchored native property editor for synchronized and personal events."""
 import sqlite3
-from PySide6.QtCore import Qt,QTimer,QPoint,Signal
+from PySide6.QtCore import Qt,QTimer,QPoint,Signal,QEvent
 from PySide6.QtGui import QGuiApplication
-from PySide6.QtWidgets import QFrame,QWidget,QVBoxLayout,QHBoxLayout,QLabel,QLineEdit,QPlainTextEdit,QComboBox,QPushButton,QToolButton,QScrollArea
+from PySide6.QtWidgets import QFrame,QWidget,QVBoxLayout,QHBoxLayout,QLabel,QLineEdit,QPlainTextEdit,QComboBox,QPushButton,QToolButton,QScrollArea,QApplication
 from .event_view import EVENT_ROLE
 from .event_choices import EventChoices
 from .design import icon,colors
@@ -24,6 +24,7 @@ class EventPopover(QFrame):
     advanced_requested=Signal(object)
     def __init__(self,day,events,types,save,parent=None,read_only=False):
         super().__init__(parent,Qt.WindowType.Tool|Qt.WindowType.FramelessWindowHint);self.setObjectName('eventPopover');self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose);self.setAttribute(Qt.WidgetAttribute.WA_QuitOnClose,False)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground);self._watching=False
         self.rows=list(events);self.save_callback=save;self.current=None;self.loading=False;self.dirty=False;self.read_only=read_only
         self.timer=QTimer(self);self.timer.setSingleShot(True);self.timer.setInterval(650);self.timer.timeout.connect(self.flush)
         c=colors();self.setStyleSheet(f'QFrame#eventPopover {{background:{c["surface"]};border:1px solid {c["line"]};border-radius:18px;}}')
@@ -55,6 +56,30 @@ class EventPopover(QFrame):
         self.filter_timer=QTimer(self);self.filter_timer.setSingleShot(True);self.filter_timer.setInterval(120);self.filter_timer.timeout.connect(self.filter_choices);self.query.textChanged.connect(self.queue_filter)
         if self.rows:self.list.setCurrentIndex(self.list.model().index(0));self._select(self.list.currentIndex())
         self.resize(510 if len(self.rows)>1 else 430,740 if len(self.rows)>1 else 520)
+        from .popup_tools import add_hints
+        add_hints(self)
+    def showEvent(self,event):
+        super().showEvent(event)
+        if not self._watching:QApplication.instance().installEventFilter(self);self._watching=True
+    def hideEvent(self,event):
+        if self._watching:QApplication.instance().removeEventFilter(self);self._watching=False
+        super().hideEvent(event)
+    def resizeEvent(self,event):
+        super().resizeEvent(event)
+        from .popup_tools import round_window
+        round_window(self,18)
+    def eventFilter(self,obj,event):
+        if not self.isVisible():return False
+        from .popup_tools import belongs_to
+        if event.type()==QEvent.Type.KeyPress and event.key()==Qt.Key.Key_Escape:
+            if belongs_to(obj,self):
+                for combo in self.findChildren(QComboBox):combo.hidePopup()
+                self.close();return True
+        if event.type()==QEvent.Type.ApplicationDeactivate:
+            from .popup_tools import dismiss_on_deactivation
+            dismiss_on_deactivation(self,event)
+        elif event.type()==QEvent.Type.MouseButtonPress and isinstance(obj,QWidget) and not belongs_to(obj,self):self.close()
+        return False
     @staticmethod
     def _type_key(event):return f'type:{event.type_id}' if event.type_id is not None else event.kind
     def request_original(self):

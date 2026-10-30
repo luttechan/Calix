@@ -100,10 +100,12 @@ class ChecklistStore:
         with self.db:self.db.execute('INSERT INTO checklist_tasks(id,section_id,title,category,professor,status_id) VALUES(?,?,?,?,?,1)',(key,section_id,checked_text(title,200,True),'',''))
         return key
     def toggle(self,row,checked):
-        if checked:
-            self.save(row,'status_id',4)
-            with self.db:self.db.execute('UPDATE checklist_tasks SET previous_status=? WHERE id=?',(row['status_id'] if row['status_kind']!='done' else 1,row['id']))
-        else:self.save(row,'status_id',row.get('previous_status') or 1)
+        if checked==(row['status_kind']=='done'):return
+        status=4 if checked else row.get('previous_status') or 1
+        previous=row['status_id'] if checked else row.get('previous_status')
+        with self.db:
+            self.db.execute('INSERT OR IGNORE INTO checklist_tasks(id,section_id,source_key,note) VALUES(?,?,?,?)',(row['id'],row['section_id'],row.get('source_key'),row.get('note','')))
+            self.db.execute('UPDATE checklist_tasks SET status_id=?,previous_status=? WHERE id=?',(status,previous,row['id']))
     def trash(self,rows,trashed=True):
         with self.db:
             for row in rows:

@@ -120,6 +120,8 @@ class MainWindow(QMainWindow):
         self.search_timer=QTimer(self);self.search_timer.setSingleShot(True);self.search_timer.setInterval(140)
         self.search_timer.timeout.connect(self.refresh)
         self._build_ui();self._build_menus();self._reload_type_filter();self._reload_course_filter()
+        from .popup_tools import add_hints
+        add_hints(self)
         if not demo:
             from .cookies import read_cookies,canvas_session_available
             self._session_pending=canvas_session_available(read_cookies(self.session_path))
@@ -171,7 +173,7 @@ class MainWindow(QMainWindow):
         self.refresh()
         self.main_stack.setCurrentIndex(2)
         self.diary_holder.layout().activate()
-        self._ensure_checklist();self.main_stack.setCurrentIndex(3)
+        self._ensure_checklist();self._refresh_checklist();self.main_stack.setCurrentIndex(3)
         self.checklist_holder.layout().activate();self.checklist.ensurePolished();self.checklist.layout().activate()
         self.main_stack.setCurrentIndex(0)
         for view in (self.video_list,self.assignment_list):
@@ -217,9 +219,9 @@ class MainWindow(QMainWindow):
         root=GlassBackdrop();root.setObjectName('root');self.setCentralWidget(root)
         outer=QHBoxLayout(root);outer.setContentsMargins(0,0,0,0);outer.setSpacing(0)
         rail=QFrame();rail.setObjectName('sidebar');rail.setFixedWidth(184)
-        side=QVBoxLayout(rail);side.setContentsMargins(12,23,12,16);side.setSpacing(5)
+        side=QVBoxLayout(rail);side.setContentsMargins(14,24,14,16);side.setSpacing(4)
         brand=QHBoxLayout();mark=QLabel();mark.setPixmap(self.windowIcon().pixmap(30,30));brand.addWidget(mark);brand.addWidget(label('Calix','brand'));brand.addStretch();side.addLayout(brand)
-        side.addWidget(label('나의 일정 공간','eyebrow'));side.addSpacing(22)
+        side.addSpacing(28)
         side.addWidget(label('일정','eyebrow'));side.addSpacing(7)
         self.home_nav=NavigationButton('홈','home',rail);self.home_nav.clicked.connect(self.show_home);side.addWidget(self.home_nav)
         self.nav=[]
@@ -352,6 +354,7 @@ class MainWindow(QMainWindow):
         return view
 
     def select_page(self,index):
+        if not self._dismiss_transients():return
         self.main_stack._settle()
         if index==0:self.calendar
         if self.diary:
@@ -376,6 +379,7 @@ class MainWindow(QMainWindow):
 
     def show_home(self,checked=False,animate=True):
         if not hasattr(self,'main_stack'):return
+        if not self._dismiss_transients():return
         if self.diary:
             if not self.diary.flush():return
             self.diary.lock()
@@ -764,6 +768,7 @@ class MainWindow(QMainWindow):
 
     def manual_sync(self,auto=False,*,dom_snapshot=None):
         if self._busy or self._closing:return
+        if not self._dismiss_transients():self.status.setText('편집 내용을 저장한 뒤 다시 시도하세요.');return
         if not auto:self._movie_reauth_attempted=False
         from .cookies import read_cookies,canvas_session_available
         cookies=read_cookies(self.session_path)
@@ -796,6 +801,7 @@ class MainWindow(QMainWindow):
     @Slot(object)
     def _sync_ok(self,result):
         if self._closing:return
+        self._dismiss_transients()
         self._reauth_attempted=False
         self._set_logged_in(True)
         settings_failed=False
@@ -881,6 +887,7 @@ class MainWindow(QMainWindow):
         return self.checklist
 
     def show_checklist(self):
+        if not self._dismiss_transients():return
         if self.diary:
             if not self.diary.flush():return
             self.diary.lock()
@@ -901,6 +908,7 @@ class MainWindow(QMainWindow):
         return self.diary
 
     def show_diary(self):
+        if not self._dismiss_transients():return
         self._ensure_diary()
         self.diary_nav.setChecked(True);self.heading.setText('일기장');self.add_task_button.hide();self.detail_button.hide();self.main_stack.slide_to(2)
         self._present_page()
@@ -1051,7 +1059,11 @@ class MainWindow(QMainWindow):
         if self._event_popover and not self._event_popover.close():return
         from .event_popover import EventPopover
         self.select_day(day)
-        popup=EventPopover(day,rows,self.store.event_types(),self.save_event_properties,self,read_only=self.demo or self._busy)
+        source_store=self.store
+        def save(event,title,type_id,note):
+            if self.store is not source_store:raise ValueError('계정이 변경됐습니다. 일정을 다시 여세요.')
+            return self.save_event_properties(event,title,type_id,note)
+        popup=EventPopover(day,rows,self.store.event_types(),save,self,read_only=self.demo or self._busy)
         self._event_popover=popup
         popup.original_requested.connect(self.open_original)
         popup.advanced_requested.connect(self._advanced_event)
@@ -1274,6 +1286,22 @@ class MainWindow(QMainWindow):
         super().moveEvent(event)
         root=self.centralWidget()
         if root and hasattr(root,'repair_after_move'):root.repair_after_move()
+
+    def _dismiss_transients(self):
+        popup=getattr(self,'_event_popover',None)
+        if popup:
+            if not popup.close():return False
+            if self._event_popover is popup:self._event_popover=None
+        if getattr(self,'checklist',None):self.checklist.close_popup()
+        from .controls import DateInput
+        for field in self.findChildren(DateInput):
+            if field.popup:field.popup.close()
+        return True
+
+    def changeEvent(self,event):
+        super().changeEvent(event)
+        from PySide6.QtCore import QEvent
+        if event.type()==QEvent.Type.WindowStateChange and self.isMinimized():self._dismiss_transients()
 
     def closeEvent(self,event):
         if self._closed:event.accept();return

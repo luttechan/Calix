@@ -30,7 +30,7 @@ class SchedulePreview(QFrame):
             box=QHBoxLayout(row);box.setContentsMargins(10,0,10,0);box.setSpacing(8)
             first=QWidget();type_box=QHBoxLayout(first);type_box.setContentsMargins(0,0,0,0);type_box.setSpacing(3)
             check=QCheckBox();check.setAccessibleName('일정 완료');check.setFixedWidth(20);type_box.addWidget(check)
-            type_label=self.text_label('');type_box.addWidget(type_label,1);box.addWidget(first,2);fields=[type_label]
+            type_label=self.text_label('');type_label.setSizePolicy(QSizePolicy.Policy.Maximum,QSizePolicy.Policy.Fixed);type_label.setMaximumWidth(104);type_label.setFixedHeight(24);type_box.addWidget(type_label,0,Qt.AlignmentFlag.AlignVCenter);type_box.addStretch();box.addWidget(first,2);fields=[type_label]
             for stretch in (2,4,2,2):
                 label=self.text_label('');box.addWidget(label,stretch);fields.append(label)
             row.clicked.connect(lambda checked=False,n=index:self.open_row(n));check.clicked.connect(lambda checked,n=index:self.complete_row(n,checked))
@@ -50,7 +50,7 @@ class SchedulePreview(QFrame):
             status_style='color:#D94B61;' if deadline_display(event,self.event_model.now)[1]=='red' else ''
             if fields[4].styleSheet()!=status_style:fields[4].setStyleSheet(status_style)
             palette=category_colors();kind='assignment' if event.kind=='assignment' else 'movie';tokens=type_tokens(event.type_color) if event.type_id is not None else {key:palette[kind+'_'+key] for key in ('ink','bg','line')}
-            style=f'color:{tokens["ink"]};background:{tokens["bg"]};border:1px solid {tokens["line"]};border-radius:5px;padding:3px;font-size:12px;'
+            style=f'color:{tokens["ink"]};background:{tokens["bg"]};border:1px solid {tokens["line"]};border-radius:5px;padding:2px 7px;font-size:12px;'
             if fields[0].styleSheet()!=style:fields[0].setStyleSheet(style)
             row.setAccessibleName(' / '.join(values));check.blockSignals(True);check.setChecked(event.completed);check.setVisible(event.manual);check.blockSignals(False)
         self.empty_label.setVisible(not events)

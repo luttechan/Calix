@@ -3,11 +3,11 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor,QIcon,QPainter,QPalette,QPen,QPixmap
 from PySide6.QtWidgets import QApplication
 
-VERSION='1.2.0'
+VERSION='1.2.0-r1'
 THEME_NAMES={'pink':'핑크','sky':'스카이블루','mint':'민트','purple':'퍼플','dark':'다크'}
 THEMES={
  'pink':dict(bg='#FFF6FA',side='#FFFDFE',surface='#FFFFFF',soft='#FCE7F0',hover='#FFF0F6',ink='#342431',muted='#836875',line='#EDDCE5',accent='#B13970',onaccent='#FFFFFF',hero='#F8D7E7',hero2='#FFEDF5'),
- 'sky':dict(bg='#F6F8FC',side='#FBFCFE',surface='#FFFFFF',soft='#EAEFFC',hover='#F0F3FC',ink='#26324B',muted='#70809B',line='#E2E7F0',accent='#5E70C8',onaccent='#FFFFFF',hero='#E7ECFA',hero2='#F1F5FD'),
+ 'sky':dict(bg='#F7F8FA',side='#FCFCFD',surface='#FFFFFF',soft='#EEF0FB',hover='#F1F3FA',ink='#20242C',muted='#6D7480',line='#E6E8EE',accent='#586BD6',onaccent='#FFFFFF',hero='#E8EBF8',hero2='#F2F4FA'),
  'mint':dict(bg='#F3FAF7',side='#FEFFFE',surface='#FFFFFF',soft='#DFF2E9',hover='#EAF7F0',ink='#233D34',muted='#637E73',line='#D8E9E0',accent='#217A5B',onaccent='#FFFFFF',hero='#CEECDF',hero2='#EDF9F3'),
  'purple':dict(bg='#F7F4FF',side='#FEFDFF',surface='#FFFFFF',soft='#ECE3FC',hover='#F1EBFE',ink='#352B4D',muted='#7C7091',line='#E4DDF1',accent='#7651AE',onaccent='#FFFFFF',hero='#E3D7F8',hero2='#F5EEFF'),
  'dark':dict(bg='#11151D',side='#151A23',surface='#1C232F',soft='#2B384C',hover='#253145',ink='#EBF0F9',muted='#9EACC2',line='#313D50',accent='#AECDF6',onaccent='#18273C',hero='#263F60',hero2='#1B293B'),
@@ -47,11 +47,15 @@ def glass_enabled():
 
 def stylesheet(key=DEFAULT_THEME):
     c=theme_tokens(key);c.update(category_colors(key))
-    app=QApplication.instance();c['font_family']=(app.property('bufsFontFamily') if app else None) or 'Pretendard Variable';c['feast_ink']='#C3A6EC' if QColor(c['bg']).lightness()<128 else '#765197'
+    app=QApplication.instance();c['font_family']=(app.property('bufsFontFamily') if app else None) or 'Pretendard Variable';c['feast_ink']='#C3A6EC' if QColor(c['bg']).lightness()<128 else '#765197';c['danger_ink']='#F2A6B8' if QColor(c['bg']).lightness()<128 else '#A93B60'
     base='''
 QWidget {{ font-family:"{font_family}"; color:{ink}; font-size:14px; }}
 QTableView#checklistTable {{ background:{surface};alternate-background-color:{surface};border:1px solid {line};border-radius:12px;selection-background-color:{soft};selection-color:{ink}; }}
 QTableView#checklistTable::item {{ padding:7px 9px;border-bottom:1px solid {line}; }}
+QTableView#checklistTable::item:focus {{border:1px solid {accent};}}
+QFrame#timeInput {{background:{surface};border:1px solid {line};border-radius:10px;}}
+QFrame#timeInput[invalid="true"] {{border:1px solid #D94B61;}}
+QFrame#timeInput:focus {{border:1px solid {accent};}}
 QTabBar::tab {{ padding:9px 17px;border:0;border-bottom:2px solid transparent;color:{muted};background:transparent; }}
 QTabBar::tab:selected {{ color:{accent};border-bottom:2px solid {accent};font-weight:600; }}
 QMainWindow, QDialog, QWidget#root, QWidget#page {{ background:{bg}; }}
@@ -76,7 +80,7 @@ QLabel#summaryNumber {{ font-size:36px; font-weight:700; }}
 QLabel#summaryArrow {{ color:{accent}; font-size:19px; }}
 QPushButton#homeSummary {{ background:{surface}; border:1px solid {line}; border-radius:20px; padding:0; min-height:104px; }}
 QPushButton#homeSummary:hover, QPushButton#homeSummary:focus {{ background:{hover}; border-color:{accent}; }}
-QPushButton, QToolButton {{ background:{surface}; color:{ink}; border:1px solid {line}; border-radius:10px; padding:8px 13px; min-height:20px; }}
+QPushButton, QToolButton {{ background:{surface}; color:{ink}; border:1px solid {line}; border-radius:8px; padding:8px 13px; min-height:20px; }}
 QPushButton:hover, QToolButton:hover {{ background:{hover}; border-color:{accent}; }}
 QPushButton:pressed {{ background:{soft}; }}
 QPushButton:disabled {{ color:{muted}; background:{bg}; border-color:{line}; }}
@@ -86,8 +90,8 @@ QPushButton#quiet:hover {{ background:{soft}; }}
 QPushButton#nav {{ background:transparent; border:0; padding:8px 12px; text-align:left; color:{muted}; font-weight:400; }}
 QPushButton#nav:hover {{ background:{hover}; color:{ink}; }}
 QPushButton#nav:checked {{ background:{soft}; color:{accent}; font-weight:400; }}
-QPushButton#ghost {{ background:transparent; }}
-QPushButton#danger {{ background:transparent; border-color:#BC8193; color:#A93B60; }}
+QPushButton#ghost {{ background:transparent;border-color:transparent; }}
+QPushButton#danger {{ background:transparent; border-color:#BC8193; color:{danger_ink}; }}
 QLineEdit, QComboBox, QPlainTextEdit, QTextEdit, QTimeEdit, QSpinBox {{ background:{surface}; border:1px solid {line}; border-radius:9px; padding:7px 10px; min-height:22px; selection-background-color:{soft}; selection-color:{ink}; }}
 QLineEdit:focus, QComboBox:focus, QPlainTextEdit:focus {{ border-color:{accent}; }}
 QComboBox::drop-down {{ border:0; width:24px; }}
@@ -96,7 +100,12 @@ QListView, QTableWidget {{ background:{surface}; border:1px solid {line}; border
 QListView::item {{ border:1px solid {line}; border-radius:9px; background:{surface}; margin:4px 7px; padding:8px 11px; }}
 QListView::item:hover {{ background:{hover}; }}
 QListView::item:selected {{ background:{soft}; color:{ink}; border-color:{accent}; }}
-QCalendarWidget {{ background:{surface}; border:1px solid {line}; border-radius:14px; }}
+QCalendarWidget {{ background:{surface}; border:0; border-radius:10px; }}
+QCalendarWidget QWidget#qt_calendar_navigationbar {{background:{surface};}}
+QCalendarWidget QToolButton {{background:transparent;border:0;border-radius:6px;padding:4px 8px;min-height:24px;color:{ink};}}
+QCalendarWidget QToolButton:hover {{background:{hover};}}
+QCalendarWidget QToolButton::menu-indicator {{image:none;}}
+QCalendarWidget QSpinBox {{background:{surface};border:1px solid {line};padding:2px 6px;}}
 QCalendarWidget QTableView {{ background:{surface}; color:{ink}; border:0; outline:0; selection-background-color:{soft}; selection-color:{ink}; }}
 QLabel#assignmentBadge {{ color:{assignment_ink}; background:{assignment_bg}; border:1px solid {assignment_line}; border-radius:5px; padding:1px 6px; font-size:12px; font-weight:600; }}
 QLabel#movieBadge {{ color:{movie_ink}; background:{movie_bg}; border:1px solid {movie_line}; border-radius:5px; padding:1px 6px; font-size:12px; font-weight:600; }}
@@ -129,8 +138,8 @@ QLabel#heading {{ font-size:27px; font-weight:700; }}
 QLabel#caption {{ font-size:12px; color:{muted}; }}
 QLabel#fieldLabel {{ font-size:13px; font-weight:600; color:{ink}; }}
 QLabel#formError {{ font-size:12px; color:#B34C67; }}
-QPushButton:focus, QToolButton:focus, QLineEdit:focus, QComboBox:focus, QTimeEdit:focus {{ border:2px solid {accent}; }}
-QPushButton#nav {{ min-height:28px; border-radius:11px; padding:7px 12px; }}
+QPushButton:focus, QToolButton:focus, QLineEdit:focus, QComboBox:focus, QTimeEdit:focus {{ border:1px solid {accent}; }}
+QPushButton#nav {{ min-height:28px; border-radius:8px; padding:7px 12px; }}
 QPushButton#nav:checked {{ background:{soft};color:{accent}; }}
 QPushButton#metricCard {{ min-height:80px;background:{surface};border:1px solid {line};border-radius:14px;padding:0; }}
 QPushButton#metricCard:hover,QPushButton#metricCard[active="true"] {{ border-color:{accent};background:{hover}; }}
@@ -165,7 +174,7 @@ QListView::item:hover,QListView::item:selected {{ border:0;background:transparen
 QLabel#brand {{font-size:25px;}}
 QLabel#heading {{font-size:24px;}}
 QLabel#metricValue {{font-size:14px;font-weight:700;color:{ink};}}
-QPushButton#metricChip {{min-height:24px;border-radius:13px;padding:0;background:{surface};border:1px solid {line};}}
+QPushButton#metricChip {{min-height:24px;border-radius:8px;padding:0;background:{surface};border:1px solid {line};}}
 QPushButton#metricChip[active="true"] {{background:{soft};border-color:{accent};}}
 QLabel#dateNumber {{font-size:15px;font-weight:600;background:transparent;color:{ink};}}
 QLabel#dateNumber[dayState="outside"] {{color:{muted};font-weight:400;}}
