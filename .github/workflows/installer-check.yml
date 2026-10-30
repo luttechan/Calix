@@ -41,7 +41,14 @@ jobs:
           foreach ($name in @('calix-engine.exe','_internal')) {
             if (-not (Test-Path -LiteralPath (Join-Path $target $name))) { throw "Missing installed $name" }
           }
-          if ((Get-FileHash -LiteralPath (Join-Path $target 'calix-desktop.exe')).Hash -ne (Get-FileHash -LiteralPath (Join-Path $expected 'Calix.exe')).Hash) { throw 'Installed UI differs from portable build.' }
+          $installedUi = [IO.File]::ReadAllBytes((Join-Path $target 'calix-desktop.exe'))
+          $portableUi = [IO.File]::ReadAllBytes((Join-Path $expected 'Calix.exe'))
+          $uiMatches = (Get-FileHash -LiteralPath (Join-Path $target 'calix-desktop.exe')).Hash -eq (Get-FileHash -LiteralPath (Join-Path $expected 'Calix.exe')).Hash
+          if (-not $uiMatches) {
+            $differences = for ($i=0; $i -lt [Math]::Min($installedUi.Length,$portableUi.Length); $i++) { if ($installedUi[$i] -ne $portableUi[$i]) { $i } }
+            Write-Output "UI lengths: $($installedUi.Length) / $($portableUi.Length). Changed byte count: $($differences.Count)."
+            foreach ($offset in $differences | Select-Object -First 20) { Write-Output "Byte $offset : $($portableUi[$offset]) -> $($installedUi[$offset])" }
+          }
           foreach ($file in Get-ChildItem -LiteralPath $expected -File -Recurse) {
             $relative = [IO.Path]::GetRelativePath($expected,$file.FullName)
             if ($relative -eq 'calix-engine.exe' -or $relative.StartsWith('_internal\')) {
@@ -67,3 +74,13 @@ jobs:
           $reply = $stdout.Result -split "`n" | Where-Object { $_.Trim() } | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object id -eq 1
           if ($reply.result.version -ne '1.4.0') { throw 'Installed engine bootstrap failed.' }
           Write-Output 'Installer, embedded runtime hashes and installed engine startup verified.'
+          if (-not $uiMatches) { throw 'Inspect UI binary difference before publication.' }
+      - name: Retain executable comparison
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Calix-1.4-Setup-comparison
+          path: |
+            ${{ runner.temp }}/calix140-installed/calix-desktop.exe
+            ${{ runner.temp }}/calix140-portable/Calix 1.4.0/Calix.exe
+          retention-days: 2
