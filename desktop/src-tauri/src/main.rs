@@ -2,12 +2,15 @@
 use tauri::{Emitter, Manager, WindowEvent};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState};
+mod auth;
 
 #[tauri::command]
-fn quit_app(app: tauri::AppHandle) { app.exit(0); }
+fn quit_app(app: tauri::AppHandle, webview: tauri::Webview) -> Result<(), String> { auth::trusted(&webview, &["main"])?;app.exit(0);Ok(()) }
 #[tauri::command]
-fn app_ready(app: tauri::AppHandle) {
+fn app_ready(app: tauri::AppHandle, webview: tauri::Webview) -> Result<(), String> {
+    auth::trusted(&webview, &["main"])?;
     if let Some(window) = app.get_webview_window("main") { let _ = window.set_always_on_top(false); }
+    Ok(())
 }
 
 fn show(app: &tauri::AppHandle) {
@@ -18,9 +21,11 @@ fn show(app: &tauri::AppHandle) {
 
 fn main() {
     tauri::Builder::default()
+        .manage(auth::AuthGate(std::sync::Mutex::new(())))
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show(app)))
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![quit_app, app_ready])
+        .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(tauri::generate_handler![quit_app, app_ready, auth::auth_open, auth::auth_mount, auth::auth_complete, auth::auth_status, auth::auth_reload, auth::auth_logout, auth::backup_file])
         .setup(|app| {
             let open = MenuItem::with_id(app, "open", "열기", true, None::<&str>)?;
             let exit = MenuItem::with_id(app, "exit", "종료", true, None::<&str>)?;
@@ -41,7 +46,8 @@ fn main() {
         })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close(); let _ = window.emit("app:hidden", ()); let _ = window.hide();
+                if window.label() == "main" { api.prevent_close();let _ = window.emit("app:hidden", ());let _ = window.hide(); }
+                else if window.label() == "login" { let _ = window.app_handle().emit_to("main", "auth:dismissed", ()); }
             }
         })
         .run(tauri::generate_context!())

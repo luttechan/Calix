@@ -1,9 +1,84 @@
-export type EventItem={key:string;course_id:number;course_name:string;kind:string;title:string;due_at:string|null;completed:boolean;url:string;note:string;type_id:number|null;type_name:string;type_color:string;manual:boolean;completion_verified:boolean;week:string;source_title:string};
-export type Course={id:number;name:string};
-export type Session={id:number;course_id:number;day:number;start_time:string;end_time:string;professor:string;room:string;color:string};
-export type Task={id:string;section_id:number;source_key:string|null;title:string;due_at:string|null;category:string;role:string;professor:string;status_id:number;status_name:string;status_color:string;status_kind:string;note:string};
-export type Summary={id:string;date:string;title:string};
-export type Journal={date:string;title:string;body:string;html:string};
-export type Preferences={theme:'pink'|'sky'|'mint'|'purple'|'dark';glass:boolean;font_mode:string;catholic:boolean;birthday:boolean};
-export type Snapshot={version:string;events:EventItem[];courses:Course[];types:{id:number;name:string;color:string}[];sessions:Session[];sections:{id:number;name:string}[];statuses:{id:number;name:string;color:string;kind:string}[];tasks:Task[];offDays:number[];preferences:Preferences;lastSync:string;syncSummary:string;holidays:Record<string,string>;specialDates:Record<string,string>;journals:Summary[]};
-export type Page='home'|'calendar'|'assignments'|'videos'|'timetable'|'checklist'|'diary'|'settings';
+export type EventItem = {
+  key: string;
+  course_id: number;
+  course_name: string;
+  kind: string;
+  title: string;
+  due_at: string | null;
+  completed: boolean;
+  url: string;
+  note: string;
+  type_id: number | null;
+  type_name: string;
+  type_color: string;
+  manual: boolean;
+  completion_verified: boolean;
+  week: string;
+  source_title: string;
+};
+export type Course = { id: number; name: string };
+export type Session = {
+  id: number;
+  course_id: number;
+  day: number;
+  start_time: string;
+  end_time: string;
+  professor: string;
+  room: string;
+  color: string;
+};
+export type Task = {
+  id: string;
+  section_id: number;
+  source_key: string | null;
+  title: string;
+  due_at: string | null;
+  category: string;
+  role: string;
+  professor: string;
+  status_id: number;
+  status_name: string;
+  status_color: string;
+  status_kind: string;
+  note: string;
+};
+export type Summary = { id: string; date: string; title: string };
+export type Journal = {
+  date: string;
+  title: string;
+  body: string;
+  html: string;
+};
+export type Preferences = {
+  theme: "pink" | "sky" | "mint" | "purple" | "dark";
+  glass: boolean;
+  font_mode: string;
+  catholic: boolean;
+  birthday: boolean;
+};
+export type Snapshot = {
+  version: string;
+  events: EventItem[];
+  courses: Course[];
+  types: { id: number; name: string; color: string }[];
+  sessions: Session[];
+  sections: { id: number; name: string }[];
+  statuses: { id: number; name: string; color: string; kind: string }[];
+  tasks: Task[];
+  offDays: number[];
+  preferences: Preferences;
+  lastSync: string;
+  syncSummary: string;
+  holidays: Record<string, string>;
+  specialDates: Record<string, string>;
+  journals: Summary[];
+};
+export type Page =
+  | "home"
+  | "calendar"
+  | "assignments"
+  | "videos"
+  | "timetable"
+  | "checklist"
+  | "diary"
+  | "settings";

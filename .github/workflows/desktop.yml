@@ -1,13 +1,13 @@
-name: Desktop 1.4 validation
+name: Desktop 1.4.1 validation
 on:
   workflow_dispatch:
   push:
-    branches: ['codex/calix-140']
+    branches: ['codex/calix-141']
     paths: ['desktop/**','learning_calendar/**','tests/test_desktop_engine.py','.github/workflows/desktop.yml']
 permissions:
   contents: read
 concurrency:
-  group: calix-140-development
+  group: calix-141-development
   cancel-in-progress: true
 jobs:
   windows:
@@ -60,16 +60,40 @@ jobs:
         run: python desktop/tools/build_engine.py
       - name: Check packaged Python engine
         run: python desktop/tools/check_engine.py desktop/.build/dist/calix-engine/calix-engine.exe
+      - name: Check packaged course browser
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $exe = (Resolve-Path desktop/.build/dist/calix-engine/calix-engine.exe).Path
+          $report = Join-Path $env:RUNNER_TEMP 'calix141-course-browser.json'
+          $process = Start-Process -FilePath $exe -ArgumentList @('--collector-check',$report) -WindowStyle Hidden -PassThru
+          if (-not $process.WaitForExit(30000)) { $process.Kill(); throw 'Course browser timed out.' }
+          if ($process.ExitCode -ne 0) { throw 'Course browser failed to initialize.' }
+          $result = Get-Content $report -Raw | ConvertFrom-Json
+          if (-not $result.passed) { throw 'Course page did not render.' }
+          Get-Content $report -Raw
+      - name: Restore Rust build cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: desktop/src-tauri/target
+          key: ${{ runner.os }}-calix141-rust-${{ hashFiles('desktop/src-tauri/Cargo.toml') }}-${{ github.sha }}
+          restore-keys: ${{ runner.os }}-calix141-rust-${{ hashFiles('desktop/src-tauri/Cargo.toml') }}-
       - name: Build Tauri application and Setup
         working-directory: desktop
         run: |
           pnpm tauri build
           if ($LASTEXITCODE -ne 0) { throw 'Desktop build failed.' }
+      - name: Retain Rust build cache
+        if: always()
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: desktop/src-tauri/target
+          key: ${{ runner.os }}-calix141-rust-${{ hashFiles('desktop/src-tauri/Cargo.toml') }}-${{ github.sha }}
       - name: Package development build
         run: python desktop/tools/package_desktop.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: Calix-1.4.0-development-Windows-x64
+          name: Calix-1.4.1-development-Windows-x64
           path: desktop/.build/packages/*
           compression-level: 0
           retention-days: 7
