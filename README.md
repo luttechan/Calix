@@ -1,4 +1,4 @@
-# Calix
+# Calix v.1.4.1
 
 부산외대 Canvas 일정 관리 프로그램.
 
@@ -8,24 +8,22 @@ Windows 10 / 11, 64비트. 설치 파일 또는 ZIP 제공.
 
 업데이트: 설정 → 앱 관리 → 업데이트 확인.
 
-## 소스 실행
+## 1.1 → 1.4.1
 
-Python 3.14.10, Node 24, pnpm 11, Rust 및 Visual Studio C++ 빌드 도구.
+- 홈에 오늘 할 일과 남은 일정을 표시합니다.
+- 과목별 주차학습, 과제와 영상을 수집하고 완료 상태를 반영합니다.
+- 달력에서 상세 확인, 일정 추가, 유형과 색상 변경을 지원합니다. 공휴일과 특수 일정도 설정할 수 있습니다.
+- 체크리스트에 일정을 개별 또는 일괄로 가져옵니다. 분류, 상태, 내 역할, 담당 교수와 비고를 편집할 수 있습니다.
+- 시간표에 교수, 강의실, 남은 과제와 영상을 표시합니다. 수업 색상과 공강을 설정하고 창 크기에 맞춰 간격을 조절합니다.
+- 일반 일기와 암호화된 비밀 일기를 제공합니다. 글자 굵기, 기울임과 색상을 지원합니다.
+- 다섯 가지 테마, 글래스 효과, 새 글꼴과 필기체 시작 화면을 적용했습니다.
+- 로그인 유지, 업데이트 확인과 설치, 백업과 복원을 지원합니다. 창을 닫으면 트레이로 이동합니다.
+- 로그인 창과 업데이트 화면을 새 UI에 통합했습니다. 메뉴 지연, 쿠키 전달과 종료 충돌을 개선했습니다.
 
-```text
-python -m pip install --only-binary=:all: -r requirements-build.txt brotli==1.2.1
-python tools/prepare_assets.py
-python desktop/tools/prepare_web_assets.py
-python desktop/tools/build_engine.py
-cd desktop
-pnpm install --frozen-lockfile
-pnpm tauri dev
-```
+## 소스
 
-빌드: `build_desktop.bat`.
-
-화면 편집: `desktop/src`. 창과 로그인: `desktop/src-tauri/src`.
-데이터 연결: `desktop/engine_*.py`. [개발 경로와 실행](desktop/README.md).
+저장소에는 소스만 포함합니다. 실행 파일은 릴리즈에서 받으십시오.
+[개발 경로와 실행](desktop/README.md).
 
 개발: Lutté Laurent
 

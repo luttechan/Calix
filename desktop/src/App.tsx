@@ -249,10 +249,13 @@ export function App() {
       notify("로그인은 Windows 앱에서 진행합니다.");
       return;
     }
-    await Promise.all([rpc("session.prepare"), invoke("auth_open", {
-      theme: document.documentElement.dataset.theme || "pink",
-      font: document.documentElement.dataset.font || "pretendard",
-    })]);
+    await Promise.all([
+      rpc("session.prepare"),
+      invoke("auth_open", {
+        theme: document.documentElement.dataset.theme || "pink",
+        font: document.documentElement.dataset.font || "pretendard",
+      }),
+    ]);
   };
   const refresh = useCallback(async () => {
     const snapshot = await rpc<Snapshot>("bootstrap");

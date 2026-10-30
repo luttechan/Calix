@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: ['codex/calix-141']
-    paths: ['desktop/**','learning_calendar/**','tests/test_desktop_engine.py','.github/workflows/desktop.yml']
+    paths: ['desktop/**','learning_calendar/**','tests/test_desktop_engine.py','tests/test_collector_adapter.py','.github/workflows/desktop.yml']
 permissions:
   contents: read
 concurrency:
@@ -34,7 +34,7 @@ jobs:
           python tools/prepare_assets.py
           if ($LASTEXITCODE -ne 0) { throw 'Asset build failed.' }
       - name: Check data API
-        run: python -m pytest -q tests/test_desktop_engine.py -p no:cacheprovider
+        run: python -m pytest -q tests/test_desktop_engine.py tests/test_collector_adapter.py -p no:cacheprovider
       - name: Prepare Node and Rust
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:

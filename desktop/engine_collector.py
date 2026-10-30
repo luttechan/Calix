@@ -23,6 +23,7 @@ def run(folder):
     from PySide6.QtWidgets import QApplication
     from PySide6.QtWebEngineCore import (
         QWebEngineProfile,
+        QWebEnginePage,
         QWebEngineUrlRequestInterceptor,
     )
     from PySide6.QtNetwork import QNetworkCookie
@@ -57,6 +58,8 @@ def run(folder):
     )
     profile.setHttpCacheType(QWebEngineProfile.HttpCacheType.MemoryHttpCache)
     profile.setHttpCacheMaximumSize(16 * 1024 * 1024)
+    bootstrap_page = QWebEnginePage(profile)
+    bootstrap_page.setHtml("<!doctype html><title>Calix</title>")
     store = profile.cookieStore()
     captured = {}
 
@@ -209,6 +212,8 @@ def run(folder):
         collector.cancel()
     if validator and validator.isRunning():
         validator.wait(30000)
+    bootstrap_page.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
     profile.deleteLater()
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
     app.processEvents()
