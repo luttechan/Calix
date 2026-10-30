@@ -16,11 +16,15 @@ def run(folder):
         Qt,
         QTemporaryDir,
         QDir,
+        Signal,
     )
 
     QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
     from PySide6.QtWidgets import QApplication
-    from PySide6.QtWebEngineCore import QWebEngineProfile
+    from PySide6.QtWebEngineCore import (
+        QWebEngineProfile,
+        QWebEngineUrlRequestInterceptor,
+    )
     from PySide6.QtNetwork import QNetworkCookie
     from learning_calendar.cookies import (
         read_cookies,
@@ -55,6 +59,39 @@ def run(folder):
     profile.setHttpCacheMaximumSize(16 * 1024 * 1024)
     store = profile.cookieStore()
     captured = {}
+
+    class TokenInterceptor(QWebEngineUrlRequestInterceptor):
+        captured_token = Signal(str)
+
+        def interceptRequest(self, info):
+            url = info.requestUrl()
+            if (
+                url.scheme() != "https"
+                or url.host() != "canvas.bufs.ac.kr"
+                or not url.path().startswith("/learningx/")
+            ):
+                return
+            for key, value in info.httpHeaders().items():
+                if bytes(key).lower() == b"authorization":
+                    header = bytes(value).decode("latin1")
+                    if header.lower().startswith("bearer "):
+                        self.captured_token.emit(header[7:].strip())
+
+    def token_captured(token):
+        if not token or len(token) > 65536:
+            return
+        cookie = QNetworkCookie(b"xn_api_token", token.encode("utf-8"))
+        cookie.setDomain("canvas.bufs.ac.kr")
+        cookie.setPath("/")
+        cookie.setSecure(True)
+        cookie.setHttpOnly(True)
+        record = cookie_record(cookie)
+        if record:
+            captured[(record["domain"], record["name"], record["path"])] = record
+
+    interceptor = TokenInterceptor(profile)
+    interceptor.captured_token.connect(token_captured)
+    profile.setUrlRequestInterceptor(interceptor)
     required = {
         r["name"]
         for r in rows

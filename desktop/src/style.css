@@ -2192,7 +2192,7 @@ label textarea {
 }
 .timetable-panel .session-card {
   padding: clamp(4px, calc(var(--hour-unit) * 0.15), 10px);
-  font-size: clamp(9px, calc(var(--hour-unit) * 0.2), 13px);
+  font-size: clamp(11px, calc(var(--hour-unit) * 0.2), 13px);
   line-height: 1.25;
 }
 .timetable-panel .session-card strong {
@@ -2203,7 +2203,7 @@ label textarea {
   text-overflow: ellipsis;
 }
 .timetable-panel .session-card small {
-  font-size: clamp(8px, calc(var(--hour-unit) * 0.17), 11px);
+  font-size: clamp(10px, calc(var(--hour-unit) * 0.17), 11px);
   margin-top: clamp(1px, calc(var(--hour-unit) * 0.065), 4px);
   line-height: 1.2;
   white-space: nowrap;
@@ -2216,7 +2216,7 @@ label textarea {
   flex-wrap: nowrap;
 }
 .timetable-panel .session-work > span {
-  font-size: clamp(8px, calc(var(--hour-unit) * 0.14), 9px);
+  font-size: 9px;
   line-height: 1.2;
   padding: 0 3px;
 }
@@ -2227,7 +2227,7 @@ label textarea {
   display: none;
 }
 .timetable-panel .time-axis > span {
-  font-size: clamp(8px, calc(var(--hour-unit) * 0.16), 10px);
+  font-size: clamp(9px, calc(var(--hour-unit) * 0.16), 10px);
   line-height: 1;
 }
 .timetable-panel .week-column.off-column {

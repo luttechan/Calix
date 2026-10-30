@@ -24,6 +24,9 @@ pnpm tauri dev
 
 빌드: `build_desktop.bat`.
 
+화면 편집: `desktop/src`. 창과 로그인: `desktop/src-tauri/src`.
+데이터 연결: `desktop/engine_*.py`. [개발 경로와 실행](desktop/README.md).
+
 개발: Lutté Laurent
 
 글꼴: Pretendard 기반 Calix Sans. © 2021 Kil Hyung-jin.

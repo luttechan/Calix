@@ -137,9 +137,12 @@ export function AuthWindow() {
             onClick={() => {
               setLoaded(false);
               setError("");
-              void invoke("auth_reload").catch((error) =>
-                setError(String(error)),
-              );
+              const bounds = host.current?.getBoundingClientRect();
+              if (!bounds) return;
+              const { x, y, width, height } = bounds;
+              void invoke("auth_mount", { bounds: { x, y, width, height } })
+                .then(() => invoke("auth_reload"))
+                .catch((error) => setError(String(error)));
             }}
           >
             <RefreshCw size={16} />

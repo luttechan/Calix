@@ -3,13 +3,10 @@ setlocal EnableExtensions DisableDelayedExpansion
 chcp 65001 >nul
 cd /d "%~dp0"
 if errorlevel 1 goto FAILED
-call "%~dp0_find_python.bat"
+where pnpm >nul 2>nul
 if errorlevel 1 goto FAILED
-%CALIX_PYTHON% "%~dp0tools\check_runtime_security.py"
-if errorlevel 1 goto FAILED
-%CALIX_PYTHON% -B "%~dp0tools\prepare_assets.py"
-if errorlevel 1 goto FAILED
-%CALIX_PYTHON% -B "%~dp0main.py"
+cd /d "%~dp0desktop"
+call pnpm tauri dev
 exit /b %ERRORLEVEL%
 :FAILED
 echo [ERROR] See README.md for source setup.

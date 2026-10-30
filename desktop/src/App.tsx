@@ -249,11 +249,10 @@ export function App() {
       notify("로그인은 Windows 앱에서 진행합니다.");
       return;
     }
-    await rpc("session.prepare");
-    await invoke("auth_open", {
+    await Promise.all([rpc("session.prepare"), invoke("auth_open", {
       theme: document.documentElement.dataset.theme || "pink",
       font: document.documentElement.dataset.font || "pretendard",
-    });
+    })]);
   };
   const refresh = useCallback(async () => {
     const snapshot = await rpc<Snapshot>("bootstrap");
@@ -367,7 +366,10 @@ export function App() {
             "session.import",
             message.payload as Record<string, unknown>,
           ).catch((error) =>
-            invoke("auth_status", { success: false, message: error.message }),
+            invoke("auth_status", {
+              success: false,
+              message: error.message,
+            }).catch(() => {}),
           );
         },
       ],

@@ -666,7 +666,7 @@ export function TimetablePage() {
                   .map((s) => (
                     <button
                       key={s.id}
-                      className={`session-card ${((minute(s.end_time) - minute(s.start_time)) / 60) * unit < 80 ? "compact" : ""} ${((minute(s.end_time) - minute(s.start_time)) / 60) * unit < 48 ? "short" : ""}`}
+                      className={`session-card ${((minute(s.end_time) - minute(s.start_time)) / 60) * unit < 90 ? "compact" : ""} ${((minute(s.end_time) - minute(s.start_time)) / 60) * unit < 68 ? "short" : ""}`}
                       title={`${data.courses.find((c) => c.id === s.course_id)?.name || "수업"} / ${s.professor} / ${s.room} / 과제 ${workloads(s.course_id, "assignment")} / 영상 ${workloads(s.course_id, "movie")}`}
                       style={{
                         top: ((minute(s.start_time) - start) / 60) * unit,
@@ -688,11 +688,10 @@ export function TimetablePage() {
                       <small>
                         {s.start_time} – {s.end_time}
                       </small>
-                      {s.professor && (
-                        <small className="session-detail">{s.professor}</small>
-                      )}
-                      {s.room && (
-                        <small className="session-detail">{s.room}</small>
+                      {(s.professor || s.room) && (
+                        <small className="session-detail">
+                          {[s.professor, s.room].filter(Boolean).join(" / ")}
+                        </small>
                       )}
                       <div className="session-work">
                         <span>과제 {workloads(s.course_id, "assignment")}</span>

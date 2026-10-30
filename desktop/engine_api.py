@@ -43,12 +43,17 @@ class EngineAPI:
         path = Path(path).resolve()
         if path.parent != self.folder.resolve() or not path.name.endswith(".db"):
             raise ValueError("계정 저장소를 확인하세요.")
+        candidate = Store(path)
+        try:
+            checklist = ChecklistStore(candidate)
+            checklist.freeze_imports(candidate.events())
+            settings = dict(self.settings, active_db=path.name)
+            write_settings(self.settings_path, settings)
+        except Exception:
+            candidate.close()
+            raise
         self.store.close()
-        self.store = Store(path)
-        self.checklist = ChecklistStore(self.store)
-        self.checklist.freeze_imports(self.store.events())
-        self.settings["active_db"] = path.name
-        write_settings(self.settings_path, self.settings)
+        self.store, self.checklist, self.settings = candidate, checklist, settings
 
     def activate_account(self, owner):
         if (

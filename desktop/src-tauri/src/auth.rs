@@ -25,7 +25,7 @@ pub async fn auth_open(app: AppHandle, webview: Webview, theme: Option<String>, 
     trusted(&webview, &["main"])?;
     let gate = app.state::<AuthGate>();
     let _guard = gate.0.lock().map_err(|_| "로그인 창을 준비하지 못했습니다.")?;
-    if let Some(window) = app.get_webview_window("login") {
+    if let Some(window) = app.get_window("login") {
         window.unminimize().map_err(|_| "로그인 창을 복원하지 못했습니다.")?;
         window.show().map_err(|_| "로그인 창을 표시하지 못했습니다.")?;
         window.set_focus().map_err(|_| "로그인 창을 표시하지 못했습니다.")?;
@@ -103,7 +103,7 @@ pub async fn auth_status(app: AppHandle, webview: Webview, success: bool, messag
     trusted(&webview, &["main"])?;
     let _ = app.emit_to("login", "auth:status", json!({"success":success,"message":message}));
     if success {
-        if let Some(window) = app.get_webview_window("login") {
+        if let Some(window) = app.get_window("login") {
             let visible = window.is_visible().unwrap_or(false);
             let _ = window.destroy();
             if visible { if let Some(main) = app.get_webview_window("main") { let _ = main.show();let _ = main.set_focus(); } }

@@ -218,6 +218,16 @@ def test_account_switch_preserves_each_users_tasks(engine):
     assert engine.event(key).title == "내 일정"
 
 
+def test_failed_store_switch_keeps_current_store_usable(engine, monkeypatch):
+    def fail(*args):
+        raise OSError("Synthetic settings write failure")
+
+    monkeypatch.setattr("engine_api.write_settings", fail)
+    with pytest.raises(OSError):
+        engine.switch_store(engine.folder / "learning-user-202.db")
+    assert engine.event("a").title == "과제"
+
+
 def test_native_cookie_exchange_rejects_external_or_missing_sessions():
     from engine_sessions import import_cookie_records
 
@@ -241,3 +251,74 @@ def test_native_cookie_exchange_rejects_external_or_missing_sessions():
     import base64
 
     assert b"HttpOnly" in base64.b64decode(rows[0]["raw"])
+
+
+def test_backup_api_restores_edits_and_keeps_recovery_copy(engine, tmp_path):
+    path = tmp_path / "saved.calix"
+    key = engine.dispatch(
+        "event.add",
+        {"title": "백업한 이름", "type_id": engine.bootstrap()["types"][0]["id"]},
+    )
+    assert engine.dispatch("backup.export", {"path": str(path)}) is True
+    engine.dispatch("event.save", {"key": key, "title": "변경한 이름"})
+    assert engine.dispatch("backup.restore", {"path": str(path)}) is True
+    assert engine.event(key).title == "백업한 이름"
+    assert list(engine.folder.glob("recovery-*.calix"))
+
+
+@pytest.mark.parametrize("valid", [True, False])
+def test_update_download_only_becomes_installable_after_digest_check(tmp_path, valid):
+    import hashlib
+    from PySide6.QtCore import QCoreApplication
+    from PySide6.QtNetwork import QNetworkReply, QNetworkRequest
+    from learning_calendar.updates import Release
+    from engine_updates import UpdateService
+
+    application = QCoreApplication.instance() or QCoreApplication([])
+    service = UpdateService(lambda *args, **kwargs: None)
+    content = b"synthetic installer for checksum validation"
+    digest = hashlib.sha256(content).hexdigest() if valid else "0" * 64
+    service.release = Release("v9.0.0", "", "", digest, len(content))
+    service.phase = "downloading"
+    service.partial = tmp_path / "update" / "setup.part"
+    service.partial.parent.mkdir()
+    service.file = service.partial.open("xb", buffering=0)
+    service.hash = hashlib.sha256()
+
+    class Reply:
+        def __init__(self):
+            self.body = content
+
+        def attribute(self, key):
+            return (
+                200
+                if key == QNetworkRequest.Attribute.HttpStatusCodeAttribute
+                else None
+            )
+
+        def readAll(self):
+            body, self.body = self.body, b""
+            return body
+
+        def error(self):
+            return QNetworkReply.NetworkError.NoError
+
+        def blockSignals(self, value):
+            pass
+
+        def abort(self):
+            pass
+
+        def deleteLater(self):
+            pass
+
+    service.reply = Reply()
+    service.finished()
+    assert service.phase == ("ready" if valid else "error")
+    if valid:
+        assert Path(service.installer[0]).read_bytes() == content
+    else:
+        assert service.installer is None and not list(tmp_path.rglob("*.exe"))
+    service.cancel()
+    assert not list(tmp_path.rglob("setup.part"))
+    assert not list(tmp_path.rglob("*.exe"))

@@ -110,7 +110,8 @@ class UpdateService(QObject):
             self.fail("설치 파일 크기가 일치하지 않습니다.")
             return
         try:
-            self.file.write(data)
+            if self.file.write(data) != len(data):
+                raise OSError("Incomplete update write")
         except OSError:
             self.fail("설치 파일을 저장하지 못했습니다.")
             return
@@ -200,7 +201,10 @@ class UpdateService(QObject):
     def cancel(self, keep_installer=False):
         self.release_reply()
         if self.file:
-            self.file.close()
+            try:
+                self.file.close()
+            except OSError:
+                pass
             self.file = None
         paths = [self.partial]
         self.partial = None
