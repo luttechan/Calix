@@ -1,7 +1,7 @@
 """Single-click property editing, bound to stable task IDs rather than row positions."""
 from datetime import datetime,time
 from PySide6.QtCore import Qt,QDate,QTimer,QLocale,Signal
-from PySide6.QtWidgets import QLabel,QLineEdit,QPlainTextEdit,QComboBox,QCalendarWidget,QHBoxLayout,QPushButton
+from PySide6.QtWidgets import QLabel,QLineEdit,QPlainTextEdit,QCalendarWidget,QHBoxLayout,QPushButton
 from .popup_tools import RoundedPopup
 from .controls import TimeInput
 from .models import KST,parse_datetime
@@ -11,8 +11,8 @@ class FieldPopup(RoundedPopup):
     failed=Signal(str)
     def __init__(self,column,row,choices,save,parent=None):
         super().__init__(parent);self.column=column;self.row=row;self.save_callback=save;self._decided=False;self._committing=False;self.combo=None
-        self.setMinimumWidth(300 if column==1 else 280);title=QLabel(('할 일','기한','분류','내 역할','담당 교수','상태','비고')[column]);title.setObjectName('section');self.form.addWidget(title)
-        self.error=QLabel();self.error.setTextFormat(Qt.TextFormat.PlainText);self.error.setObjectName('formError');self.error.setWordWrap(True)
+        self.setMinimumWidth(320 if column in (1,2,3,4,5) else 280);self.form.setContentsMargins(12,12,12,12);self.form.setSpacing(8);title=QLabel(('할 일','기한','분류','내 역할','담당 교수','상태','비고')[column]);title.setObjectName('fieldLabel');self.form.addWidget(title)
+        self.error=QLabel();self.error.setTextFormat(Qt.TextFormat.PlainText);self.error.setObjectName('formError');self.error.setWordWrap(True);self.error.hide()
         if column==1:
             date=parse_datetime(row.get('due_at')) or datetime.now(KST).replace(hour=23,minute=59,second=0,microsecond=0)
             self.date_text=QLineEdit(date.strftime('%Y.%m.%d'));self.date_text.setMaxLength(10);self.date_text.setPlaceholderText('YYYY.MM.DD');self.date_text.setAccessibleName('기한 날짜 입력');self.date_text.setToolTip('날짜 입력 또는 달력에서 선택');self.form.addWidget(self.date_text)
@@ -24,15 +24,14 @@ class FieldPopup(RoundedPopup):
             self.date_text.returnPressed.connect(self.commit);self.time.lineEdit().returnPressed.connect(self.commit)
             self.focus_input=self.date_text
         elif column in (2,3,4,5):
-            self.combo=QComboBox();self.combo.setEditable(column!=5);self.combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert);self.combo.setAccessibleName(title.text());self.form.addWidget(self.combo)
+            from .property_choice import PropertyChoice
+            self.combo=PropertyChoice(column!=5);self.combo.setAccessibleName(title.text());self.combo.input.setAccessibleName(title.text());self.combo.options.setAccessibleName(title.text()+' 선택 목록');self.form.addWidget(self.combo)
             if column==5:
-                from .design import icon
-                for state in choices:self.combo.addItem(icon('custom',state['color']),state['name'],state['id'])
-                self.combo.setCurrentIndex(max(0,self.combo.findData(row['status_id'])))
+                self.combo.set_choices([(state['name'],state['id'],state['color']) for state in choices],row['status_id'])
             else:
-                self.combo.addItems(choices);self.combo.setCurrentText(str(row.get(('category','role','professor')[column-2]) or ''))
-                self.combo.lineEdit().setMaxLength(120 if column==4 else 100);self.combo.lineEdit().returnPressed.connect(self.commit)
-            self.combo.activated.connect(lambda *_:QTimer.singleShot(0,self,self.commit));self.focus_input=self.combo
+                self.combo.set_choices([(value,value,None) for value in choices],str(row.get(('category','role','professor')[column-2]) or ''))
+                self.combo.lineEdit().setMaxLength(120 if column==4 else 100)
+            self.combo.activated.connect(lambda *_:QTimer.singleShot(0,self,self.commit));self.combo.submitted.connect(self.commit);self.focus_input=self.combo
         else:
             self.input=QPlainTextEdit() if column==6 else QLineEdit();self.input.setAccessibleName(title.text())
             value=str(row.get('note' if column==6 else 'title') or '')
@@ -42,8 +41,8 @@ class FieldPopup(RoundedPopup):
         self.form.addWidget(self.error);actions=QHBoxLayout()
         if column==1:
             clear=QPushButton('기한 없음');clear.clicked.connect(lambda:self.commit_value(''));actions.addWidget(clear)
-        cancel=QPushButton('취소');cancel.clicked.connect(self.reject);actions.addStretch();actions.addWidget(cancel)
-        save_button=QPushButton('저장');save_button.setObjectName('primary');save_button.setDefault(True);save_button.clicked.connect(self.commit);actions.addWidget(save_button);self.form.addLayout(actions)
+        cancel=QPushButton('취소');cancel.setAutoDefault(False);cancel.clicked.connect(self.reject);actions.addStretch();actions.addWidget(cancel)
+        save_button=QPushButton('저장');save_button.setObjectName('primary');save_button.setAutoDefault(False);save_button.clicked.connect(self.commit);actions.addWidget(save_button);self.form.addLayout(actions)
         from PySide6.QtGui import QShortcut,QKeySequence
         QShortcut(QKeySequence('Ctrl+Return'),self,activated=self.commit);save_button.setToolTip('저장 (Ctrl+Enter)')
     def showEvent(self,event):
@@ -75,11 +74,11 @@ class FieldPopup(RoundedPopup):
                 self._decided=True
                 if self.combo:self.combo.hidePopup()
                 self.accept()
-            else:self.error.setText('저장 내용을 확인하세요.')
+            else:self.error.setText('저장 내용을 확인하세요.');self.error.show()
         finally:self._committing=False
     def commit(self):
         try:self.commit_value(self.value())
-        except ValueError as exc:self.error.setText(str(exc))
+        except ValueError as exc:self.error.setText(str(exc));self.error.show()
     def reject(self):self._decided=True;super().reject()
     def closeEvent(self,event):
         if not self._decided:

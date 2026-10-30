@@ -51,7 +51,7 @@ class DayBadges(QWidget):
         for i,(name,count,color,done) in enumerate(custom[:3]):self.filters[self.custom[i]]=(name,color,done)
         all_labels=' / '.join([f'{"완료 과제" if label is self.assignment_done else "시청 완료 영상" if label is self.movie_done else name} {count}건'+(' (완료)' if done and label is not self.assignment_done else '') for label,name,count,_,done in active]+[f'{name} {count}건'+(' (완료)' if done else '') for name,count,color,done in custom[3:]])
         total=sum(entry[2] for entry in active)+sum(count for name,count,color,done in custom[3:])
-        compact=height<18 or width<60
+        compact=height<20 or width<60
         capacity=min(3,max(1,(width+4)//48)) if not compact else 3
         if len(active)>capacity or len(custom)>3:
             hidden=len(active)-capacity+1+len(custom[3:])
@@ -74,7 +74,7 @@ class DayBadges(QWidget):
             badge_height=8;gap=4;badge_width=min(22,max(12,(width-4*len(active))//max(1,len(active))));total=len(active)*badge_width+max(0,len(active)-1)*gap;left=max(0,(width-total)//2)
             for i,(label,title,count,color,done) in enumerate(active):label.setText('');label.setGeometry(left+i*(badge_width+gap),0,badge_width,badge_height)
         else:
-            badge_height=18;gap=4;left=0;maximum=max(24,(width-gap*max(0,len(active)-1))//max(1,len(active)))
+            badge_height=20;gap=4;left=0;maximum=max(24,(width-gap*max(0,len(active)-1))//max(1,len(active)))
             for i,(label,title,count,color,done) in enumerate(active):
                 value=f'{title} {count}' if count else title
                 chip_width=min(maximum,max(38,min(100,QFontMetrics(label.font()).horizontalAdvance(value)+12)))
@@ -94,6 +94,7 @@ class MonthCanvas(QCalendarWidget):
         self.setGridVisible(False);self.setMinimumSize(260,230)
         self.setSizePolicy(QSizePolicy.Policy.Expanding,QSizePolicy.Policy.Expanding)
         self.setAccessibleName('월간 달력')
+        self.setObjectName('monthCalendar')
         self.clicked.connect(lambda d:self.selected.emit(d.toPython()))
         self.activated.connect(lambda d:self.create_requested.emit(d.toPython()))
         self.currentPageChanged.connect(lambda y,m:self.selected.emit(date(y,m,1)))
@@ -138,8 +139,12 @@ class MonthCanvas(QCalendarWidget):
     def paintCell(self,painter,rect,day):
         # Shapes only. The fixed QLabel pool renders date text natively.
         c=colors();selected=day==self.selectedDate();painter.save();painter.setRenderHint(painter.RenderHint.Antialiasing)
-        edge=QColor(c['accent'] if selected else c['line']);edge.setAlpha(190 if selected else 135);painter.setPen(QPen(edge,1));painter.setBrush(QColor(c['soft']) if selected else Qt.BrushStyle.NoBrush)
-        painter.drawRoundedRect(QRectF(rect).adjusted(3,3,-3,-3),12,12);painter.restore()
+        painter.fillRect(rect,QColor(c['surface']))
+        edge=QColor(c['line']);edge.setAlpha(170);painter.setPen(QPen(edge,1))
+        painter.drawLine(rect.topRight(),rect.bottomRight());painter.drawLine(rect.bottomLeft(),rect.bottomRight())
+        if selected:
+            painter.setPen(QPen(QColor(c['accent']),1));painter.setBrush(QColor(c['soft']));painter.drawRoundedRect(QRectF(rect).adjusted(4,4,-4,-4),8,8)
+        painter.restore()
 
     def eventFilter(self,obj,event):
         if obj is getattr(self,'_badge_viewport',None) and event.type() in (QEvent.Type.Resize,QEvent.Type.Show):self.badge_timer.start(0)
@@ -164,17 +169,22 @@ class MonthCanvas(QCalendarWidget):
         for i,badges in enumerate(self.badges):
             rect=self.view.visualRect(self.view.model().index(i//7+1,i%7))
             day=start+timedelta(days=i);rows=self.buckets.get(day,[])
-            number=self.date_labels[i];number.setText(str(day.day));number.setGeometry(rect.left()+12,rect.top()+8,max(24,rect.width()-24),22)
+            small=rect.height()<60;number_top=4 if small else 8;number_height=(20 if rect.height()>=44 else 16) if small else 24;bottom=12 if rect.height()>=68 else 8 if rect.height()>=44 else 4
+            number=self.date_labels[i];number.setText(str(day.day));number.setGeometry(rect.left()+12,rect.top()+number_top,min(28,max(18,rect.width()-24)),number_height)
+            if number.property('compactDate')!=small:number.setProperty('compactDate',small);number.style().unpolish(number);number.style().polish(number)
+            is_today=day==now.date()
+            if number.property('isToday')!=is_today:number.setProperty('isToday',is_today);number.style().unpolish(number);number.style().polish(number)
+            number.setAlignment(Qt.AlignmentFlag.AlignCenter if is_today else Qt.AlignmentFlag.AlignLeft|Qt.AlignmentFlag.AlignVCenter)
             name=self.holidays.get(day,'');state='outside' if day.month!=self.monthShown() else 'holiday' if name else 'selected' if day==self.selectedDate().toPython() else 'today' if day==datetime.now(KST).date() else 'sunday' if day.weekday()==6 else 'saturday' if day.weekday()==5 else 'normal'
             if number.property('dayState')!=state:number.setProperty('dayState',state);number.style().unpolish(number);number.style().polish(number)
             number.show();number.raise_()
             feast_name=self.feasts.get(day,'');tooltip='\n'.join(filter(None,(name,feast_name)))
             number.setToolTip(tooltip_text(tooltip));number.setAccessibleName(day.isoformat()+(' / '+tooltip if tooltip else ''))
-            holiday=self.holiday_labels[i];holiday.setProperty('calendarDate',day.isoformat());holiday.setGeometry(rect.left()+12,rect.top()+31,max(1,rect.width()-24),17);holiday.setToolTip(tooltip_text(name));holiday.setAccessibleName(name)
-            text_bottom=rect.bottom()-(26 if rows else 8)
+            holiday=self.holiday_labels[i];holiday.setProperty('calendarDate',day.isoformat());holiday.setGeometry(rect.left()+12,rect.top()+36,max(1,rect.width()-24),16);holiday.setToolTip(tooltip_text(name));holiday.setAccessibleName(name)
+            text_bottom=rect.bottom()-(36 if rows else 12)
             holiday.setText(holiday.fontMetrics().elidedText(name,Qt.TextElideMode.ElideRight,max(1,rect.width()-24)));holiday.setVisible(bool(name) and day.month==self.monthShown() and holiday.geometry().bottom()<text_bottom)
             if self.feast_labels:
-                feast=self.feast_labels[i];feast.setProperty('calendarDate',day.isoformat());feast.setGeometry(rect.left()+12,rect.top()+(49 if name else 31),max(1,rect.width()-24),17);feast.setToolTip(tooltip_text(feast_name));feast.setAccessibleName(feast_name)
+                feast=self.feast_labels[i];feast.setProperty('calendarDate',day.isoformat());feast.setGeometry(rect.left()+12,rect.top()+(56 if name else 36),max(1,rect.width()-24),16);feast.setToolTip(tooltip_text(feast_name));feast.setAccessibleName(feast_name)
                 feast.setText(feast.fontMetrics().elidedText(feast_name,Qt.TextElideMode.ElideRight,max(1,rect.width()-24)));feast.setVisible(bool(feast_name) and day.month==self.monthShown() and feast.geometry().bottom()<text_bottom)
             badges.setProperty('calendarDate',day.isoformat())
             badges.set_events(day,rows)
@@ -185,7 +195,7 @@ class MonthCanvas(QCalendarWidget):
                 if event.type_id is not None:
                     key=(event.type_label,event.type_color,event.completed);groups[key]=groups.get(key,0)+1
             custom=[(name,count,color,completed) for (name,color,completed),count in groups.items()]
-            available=max(1,rect.height()-25)
-            height=badges.configure(a,v,max(18,rect.width()-16),available,custom,assignment_done=done,movie_done=vd,assignment_overdue=late)
-            badges.setGeometry(rect.left()+8,rect.bottom()-height-8,max(18,rect.width()-16),height)
+            available=max(1,rect.height()-(number_top+number_height+4+bottom))
+            height=badges.configure(a,v,max(18,rect.width()-24),available,custom,assignment_done=done,movie_done=vd,assignment_overdue=late)
+            badges.setGeometry(rect.left()+12,rect.bottom()-height-bottom,max(18,rect.width()-24),height)
             badges.show()

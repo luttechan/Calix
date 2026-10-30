@@ -25,5 +25,12 @@ def migrate_legacy_data(target,legacy=None):
     for name in ('settings.json','canvas_session.dpapi'):
         if (legacy/name).is_file():shutil.copy2(legacy/name,stage/name)
     (stage/'migration.txt').write_text('Imported from BUFS Learning Calendar. Original files retained.',encoding='utf-8')
-    stage.rename(target)
+    # Windows can briefly deny a directory rename while a scanner holds a
+    # newly written database. Keep the staged copy and retry for at most 775 ms.
+    from time import sleep
+    for attempt in range(6):
+        try:stage.rename(target);break
+        except PermissionError:
+            if attempt==5 or target.exists():raise
+            sleep(.025*2**attempt)
     return True

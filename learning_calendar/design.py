@@ -3,7 +3,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor,QIcon,QPainter,QPalette,QPen,QPixmap
 from PySide6.QtWidgets import QApplication
 
-VERSION='1.2.0-r1'
+VERSION='1.2.0-r2'
 THEME_NAMES={'pink':'핑크','sky':'스카이블루','mint':'민트','purple':'퍼플','dark':'다크'}
 THEMES={
  'pink':dict(bg='#FFF6FA',side='#FFFDFE',surface='#FFFFFF',soft='#FCE7F0',hover='#FFF0F6',ink='#342431',muted='#836875',line='#EDDCE5',accent='#B13970',onaccent='#FFFFFF',hero='#F8D7E7',hero2='#FFEDF5'),
@@ -50,6 +50,9 @@ def stylesheet(key=DEFAULT_THEME):
     app=QApplication.instance();c['font_family']=(app.property('bufsFontFamily') if app else None) or 'Pretendard Variable';c['feast_ink']='#C3A6EC' if QColor(c['bg']).lightness()<128 else '#765197';c['danger_ink']='#F2A6B8' if QColor(c['bg']).lightness()<128 else '#A93B60'
     base='''
 QWidget {{ font-family:"{font_family}"; color:{ink}; font-size:14px; }}
+QListView#propertyOptions {{background:{surface};border:0;border-radius:8px;padding:2px;outline:0;}}
+QListView#propertyOptions::item {{padding:0;margin:0;border:0;}}
+QLineEdit#propertySearch {{padding:8px 12px;min-height:20px;}}
 QTableView#checklistTable {{ background:{surface};alternate-background-color:{surface};border:1px solid {line};border-radius:12px;selection-background-color:{soft};selection-color:{ink}; }}
 QTableView#checklistTable::item {{ padding:7px 9px;border-bottom:1px solid {line}; }}
 QTableView#checklistTable::item:focus {{border:1px solid {accent};}}
@@ -176,11 +179,13 @@ QLabel#heading {{font-size:24px;}}
 QLabel#metricValue {{font-size:14px;font-weight:700;color:{ink};}}
 QPushButton#metricChip {{min-height:24px;border-radius:8px;padding:0;background:{surface};border:1px solid {line};}}
 QPushButton#metricChip[active="true"] {{background:{soft};border-color:{accent};}}
-QLabel#dateNumber {{font-size:15px;font-weight:600;background:transparent;color:{ink};}}
+QLabel#dateNumber {{font-size:14px;font-weight:500;background:transparent;color:{ink};}}
+QLabel#dateNumber[compactDate="true"] {{font-size:12px;}}
 QLabel#dateNumber[dayState="outside"] {{color:{muted};font-weight:400;}}
 QLabel#dateNumber[dayState="today"],QLabel#dateNumber[dayState="selected"],QLabel#dateNumber[dayState="saturday"] {{color:{accent};}}
 QLabel#dateNumber[dayState="sunday"] {{color:#BE607C;}}
 QLabel#dateNumber[dayState="holiday"],QLabel#holidayName {{color:#BE607C;}}
+QLabel#dateNumber[isToday="true"] {{background:{accent};color:{onaccent};border-radius:8px;font-weight:600;}}
 QLabel#holidayName {{font-size:11px;background:transparent;}}
 QLabel#feastName {{font-size:11px;background:transparent;color:{feast_ink};}}
 QWidget#diaryLock {{background:{surface};border:1px solid {line};border-radius:20px;}}

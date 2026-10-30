@@ -69,7 +69,7 @@ def test_two_category_badges_have_separate_semantic_borders(app,tmp_path):
     assert pair.assignment.objectName()=='assignmentBadge' and pair.movie.objectName()=='movieBadge'
     c=category_colors();assert c['assignment_line']!=c['movie_line']
     assert pair.assignment.geometry().right()<pair.movie.geometry().left()
-    assert pair.assignment.height()==pair.movie.height()==18
+    assert pair.assignment.height()==pair.movie.height()==20
     host.dispose();host.deleteLater();app.processEvents()
 
 def test_small_cells_use_color_indicators_instead_of_tiny_text(app):

@@ -19,7 +19,8 @@ def test_full_width_calendar_and_contextual_detail_panel(app,tmp_path):
 
 def test_many_custom_types_stay_on_one_line_with_complete_accessible_counts(app):
     badge=DayBadges();height=badge.configure(1,2,160,95,[('운동',3,'#3AA68E'),('할 일',4,'#7582E6'),('시험',2,'#D48560'),('독서',1,'#CF779A')])
-    assert height==18 and all(label.y()==0 for label in (badge.assignment,badge.movie,*badge.custom) if not label.isHidden())
+    # The revised badge uses a 20 px line box; overflow remains one row.
+    assert height==20 and all(label.y()==0 for label in (badge.assignment,badge.movie,*badge.custom) if not label.isHidden())
     for text in ('과제 1건','영상 2건','운동 3건','할 일 4건','시험 2건','독서 1건'):assert text in badge.accessibleName()
     shown=[label for label in (badge.assignment,badge.movie,*badge.custom) if not label.isHidden()]
     assert len(shown)==3 and shown[-1].text().startswith('+') and shown[-1].geometry().right()<160
