@@ -1,0 +1,102 @@
+name: Desktop 1.4.2 validation
+on:
+  workflow_dispatch:
+  push:
+    branches: ['main']
+permissions:
+  contents: read
+concurrency:
+  group: calix-142-build
+  cancel-in-progress: true
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.14.10'
+          cache: pip
+          cache-dependency-path: requirements-build.txt
+      - name: Prepare Python engine
+        run: |
+          python -m pip install --only-binary=:all: -r requirements-build.txt brotli==1.2.1
+          if ($LASTEXITCODE -ne 0) { throw 'Python dependencies failed.' }
+          python tools/check_runtime_security.py
+          if ($LASTEXITCODE -ne 0) { throw 'Runtime check failed.' }
+          python tools/prepare_assets.py
+          if ($LASTEXITCODE -ne 0) { throw 'Asset build failed.' }
+      - name: Check data API
+        run: python -m pytest -q -p no:cacheprovider
+      - name: Prepare Node and Rust
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.22.1'
+      - name: Prepare build tools
+        run: |
+          rustup update stable --no-self-update
+          if ($LASTEXITCODE -ne 0) { throw 'Rust update failed.' }
+          npm install -g pnpm@11.25.0
+          if ($LASTEXITCODE -ne 0) { throw 'pnpm install failed.' }
+      - name: Build local web assets
+        run: python desktop/tools/prepare_web_assets.py
+      - name: Check frontend
+        working-directory: desktop
+        run: |
+          pnpm install --frozen-lockfile
+          if ($LASTEXITCODE -ne 0) { throw 'Frontend dependencies failed.' }
+          pnpm test
+          if ($LASTEXITCODE -ne 0) { throw 'Frontend tests failed.' }
+          pnpm build
+          if ($LASTEXITCODE -ne 0) { throw 'TypeScript build failed.' }
+      - name: Build Python sidecar
+        run: python desktop/tools/build_engine.py
+      - name: Check packaged Python engine
+        run: python desktop/tools/check_engine.py desktop/.build/dist/calix-engine/calix-engine.exe
+      - name: Check packaged course browser
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $exe = (Resolve-Path desktop/.build/dist/calix-engine/calix-engine.exe).Path
+          $report = Join-Path $env:RUNNER_TEMP 'calix141-course-browser.json'
+          $process = Start-Process -FilePath $exe -ArgumentList @('--collector-check',$report) -WindowStyle Hidden -PassThru
+          if (-not $process.WaitForExit(30000)) { $process.Kill(); throw 'Course browser timed out.' }
+          if ($process.ExitCode -ne 0) { throw 'Course browser failed to initialize.' }
+          $result = Get-Content $report -Raw | ConvertFrom-Json
+          if (-not $result.passed) { throw 'Course page did not render.' }
+          Get-Content $report -Raw
+      - name: Restore Rust build cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: desktop/src-tauri/target
+          key: ${{ runner.os }}-calix141-rust-${{ hashFiles('desktop/src-tauri/Cargo.toml') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-calix141-rust-${{ hashFiles('desktop/src-tauri/Cargo.toml') }}-
+            ${{ runner.os }}-calix141-rust-
+      - name: Build Tauri application and Setup
+        working-directory: desktop
+        run: |
+          pnpm tauri build
+          if ($LASTEXITCODE -ne 0) { throw 'Desktop build failed.' }
+      - name: Retain Rust build cache
+        if: always()
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: desktop/src-tauri/target
+          key: ${{ runner.os }}-calix141-rust-${{ hashFiles('desktop/src-tauri/Cargo.toml') }}-${{ github.sha }}
+      - name: Package development build
+        run: python desktop/tools/package_desktop.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Calix-1.4.2-development-Windows-x64
+          path: desktop/.build/packages/*
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error
+

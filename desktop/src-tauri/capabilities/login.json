@@ -1,0 +1,12 @@
+{
+  "identifier": "login-chrome",
+  "description": "Local login chrome only. The remote school webview has no application permissions.",
+  "webviews": ["login"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close",
+    "core:window:allow-start-dragging"
+  ]
+}

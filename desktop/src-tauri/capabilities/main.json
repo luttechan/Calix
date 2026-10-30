@@ -1,0 +1,19 @@
+{
+  "identifier": "main",
+  "description": "Calix local application UI",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close",
+    "core:window:allow-start-dragging",
+    "shell:allow-stdin-write",
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        { "name": "binaries/calix-engine", "sidecar": true, "args": false }
+      ]
+    }
+  ]
+}

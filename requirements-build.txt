@@ -1,0 +1,10 @@
+PySide6==6.12.0
+requests==2.34.2
+keyring==25.7.0
+tzdata==2026.5
+cryptography==50.0.2
+pyinstaller==6.22.3
+pytest==9.1.1
+fonttools==4.67.0
+psutil==7.2.2
+urllib3==2.8.0
