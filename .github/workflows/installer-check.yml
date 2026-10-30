@@ -1,0 +1,69 @@
+name: Calix 1.4 installer validation
+on:
+  push:
+    branches: ['codex/calix-140']
+    paths: ['.github/workflows/installer-check.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  installer:
+    runs-on: windows-latest
+    timeout-minutes: 12
+    steps:
+      - name: Download validated build
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $run = gh api repos/luttechan/Calix/actions/runs/41077970943 | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $run.conclusion -ne 'success' -or $run.head_sha -ne '160da2ece1d20d81c0b5c4be006ba121c0440c58') { throw 'Unexpected build provenance.' }
+          gh run download 41077970943 --repo luttechan/Calix --name Calix-1.4.0-development-Windows-x64 --dir packages
+          if ($LASTEXITCODE -ne 0) { throw 'Artifact download failed.' }
+          foreach ($line in Get-Content packages/SHA256SUMS.txt) {
+            $hash, $name = $line -split '  ', 2
+            if ((Get-FileHash -LiteralPath (Join-Path packages $name) -Algorithm SHA256).Hash.ToLowerInvariant() -ne $hash) { throw 'Artifact digest mismatch.' }
+          }
+      - name: Install and check runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $target = Join-Path $env:RUNNER_TEMP 'calix140-installed'
+          if (Test-Path -LiteralPath $target) { throw 'Install directory must be new.' }
+          $setup = (Resolve-Path packages/Calix-1.4.0-Setup-x64.exe).Path
+          $process = Start-Process -FilePath $setup -ArgumentList @('/S',"/D=$target") -WindowStyle Hidden -PassThru
+          if (-not $process.WaitForExit(180000)) { $process.Kill(); throw 'Installer timed out.' }
+          if ($process.ExitCode -ne 0) { throw 'Installer failed.' }
+          $portable = Join-Path $env:RUNNER_TEMP 'calix140-portable'
+          Expand-Archive -LiteralPath packages/Calix-1.4.0-Windows-x64.zip -DestinationPath $portable
+          $expected = Join-Path $portable 'Calix 1.4.0'
+          foreach ($name in @('calix-engine.exe','_internal')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $target $name))) { throw "Missing installed $name" }
+          }
+          if ((Get-FileHash -LiteralPath (Join-Path $target 'calix-desktop.exe')).Hash -ne (Get-FileHash -LiteralPath (Join-Path $expected 'Calix.exe')).Hash) { throw 'Installed UI differs from portable build.' }
+          foreach ($file in Get-ChildItem -LiteralPath $expected -File -Recurse) {
+            $relative = [IO.Path]::GetRelativePath($expected,$file.FullName)
+            if ($relative -eq 'calix-engine.exe' -or $relative.StartsWith('_internal\')) {
+              if ((Get-FileHash -LiteralPath (Join-Path $target $relative)).Hash -ne (Get-FileHash -LiteralPath $file.FullName).Hash) { throw "Installed file differs: $relative" }
+            }
+          }
+          $info = [Diagnostics.ProcessStartInfo]::new((Join-Path $target 'calix-engine.exe'))
+          $info.Arguments = '--data-dir ' + (Join-Path $env:RUNNER_TEMP 'calix140-installer-data')
+          $info.UseShellExecute = $false
+          $info.CreateNoWindow = $true
+          $info.RedirectStandardInput = $true
+          $info.RedirectStandardOutput = $true
+          $info.RedirectStandardError = $true
+          $info.StandardOutputEncoding = [Text.Encoding]::UTF8
+          $engine = [Diagnostics.Process]::Start($info)
+          $stdout = $engine.StandardOutput.ReadToEndAsync()
+          $stderr = $engine.StandardError.ReadToEndAsync()
+          $engine.StandardInput.WriteLine('{"id":1,"method":"bootstrap","params":{}}')
+          $engine.StandardInput.WriteLine('{"id":2,"method":"quit","params":{}}')
+          $engine.StandardInput.Close()
+          if (-not $engine.WaitForExit(30000)) { $engine.Kill(); throw 'Installed engine timed out.' }
+          if ($engine.ExitCode -ne 0) { throw $stderr.Result }
+          $reply = $stdout.Result -split "`n" | Where-Object { $_.Trim() } | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object id -eq 1
+          if ($reply.result.version -ne '1.4.0') { throw 'Installed engine bootstrap failed.' }
+          Write-Output 'Installer, embedded runtime hashes and installed engine startup verified.'
