@@ -50,6 +50,28 @@ def test_backend_rejects_unknown_methods_and_store_path_escape(engine):
     with pytest.raises(ValueError):engine.dispatch('__import__',{})
     with pytest.raises(ValueError):engine.switch_store(engine.folder.parent/'outside.db')
 
+def test_special_preferences_survive_bootstrap_and_year_navigation(engine):
+    engine.dispatch('special.save',{'catholic':False,'birthday':True})
+    assert engine.bootstrap()['preferences']['birthday'] is True
+    dates=engine.dispatch('calendar.year',{'year':2028})
+    assert dates['specialDates']['2028-06-27']=='클로네 생일'
+    with pytest.raises(ValueError):engine.dispatch('calendar.year',{'year':True})
+    with pytest.raises(ValueError):engine.dispatch('special.save',{'catholic':'false','birthday':True})
+
+def test_manual_deadline_changes_and_delete_do_not_affect_school_events(engine):
+    kind=engine.bootstrap()['types'][0]['id']
+    key=engine.dispatch('event.add',{'title':'개인 일정','type_id':kind})
+    engine.dispatch('event.save',{'key':key,'title':'수정 일정','due_at':'2026-12-01T23:59:00+09:00','note':'보존'})
+    assert engine.event(key).due_at.startswith('2026-12-01')
+    engine.dispatch('event.delete',{'key':key})
+    assert len(engine.bootstrap()['events'])==2
+    with pytest.raises(ValueError):engine.dispatch('event.delete',{'key':'a'})
+
+def test_installer_helper_rejects_arbitrary_file_and_digest(tmp_path):
+    from engine_utility import install
+    path=tmp_path/'Calix-Setup.exe';path.write_bytes(b'not an installer')
+    assert install(path,'0'*64,1)==2
+
 def test_stdio_round_trip_and_clean_exit_use_temporary_data(tmp_path):
     requests=[dict(id=1,method='bootstrap',params={}),dict(id=2,method='quit',params={})]
     result=subprocess.run([sys.executable,'-B',str(ROOT/'desktop/engine_main.py'),'--data-dir',str(tmp_path)],input=''.join(json.dumps(r)+'\n' for r in requests),capture_output=True,text=True,encoding='utf-8',timeout=20)

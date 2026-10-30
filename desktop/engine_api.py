@@ -27,7 +27,7 @@ class EngineAPI:
         self.store.close();self.store=Store(path);self.checklist=ChecklistStore(self.store);self.settings['active_db']=path.name;write_settings(self.settings_path,self.settings)
     def bootstrap(self):
         events=self.store.events();year=datetime.now(KST).year
-        return dict(version='1.4.0',events=[asdict(e) for e in events],courses=[asdict(c) for c in self.store.courses()],types=self.store.event_types(),sessions=self.store.timetable(),sections=self.checklist.sections(),statuses=self.checklist.statuses(),tasks=[row for section in self.checklist.sections() for row in self.checklist.rows(section['id'],events,self.store.timetable())],offDays=self._off_days(),preferences={k:self.settings.get(k,d) for k,d in [('theme','pink'),('glass',True),('font_mode','pretendard')]},lastSync=self.store.get_meta('last_sync'),syncSummary=self.store.get_meta('sync_summary'),holidays={day.isoformat():name for y in (year,year+1) for day,name in self.holidays.year(y).items()},specialDates={day.isoformat():name for y in (year,year+1) for day,name in self.holidays.special_dates(y).items()},journals=self.diary.summaries())
+        return dict(version='1.4.0',events=[asdict(e) for e in events],courses=[asdict(c) for c in self.store.courses()],types=self.store.event_types(),sessions=self.store.timetable(),sections=self.checklist.sections(),statuses=self.checklist.statuses(),tasks=[row for section in self.checklist.sections() for row in self.checklist.rows(section['id'],events,self.store.timetable())],offDays=self._off_days(),preferences=dict({k:self.settings.get(k,d) for k,d in [('theme','pink'),('glass',True),('font_mode','pretendard')]},catholic=self.holidays.catholic_enabled,birthday=self.holidays.birthday_enabled),lastSync=self.store.get_meta('last_sync'),syncSummary=self.store.get_meta('sync_summary'),holidays={day.isoformat():name for y in (year,year+1) for day,name in self.holidays.year(y).items()},specialDates={day.isoformat():name for y in (year,year+1) for day,name in self.holidays.special_dates(y).items()},journals=self.diary.summaries())
     def _off_days(self):
         try:items=json.loads(self.store.get_meta('timetable_off_days','[]'))
         except ValueError:return []
@@ -111,5 +111,11 @@ class EngineAPI:
             self.settings.update(theme=theme,glass=glass,font_mode=mode);write_settings(self.settings_path,self.settings);return True
         if method=='holiday.save':self.holidays.save(p['date'],p['name'],p.get('enabled',True));return True
         if method=='holiday.reset':self.holidays.reset(p['date']);return True
-        if method=='special.save':self.holidays.set_catholic(bool(p.get('catholic')));self.holidays.set_birthday(bool(p.get('birthday')));return True
+        if method=='calendar.year':
+            year=p.get('year')
+            if type(year) is not int or not 1900<=year<=9998:raise ValueError('연도를 확인하세요.')
+            return dict(holidays={day.isoformat():name for y in (year-1,year,year+1) for day,name in self.holidays.year(y).items()},specialDates={day.isoformat():name for y in (year-1,year,year+1) for day,name in self.holidays.special_dates(y).items()})
+        if method=='special.save':
+            if type(p.get('catholic')) is not bool or type(p.get('birthday')) is not bool:raise ValueError('일정 설정을 확인하세요.')
+            self.holidays.set_catholic(p['catholic']);self.holidays.set_birthday(p['birthday']);return True
         raise ValueError('지원하지 않는 요청입니다.')

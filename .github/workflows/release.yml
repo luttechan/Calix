@@ -2,17 +2,6 @@ name: Windows validation
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'learning_calendar/**'
-      - 'asset/**'
-      - 'tests/**'
-      - 'tools/**'
-      - 'main.py'
-      - 'Calix.spec'
-      - 'requirements*.txt'
-      - '.github/workflows/release.yml'
 
 permissions:
   contents: read

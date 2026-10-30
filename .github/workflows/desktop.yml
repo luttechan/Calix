@@ -2,7 +2,7 @@ name: Desktop 1.4 validation
 on:
   workflow_dispatch:
   push:
-    branches: ['codex/calix-140']
+    branches: ['codex/calix-140',main]
     paths: ['desktop/**','learning_calendar/**','tests/test_desktop_engine.py','.github/workflows/desktop.yml']
 permissions:
   contents: read
@@ -52,10 +52,14 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           if ($LASTEXITCODE -ne 0) { throw 'Frontend dependencies failed.' }
+          pnpm test
+          if ($LASTEXITCODE -ne 0) { throw 'Frontend tests failed.' }
           pnpm build
           if ($LASTEXITCODE -ne 0) { throw 'TypeScript build failed.' }
       - name: Build Python sidecar
         run: python desktop/tools/build_engine.py
+      - name: Check packaged Python engine
+        run: python desktop/tools/check_engine.py desktop/.build/dist/calix-engine/calix-engine.exe
       - name: Build Tauri application and Setup
         working-directory: desktop
         run: |
@@ -70,3 +74,4 @@ jobs:
           compression-level: 0
           retention-days: 7
           if-no-files-found: error
+

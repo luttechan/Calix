@@ -37,8 +37,12 @@ export async function rpc<T=unknown>(method:string,params:Record<string,unknown>
     child!.write(JSON.stringify({id,method,params})+'\n').catch(error=>{pending.delete(id);clearTimeout(timer);reject(error);});
   });
 }
-export async function stopEngine(){
- if(!isTauri()){await rpc('quit');return;}
- const closed=new Promise<void>((resolve,reject)=>{const timer=setTimeout(()=>{stopped.delete(done);reject(new Error('동기화 종료를 기다리는 중입니다.'));},20000);const done=()=>{clearTimeout(timer);resolve();};stopped.add(done);});
- await rpc('quit');await closed;
+export async function stopEngine(install=false){
+ if(!isTauri()){await rpc('quit',{install});return;}
+ if(!child)return;
+ let timer:ReturnType<typeof setTimeout>|undefined,done:()=>void=()=>{};
+ const closed=new Promise<void>((resolve,reject)=>{done=()=>{clearTimeout(timer);resolve();};timer=setTimeout(()=>{stopped.delete(done);reject(new Error('동기화 종료를 기다리는 중입니다.'));},20000);stopped.add(done);});
+ // Observe both promises immediately, including a quit response racing process exit.
+ try{await Promise.all([rpc('quit',{install}).catch(error=>{if(child)throw error;}),closed]);}
+ finally{clearTimeout(timer);stopped.delete(done);}
 }

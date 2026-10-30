@@ -9,8 +9,11 @@ configure_runtime()
 def data_folder():return Path(os.environ.get('APPDATA',str(Path.home()/'AppData/Roaming')))/'LutteLaurent'/'Calix'
 def main():
     if sys.stdout is not None:sys.stdout.reconfigure(encoding='utf-8',line_buffering=True)
-    parser=argparse.ArgumentParser();parser.add_argument('--data-dir');parser.add_argument('--browser',action='store_true');parser.add_argument('--pipe');parser.add_argument('--dev-http',type=int);parser.add_argument('--demo',action='store_true');args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--data-dir');parser.add_argument('--browser',action='store_true');parser.add_argument('--pipe');parser.add_argument('--dev-http',type=int);parser.add_argument('--demo',action='store_true');parser.add_argument('--utility',choices=['updates','backup','restore','install']);parser.add_argument('--installer');parser.add_argument('--digest');parser.add_argument('--wait-pid',type=int);args=parser.parse_args()
     folder=Path(args.data_dir) if args.data_dir else data_folder()
+    if args.utility:
+        from engine_utility import run,install
+        return install(args.installer,args.digest,args.wait_pid) if args.utility=='install' else run(args.utility,folder)
     if args.browser:
         from learning_calendar.cookies import read_cookies
         from learning_calendar.login_browser import run
@@ -36,13 +39,14 @@ def main():
     class Bridge(QObject):
         incoming=Signal(object)
         def __init__(self):
-            super().__init__();self.incoming.connect(self.handle);self.browser=None;self.socket=None;self.server=None;self.buffer=bytearray();self.task=None;self.collecting=False;self.pending_sync=False;self.logged_in=False;self.closing=False
+            super().__init__();self.incoming.connect(self.handle);self.browser=None;self.socket=None;self.server=None;self.buffer=bytearray();self.task=None;self.collecting=False;self.pending_sync=False;self.logged_in=False;self.closing=False;self.utility=None;self.installer=None;self.install_on_exit=False
         def notify(self,event,**payload):emit(dict(event=event,**payload))
         def handle(self,request):
             reply=request.pop('_reply',None)
             try:
                 if type(request.get('id')) is not int or not isinstance(request.get('params',{}),dict):raise ValueError('요청을 확인하세요.')
                 method=request.get('method');p=request.get('params',{})
+                if self.utility and method not in ('engine.state',):raise ValueError('열린 작업 창을 닫은 뒤 다시 시도하세요.')
                 if method=='engine.state':result=dict(loggedIn=self.logged_in,busy=bool(self.task or self.collecting))
                 elif method=='login':self.login();result=True
                 elif method=='logout':self.command('logout');self.logged_in=False;result=True
@@ -58,13 +62,41 @@ def main():
                     links={'github':'https://github.com/luttechan/Calix','family':'https://luttechan.github.io/lutte_family/','guide':'https://luttechan.github.io/calix/guide/','releases':'https://github.com/luttechan/Calix/releases'}
                     if p.get('page') not in links:raise ValueError('주소를 확인하세요.')
                     webbrowser.open(links[p['page']]);result=True
-                elif method=='quit':self.shutdown();result=True
+                elif method=='app.utility':self.open_utility(p.get('mode'));result=True
+                elif method=='quit':self.install_on_exit=p.get('install') is True;self.shutdown();result=True
                 else:result=api.dispatch(method,p)
                 response=dict(id=request['id'],result=result)
             except (KeyError,TypeError,ValueError) as exc:response=dict(id=request.get('id'),error=str(exc) if isinstance(exc,ValueError) else '입력 내용을 확인하세요.')
             except Exception:response=dict(id=request.get('id'),error='요청을 처리하지 못했습니다.')
             if reply:reply(response)
             else:emit(response)
+        def open_utility(self,mode):
+            if mode not in ('updates','backup','restore'):raise ValueError('작업을 확인하세요.')
+            if self.task or self.collecting:raise ValueError('동기화가 끝난 뒤 다시 시도하세요.')
+            if api.vault:api.vault.close();api.vault=None
+            process=QProcess(self);self.utility=process;buffer=bytearray()
+            arguments=[] if getattr(sys,'frozen',False) else [str(Path(__file__).resolve())]
+            process.setProgram(sys.executable);process.setArguments(arguments+['--utility',mode,'--data-dir',str(folder)])
+            def read():
+                buffer.extend(bytes(process.readAllStandardOutput()))
+                if len(buffer)>65536:buffer.clear();return
+                while b'\n' in buffer:
+                    line,_,tail=buffer.partition(b'\n');buffer[:]=tail
+                    try:value=json.loads(line)
+                    except ValueError:continue
+                    if not isinstance(value,dict):continue
+                    if value.get('installer'):
+                        self.installer=(value['installer'],value['digest']);self.notify('update-ready')
+                    elif value.get('message'):self.notify('notice',message=value['message'])
+            def finished(*_):
+                read();self.utility=None;process.deleteLater()
+                if mode=='restore':
+                    from learning_calendar.preferences import read_settings
+                    api.settings=read_settings(api.settings_path);api.holidays.reload();self.notify('data-changed')
+                if self.closing:self.finish_shutdown()
+            process.readyReadStandardOutput.connect(read);process.finished.connect(finished)
+            process.errorOccurred.connect(lambda error:finished() if error==QProcess.ProcessError.FailedToStart else None)
+            process.start()
         def command(self,name):
             if self.socket and self.socket.state()==QLocalSocket.LocalSocketState.ConnectedState:
                 self.socket.write((json.dumps(dict(command=name))+'\n').encode());self.socket.flush();return True
@@ -77,6 +109,9 @@ def main():
             self.server.newConnection.connect(self.connected);self.browser=QProcess(self)
             arguments=[] if getattr(sys,'frozen',False) else [str(Path(__file__).resolve())]
             self.browser.setProgram(sys.executable);self.browser.setArguments(arguments+['--browser','--data-dir',str(folder),'--pipe',name]);self.browser.finished.connect(self.browser_finished);self.browser.start()
+            self.browser.errorOccurred.connect(lambda error:self.browser_failed() if error==QProcess.ProcessError.FailedToStart else None)
+        def browser_failed(self):
+            self.pending_sync=False;self.collecting=False;self.notify('sync-error',message='로그인 창을 실행하지 못했습니다.');self.browser_finished()
         def connected(self):
             self.socket=self.server.nextPendingConnection();self.socket.readyRead.connect(self.browser_read);self.server.close()
         def browser_read(self):
@@ -91,16 +126,20 @@ def main():
                     self.logged_in=True;self.notify('authentication',loggedIn=True)
                     if self.pending_sync:self.pending_sync=False;self.collecting=True;self.command('collect')
                 elif event=='logged_out':self.logged_in=False;self.notify('authentication',loggedIn=False)
+                elif event=='dismissed' and self.pending_sync:self.pending_sync=False;self.collecting=False;self.notify('sync-error',message='로그인이 취소되었습니다.')
                 elif event=='videos_collected':self.collecting=False;self.start_sync(message.get('snapshot'))
                 elif event in ('collection_error','collection_auth_required','error'):
                     self.collecting=False;self.notify('sync-error',message=message.get('message','동기화 실패'))
                 elif event=='collection_progress':self.notify('sync-progress',message=message.get('message','일정 확인 중'))
         def browser_finished(self,*args):
-            process=self.browser;self.browser=None
+            process=self.browser;self.browser=None;was_busy=self.collecting or self.pending_sync;self.collecting=False;self.pending_sync=False;self.logged_in=False
             if process:process.deleteLater()
             if self.socket:self.socket.deleteLater();self.socket=None
             if self.server:self.server.close();self.server.deleteLater();self.server=None
             self.buffer.clear()
+            if not self.closing:
+                self.notify('authentication',loggedIn=False)
+                if was_busy:self.notify('sync-error',message='로그인 창 연결이 종료되었습니다. 다시 로그인하세요.')
             if self.closing:self.finish_shutdown()
         def sync(self):
             if self.task or self.collecting:raise ValueError('동기화 중입니다.')
@@ -126,8 +165,13 @@ def main():
             if self.browser:self.command('quit');QTimer.singleShot(3000,self,lambda:self.browser.kill() if self.browser else None)
             self.finish_shutdown()
         def finish_shutdown(self):
-            if self.task or self.browser:return
-            api.close();QTimer.singleShot(0,app.quit)
+            if self.task or self.browser or self.utility:return
+            api.close()
+            if self.install_on_exit and self.installer:
+                import subprocess
+                arguments=[] if getattr(sys,'frozen',False) else [str(Path(__file__).resolve())]
+                subprocess.Popen([sys.executable,*arguments,'--utility','install','--installer',self.installer[0],'--digest',self.installer[1],'--wait-pid',str(os.getppid())],creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0),stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+            QTimer.singleShot(0,app.quit)
     bridge=Bridge();http=None
     if args.dev_http:
         from http.server import BaseHTTPRequestHandler,ThreadingHTTPServer
@@ -136,10 +180,13 @@ def main():
         class Handler(BaseHTTPRequestHandler):
             def log_message(self,*args):pass
             def do_POST(self):
-                length=int(self.headers.get('Content-Length','0'))
-                if self.path!='/api' or self.headers.get('X-Calix-Token')!=token or not 0<length<=2*1024*1024:self.send_error(403);return
+                try:length=int(self.headers.get('Content-Length','0'))
+                except ValueError:self.send_error(400);return
+                origin=self.headers.get('Origin')
+                if self.path!='/api' or self.headers.get('X-Calix-Token')!=token or not 0<length<=2*1024*1024 or self.headers.get_content_type()!='application/json' or origin not in (None,'http://127.0.0.1:5173'):self.send_error(403);return
                 try:request=json.loads(self.rfile.read(length))
                 except ValueError:self.send_error(400);return
+                if not isinstance(request,dict):self.send_error(400);return
                 ready=threading.Event();result=[];request['_reply']=lambda value:(result.append(value),ready.set());bridge.incoming.emit(request)
                 if not ready.wait(90):self.send_error(504);return
                 data=json.dumps(result[0],ensure_ascii=False).encode();self.send_response(200);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Content-Length',str(len(data)));self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(data)
