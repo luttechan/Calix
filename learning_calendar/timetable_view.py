@@ -76,7 +76,8 @@ class SessionEditor(QDialog):
         actions=QHBoxLayout();cancel=QPushButton('취소');cancel.clicked.connect(self.reject);save=QPushButton('저장');save.setObjectName('primary');save.clicked.connect(self._save)
         actions.addStretch();actions.addWidget(cancel);actions.addWidget(save);layout.addLayout(actions)
         if item:
-            self.course.setCurrentIndex(max(0,self.course.findData(item['course_id'])));self.days[item['day']].setChecked(True)
+            self.course.setCurrentIndex(self.course.findData(item['course_id']));self.days[item['day']].setChecked(True)
+            if self.course.currentIndex()<0:self.error.setText('기존 과목을 찾을 수 없습니다. 과목을 선택하세요.')
             self.start.setTime(QTime.fromString(item['start_time'],'HH:mm'));self.end.setTime(QTime.fromString(item['end_time'],'HH:mm'))
             self.prof.setText(item.get('professor',''));self.room.setText(item.get('room',''))
         self.color_picker.set_color((item or {}).get('color') or course_color(self.course.currentData() or 0))
@@ -144,7 +145,11 @@ class SessionBlock(QFrame):
             if day not in self.surface.off_days:self.moved.emit(self.row['id'],day,clock(start),clock(start+duration))
             else:self.surface.relayout()
         self._press=None;self._drag=False;super().mouseReleaseEvent(event)
-    def mouseDoubleClickEvent(self,event):self.edit.emit(self.row['id']);super().mouseDoubleClickEvent(event)
+    def mouseDoubleClickEvent(self,event):
+        # A class is not an empty slot. Never forward its double click to the
+        # weekly surface, including after the modal editor has been dismissed.
+        event.accept();self._press=None;self._drag=False
+        if event.button()==Qt.MouseButton.LeftButton and self.surface.interactive:self.edit.emit(self.row['id'])
     def keyPressEvent(self,event):
         if event.key() in (Qt.Key.Key_Return,Qt.Key.Key_Enter):self.edit.emit(self.row['id'])
         else:super().keyPressEvent(event)
@@ -191,10 +196,12 @@ class WeekSurface(QWidget):
         start=round(((point.y()-self.TOP)*60/self.hour_height+self.start)/15)*15
         return day,max(0,min(start,1380))
     def mouseDoubleClickEvent(self,event):
+        event.accept()
+        if not self.interactive or event.button()!=Qt.MouseButton.LeftButton:return
         if event.position().x()<self.AXIS or event.position().y()<self.TOP:return
+        if any(card.isVisible() and card.geometry().contains(event.position().toPoint()) for card in self.blocks.values()):return
         day,start=self.slot_at(event.position().toPoint())
         if day not in self.off_days:self.create.emit(day,clock(start))
-        super().mouseDoubleClickEvent(event)
     def paintEvent(self,event):
         c=colors();p=QPainter(self);p.fillRect(self.rect(),QColor(c['surface']));width=(self.width()-self.AXIS)/self.days;now=datetime.now(KST)
         if now.weekday()<self.days:
