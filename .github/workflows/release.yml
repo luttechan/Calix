@@ -56,7 +56,7 @@ jobs:
       - name: Build Windows application
         run: python -m PyInstaller --noconfirm --clean Calix.spec
       - name: Verify embedded code and bundle size
-        run: python tools/check_bundle.py 'dist/Calix 1.2.0-r3'
+        run: python tools/check_bundle.py 'dist/Calix 1.2.0-r4'
       - name: Check packaged UI and browser
         env:
           QT_QPA_PLATFORM: offscreen
@@ -64,7 +64,7 @@ jobs:
           OPENSSL_ia32cap: '0:0:0:0:0'
         run: |
           $ErrorActionPreference = 'Stop'
-          $exe = Join-Path (Get-Location) 'dist/Calix 1.2.0-r3/Calix.exe'
+          $exe = Join-Path (Get-Location) 'dist/Calix 1.2.0-r4/Calix.exe'
           foreach ($mode in @('smoke-test','browser-check')) {
             $report = Join-Path $env:RUNNER_TEMP "calix-$mode.json"
             $process = Start-Process -FilePath $exe -ArgumentList @("--$mode",$report) -WindowStyle Hidden -PassThru
@@ -84,7 +84,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $report = Join-Path $env:RUNNER_TEMP 'calix-navigation.json'
-          $exe = Join-Path (Get-Location) 'dist/Calix 1.2.0-r3/Calix.exe'
+          $exe = Join-Path (Get-Location) 'dist/Calix 1.2.0-r4/Calix.exe'
           $process = Start-Process -FilePath $exe -ArgumentList @('--navigation-check',$report) -WindowStyle Hidden -PassThru
           if (-not $process.WaitForExit(30000)) { $process.Kill(); throw 'Menu check timed out.' }
           if ($process.ExitCode -notin @(0,1) -or -not (Test-Path -LiteralPath $report)) { throw 'Menu check failed.' }
@@ -98,9 +98,9 @@ jobs:
       - name: Package runtime only
         run: |
           $output = Join-Path $env:RUNNER_TEMP 'calix-release'
-          python tools/package_release.py 'dist/Calix 1.2.0-r3' $output
+          python tools/package_release.py 'dist/Calix 1.2.0-r4' $output
           if ($LASTEXITCODE -ne 0) { throw 'Packaging failed.' }
-          if ((Get-Item -LiteralPath (Join-Path $output 'Calix-1.2.0-r3-Windows-x64.zip')).Length -ge 200MB) { throw 'Unexpected archive size.' }
+          if ((Get-Item -LiteralPath (Join-Path $output 'Calix-1.2.0-r4-Windows-x64.zip')).Length -ge 200MB) { throw 'Unexpected archive size.' }
       - name: Build and verify installer
         run: |
           $ErrorActionPreference = 'Stop'
@@ -110,16 +110,16 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed.' }
           }
           $package = Join-Path $env:RUNNER_TEMP 'calix-release'
-          $bundle = Join-Path (Get-Location) 'dist/Calix 1.2.0-r3'
+          $bundle = Join-Path (Get-Location) 'dist/Calix 1.2.0-r4'
           & $compiler "/DBundleDir=$bundle" "/DOutputDir=$package" 'tools/Calix-Setup.iss'
           if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
-          $setup = Join-Path $package 'Calix-1.2.0-r3-Setup-x64.exe'
+          $setup = Join-Path $package 'Calix-1.2.0-r4-Setup-x64.exe'
           python tools/check_installer.py $setup $bundle (Join-Path $env:RUNNER_TEMP 'calix-install-check')
           if ($LASTEXITCODE -ne 0) { throw 'Installer validation failed.' }
           $digest = (Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash.ToLowerInvariant()
-          Add-Content -LiteralPath (Join-Path $package 'SHA256SUMS.txt') -Value "$digest  Calix-1.2.0-r3-Setup-x64.exe" -Encoding utf8
+          Add-Content -LiteralPath (Join-Path $package 'SHA256SUMS.txt') -Value "$digest  Calix-1.2.0-r4-Setup-x64.exe" -Encoding utf8
       - name: Publish release
-        if: github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'Calix Release v.1.2.0-r3'
+        if: github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'Calix Release v.1.2.0-r4'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -128,7 +128,7 @@ jobs:
           $headers = @{ Authorization = "Bearer $env:GH_TOKEN"; Accept = 'application/vnd.github+json' }
           $existing = $null
           try {
-            $existing = Invoke-RestMethod -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/releases/tags/v1.2.0-r3" -Headers $headers
+            $existing = Invoke-RestMethod -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/releases/tags/v1.2.0-r4" -Headers $headers
           } catch {
             if ([int]$_.Exception.Response.StatusCode -ne 404) { throw }
           }
@@ -136,5 +136,5 @@ jobs:
             if ($existing.target_commitish -eq $env:GITHUB_SHA) { exit 0 }
             throw 'This revision already exists. Do not move the old tag.'
           }
-          gh release create v1.2.0-r3 (Join-Path $package 'Calix-1.2.0-r3-Windows-x64.zip') (Join-Path $package 'Calix-1.2.0-r3-Setup-x64.exe') (Join-Path $package 'SHA256SUMS.txt') --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Calix 1.2 revision 3' --notes '시간표 수업 편집 시 추가 창이 연속으로 열리는 오류 수정. 과목 선택 오류 방지.' --latest
+          gh release create v1.2.0-r4 (Join-Path $package 'Calix-1.2.0-r4-Windows-x64.zip') (Join-Path $package 'Calix-1.2.0-r4-Setup-x64.exe') (Join-Path $package 'SHA256SUMS.txt') --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Calix 1.2 revision 4' --notes '상세 일정 창 배경 투명화 오류 수정. 시간표 편집 오류 수정 포함.' --latest
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed.' }

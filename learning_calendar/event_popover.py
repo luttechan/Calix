@@ -1,7 +1,7 @@
 """Cursor-anchored native property editor for synchronized and personal events."""
 import sqlite3
-from PySide6.QtCore import Qt,QTimer,QPoint,Signal,QEvent
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtCore import Qt,QTimer,QPoint,Signal,QEvent,QRectF
+from PySide6.QtGui import QGuiApplication,QPainter,QColor,QPen
 from PySide6.QtWidgets import QFrame,QWidget,QVBoxLayout,QHBoxLayout,QLabel,QLineEdit,QPlainTextEdit,QComboBox,QPushButton,QToolButton,QScrollArea,QApplication
 from .event_view import EVENT_ROLE
 from .event_choices import EventChoices
@@ -24,10 +24,10 @@ class EventPopover(QFrame):
     advanced_requested=Signal(object)
     def __init__(self,day,events,types,save,parent=None,read_only=False):
         super().__init__(parent,Qt.WindowType.Tool|Qt.WindowType.FramelessWindowHint);self.setObjectName('eventPopover');self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose);self.setAttribute(Qt.WidgetAttribute.WA_QuitOnClose,False)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground);self._watching=False
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground);self._watching=False;self.setWindowTitle('상세 일정')
         self.rows=list(events);self.save_callback=save;self.current=None;self.loading=False;self.dirty=False;self.read_only=read_only
         self.timer=QTimer(self);self.timer.setSingleShot(True);self.timer.setInterval(650);self.timer.timeout.connect(self.flush)
-        c=colors();self.setStyleSheet(f'QFrame#eventPopover {{background:{c["surface"]};border:1px solid {c["line"]};border-radius:18px;}}')
+        self.setFrameShape(QFrame.Shape.NoFrame)
         outer=QVBoxLayout(self);outer.setContentsMargins(16,16,16,16);outer.setSpacing(12);header=QHBoxLayout();header.addWidget(label(f'{day.month}월 {day.day}일','section'));self.count=label(f'{len(self.rows)}개 일정','badge');header.addWidget(self.count);header.addStretch()
         close=QToolButton();close.setObjectName('zoomButton');close.setIcon(icon('close'));close.setFixedSize(30,30);close.setToolTip('닫기');close.setAccessibleName('일정 상세 닫기');close.clicked.connect(self.close);header.addWidget(close);outer.addLayout(header)
         scroll=QScrollArea();scroll.setWidgetResizable(True);scroll.setFrameShape(QFrame.Shape.NoFrame);body=QWidget();scroll.setWidget(body);body.setAutoFillBackground(False);form=QVBoxLayout(body);form.setContentsMargins(0,0,8,0);form.setSpacing(12)
@@ -58,6 +58,13 @@ class EventPopover(QFrame):
         self.resize(510 if len(self.rows)>1 else 430,740 if len(self.rows)>1 else 520)
         from .popup_tools import add_hints
         add_hints(self)
+    def paintEvent(self,event):
+        # A translucent top-level QFrame cannot rely on stylesheet background
+        # propagation. Repaint its opaque surface on every dirty region.
+        c=colors();painter=QPainter(self);painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source);painter.fillRect(self.rect(),Qt.GlobalColor.transparent)
+        painter.setPen(QPen(QColor(c['line']),1));painter.setBrush(QColor(c['surface']))
+        painter.drawRoundedRect(QRectF(self.rect()).adjusted(.5,.5,-.5,-.5),18,18);painter.end()
     def showEvent(self,event):
         super().showEvent(event)
         if not self._watching:QApplication.instance().installEventFilter(self);self._watching=True
