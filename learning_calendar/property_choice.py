@@ -2,11 +2,12 @@
 from PySide6.QtCore import Qt,Signal,QEvent,QSize,QRectF
 from PySide6.QtGui import QStandardItemModel,QStandardItem,QPainter,QColor,QPen
 from PySide6.QtWidgets import QWidget,QVBoxLayout,QLineEdit,QListView,QLabel,QStyledItemDelegate,QStyle
-from .design import colors,icon
+from .design import colors
 
 VALUE_ROLE=int(Qt.ItemDataRole.UserRole)+1
 TEXT_ROLE=VALUE_ROLE+1
 CURRENT_ROLE=VALUE_ROLE+2
+COLOR_ROLE=VALUE_ROLE+3
 
 
 class ChoiceDelegate(QStyledItemDelegate):
@@ -16,9 +17,9 @@ class ChoiceDelegate(QStyledItemDelegate):
         rect=option.rect.adjusted(2,1,-2,-1)
         active=bool(option.state&(QStyle.StateFlag.State_Selected|QStyle.StateFlag.State_MouseOver))
         painter.setPen(Qt.PenStyle.NoPen);painter.setBrush(QColor(c['soft'] if active else c['surface']));painter.drawRoundedRect(QRectF(rect),6,6)
-        left=rect.left()+10;decoration=index.data(Qt.ItemDataRole.DecorationRole)
-        if decoration:
-            decoration.paint(painter,left,rect.center().y()-8,16,16);left+=24
+        left=rect.left()+10;tint=index.data(COLOR_ROLE)
+        if tint:
+            painter.setBrush(QColor(tint));painter.drawEllipse(QRectF(left+3,rect.center().y()-4,8,8));left+=24
         text_rect=rect.adjusted(left-rect.left(),0,-34,0);painter.setFont(option.font);painter.setPen(QColor(c['ink']))
         text=painter.fontMetrics().elidedText(str(index.data() or ''),Qt.TextElideMode.ElideRight,text_rect.width())
         painter.drawText(text_rect,Qt.AlignmentFlag.AlignLeft|Qt.AlignmentFlag.AlignVCenter,text)
@@ -48,7 +49,8 @@ class PropertyChoice(QWidget):
         for text,value,color in self._choices:
             if query and query not in text.casefold():continue
             item=QStandardItem(text);item.setEditable(False);item.setData(value,VALUE_ROLE);item.setData(text,TEXT_ROLE);item.setData((text==self._current) if self.editable else value==self._selected,CURRENT_ROLE);item.setToolTip(text)
-            if color:item.setIcon(icon('custom',color))
+            if color:item.setData(color,COLOR_ROLE)
+            if item.data(CURRENT_ROLE):item.setData('현재 값',Qt.ItemDataRole.AccessibleDescriptionRole)
             self._model.appendRow(item)
         count=self._model.rowCount();self.options.setVisible(bool(count));self.options.setFixedHeight(min(224,count*36+8));self.empty.setVisible(not count)
         self.options.setCurrentIndex(self._model.index(-1,0))
