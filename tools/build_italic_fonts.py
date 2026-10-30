@@ -13,6 +13,7 @@ from fontTools.pens.transformPen import TransformPen
 root=Path(__file__).resolve().parents[1]/'asset/style'
 for weight,source,style in ((400,'Regular','Italic'),(700,'Bold','BoldItalic')):
     font=TTFont(root/f'CalixSans-{source}.ttf',recalcTimestamp=False)
+    if 'STAT' in font:del font['STAT']
     glyphset=font.getGlyphSet();glyphs={}
     for name in font.getGlyphOrder():
         record=DecomposingRecordingPen(glyphset);glyphset[name].draw(record)

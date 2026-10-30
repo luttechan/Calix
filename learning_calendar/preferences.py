@@ -19,7 +19,7 @@ def prepare_credentials():
 
 
 def read_settings(path: str | Path) -> dict:
-    defaults = {'window_width':1240,'window_height':840,'active_db':'learning.db','theme':'sky','notifications':False,'glass':True}
+    defaults = {'window_width':1240,'window_height':840,'active_db':'learning.db','theme':'sky','notifications':False,'glass':True,'font_mode':'pretendard'}
     try:
         settings = json.loads(Path(path).read_text(encoding='utf-8'))
         if isinstance(settings,dict):
@@ -29,6 +29,7 @@ def read_settings(path: str | Path) -> dict:
             for key in ('notifications','glass'):
                 if type(settings.get(key)) is bool:defaults[key]=settings[key]
             if settings.get('theme') in ('pink','sky','mint','purple','dark'):defaults['theme']=settings['theme']
+            if settings.get('font_mode') in ('pretendard','windows'):defaults['font_mode']=settings['font_mode']
             name=settings.get('active_db')
             reserved={'CON','PRN','AUX','NUL',*(f'COM{i}' for i in range(1,10)),*(f'LPT{i}' for i in range(1,10))}
             if (isinstance(name,str) and 3<len(name)<=128 and name.endswith('.db')
@@ -43,7 +44,7 @@ def read_settings(path: str | Path) -> dict:
 def write_settings(path: str | Path, settings: dict):
     path = Path(path)
     path.parent.mkdir(parents=True,exist_ok=True)
-    safe = {k:v for k,v in settings.items() if k in {'window_width','window_height','active_db','theme','notifications','glass'}}
+    safe = {k:v for k,v in settings.items() if k in {'window_width','window_height','active_db','theme','notifications','glass','font_mode'}}
     temp=path.with_suffix('.tmp')
     temp.write_text(json.dumps(safe,ensure_ascii=False,indent=2),encoding='utf-8')
     temp.replace(path)

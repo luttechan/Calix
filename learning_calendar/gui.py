@@ -90,6 +90,8 @@ class MainWindow(QMainWindow):
             migrate_legacy_data(self.appdir)
         self.appdir.mkdir(parents=True,exist_ok=True)
         self.settings_path=self.appdir/'settings.json';self.settings=read_settings(self.settings_path)
+        from .fonts import set_text_style
+        set_text_style(QApplication.instance(),self.settings.get('font_mode','pretendard'))
         from .holidays import HolidayCalendar
         self.holiday_calendar=HolidayCalendar(self.appdir/'holidays.db')
         active=self.settings.get('active_db','learning.db')
@@ -105,6 +107,7 @@ class MainWindow(QMainWindow):
         self._closing=False;self._closed=False;self._login_then_sync=False;self._dialogs={}
         self.selected_date=datetime.now(KST).date();self.month=self.selected_date.replace(day=1)
         self._today=self.selected_date;self._filtered=[];self._buckets={};self._timetable_signature=None
+        self.checklist=None;self._checklist_signature=None
         self._busy=False;self._filter_signature=None;self._home_filter=None;self._page_filters={};self._page_cache={}
         self._undo_stack=[];self.diary=None;self._tray=None;self._event_popover=None;self._calendar=None
         from .reminders import DueReminders
@@ -168,6 +171,8 @@ class MainWindow(QMainWindow):
         self.refresh()
         self.main_stack.setCurrentIndex(2)
         self.diary_holder.layout().activate()
+        self._ensure_checklist();self.main_stack.setCurrentIndex(3)
+        self.checklist_holder.layout().activate();self.checklist.ensurePolished();self.checklist.layout().activate()
         self.main_stack.setCurrentIndex(0)
         for view in (self.video_list,self.assignment_list):
             delegate=view.itemDelegate()
@@ -221,6 +226,7 @@ class MainWindow(QMainWindow):
         for i,(name,kind) in enumerate((('달력','calendar'),('영상','video'),('과제','assignment'),('시간표','timetable'))):
             b=NavigationButton(name,kind,rail);b.clicked.connect(lambda checked=False,n=i:self.select_page(n))
             side.addWidget(b);self.nav.append(b)
+        self.checklist_nav=NavigationButton('체크리스트','assignment',rail);self.checklist_nav.clicked.connect(self.show_checklist);side.addWidget(self.checklist_nav)
         self.diary_nav=NavigationButton('일기장','diary',rail);self.diary_nav.clicked.connect(self.show_diary);side.addSpacing(10);side.addWidget(self.diary_nav)
         self.home_nav.setChecked(True);side.addStretch()
         side.addWidget(label('설정','eyebrow'));side.addSpacing(5)
@@ -270,7 +276,8 @@ class MainWindow(QMainWindow):
         self.tabs.addWidget(self.video_list);self.tabs.addWidget(self.assignment_list)
         self.timetable_page=QWidget();self.tabs.addWidget(self.timetable_page);self._timetable_built=False
         v.addWidget(self.tabs,1)
-        self.main_stack.addWidget(self.detail_workspace);self.diary_holder=QWidget();self.main_stack.addWidget(self.diary_holder);master.addWidget(self.main_stack,1);v=master
+        self.main_stack.addWidget(self.detail_workspace);self.diary_holder=QWidget();self.main_stack.addWidget(self.diary_holder)
+        self.checklist_holder=QWidget();self.main_stack.addWidget(self.checklist_holder);master.addWidget(self.main_stack,1);v=master
         footer=QHBoxLayout();self.sync_info=label('','muted');footer.addWidget(self.sync_info,1)
         self.undo_button=button('되돌리기',self.undo_manual,'ghost');self.undo_button.setEnabled(False);self.undo_button.setToolTip('이전 일정 변경 취소');footer.addWidget(self.undo_button)
         self.status=ElideLabel('준비');self.status.setObjectName('muted');self.status.setFixedWidth(260);footer.addWidget(self.status)
@@ -407,7 +414,13 @@ class MainWindow(QMainWindow):
         self._apply_filters(status=0 if isinstance(status,bool) else int(status));self.refresh()
 
     def choose_theme(self):
-        dialog=self._take_ready_dialog('theme');dialog.chosen.connect(self.set_theme);dialog.notifications_changed.connect(self.set_notifications);dialog.glass_changed.connect(self.set_glass);self._exec_dialog(dialog)
+        dialog=self._take_ready_dialog('theme');dialog.chosen.connect(self.set_theme);dialog.notifications_changed.connect(self.set_notifications);dialog.glass_changed.connect(self.set_glass);dialog.font_changed.connect(self.set_font_mode);self._exec_dialog(dialog)
+
+    def set_font_mode(self,mode):
+        from .fonts import set_text_style
+        mode=mode if mode in ('pretendard','windows') else 'pretendard'
+        self.main_stack._settle();self.settings['font_mode']=mode;set_text_style(QApplication.instance(),mode);self.setStyleSheet(stylesheet(self.theme_key));write_settings(self.settings_path,self.settings)
+        self._timetable_signature=None;self.refresh()
 
     def set_glass(self,enabled):
         self.main_stack._settle();self.settings['glass']=bool(enabled);QApplication.instance().setProperty('calixGlass',bool(enabled))
@@ -437,7 +450,7 @@ class MainWindow(QMainWindow):
         if self._ready_dialogs:self._ready_dialogs.invalidate()
         apply_palette(QApplication.instance(),key);self.setStyleSheet(stylesheet(key))
         write_settings(self.settings_path,self.settings)
-        for b in [self.home_nav,self.diary_nav]+self.nav:b.setIcon(icon(b.kind))
+        for b in [self.home_nav,self.diary_nav,self.checklist_nav]+self.nav:b.setIcon(icon(b.kind))
         self.centralWidget().invalidate();self.update();self.home.hero.update()
         if self._calendar is not None:self._calendar.set_month(self.month,self.selected_date,self._buckets,self.holiday_calendar.year(self.month.year),self.holiday_calendar.special_dates(self.month.year))
         for view in (self.video_list,self.assignment_list,self.day_list,self.home.upcoming,self.home.remaining_table):view.viewport().update()
@@ -503,6 +516,7 @@ class MainWindow(QMainWindow):
         self.state_select.setCurrentIndex(status);self.refresh()
 
     def _render_visible(self):
+        if self.main_stack.currentIndex()==3:self._refresh_checklist();return
         index=self.tabs.currentIndex()
         if index==0:
             self.month_label.setText(f'{self.month.year}년 {self.month.month}월')
@@ -566,10 +580,12 @@ class MainWindow(QMainWindow):
     def go_today(self):self.select_day(datetime.now(KST).date())
 
     def _set_busy(self,busy):
+        if busy and self.checklist:self.checklist.flush_editor()
         self._busy=busy;self.sync_btn.setEnabled(not busy);self.login_button.setEnabled(not busy);self.account_button.setEnabled(not busy)
         self.add_task_button.setEnabled(not busy)
         self.sync_btn.setText('수집 중…' if busy else '동기화')
         if hasattr(self,'timetable'):self.timetable.set_read_only(busy or self.demo)
+        if self.checklist:self._checklist_signature=None;self._refresh_checklist()
 
     def login(self):
         if self._busy or self._closing:return
@@ -855,7 +871,27 @@ class MainWindow(QMainWindow):
             self._sync_after_browser=False;self.manual_sync(auto=True)
 
     def _reload(self):
+        self._checklist_signature=None
         self.snapshot=Snapshot(self.store.events(),self.store.courses());self._reload_type_filter();self._reload_course_filter();self.refresh()
+
+    def _ensure_checklist(self):
+        if self.checklist is None:
+            from .checklist_view import ChecklistView
+            self.checklist=ChecklistView(self.store,self);layout=QVBoxLayout(self.checklist_holder);layout.setContentsMargins(0,0,0,0);layout.addWidget(self.checklist)
+        return self.checklist
+
+    def show_checklist(self):
+        if self.diary:
+            if not self.diary.flush():return
+            self.diary.lock()
+        self._ensure_checklist()
+        self._refresh_checklist();self.checklist_nav.setChecked(True);self.heading.setText('체크리스트');self.add_task_button.hide();self.detail_button.hide();self.main_stack.slide_to(3);self._present_page()
+
+    def _refresh_checklist(self):
+        if self.checklist is None:return
+        snapshot=self._current_snapshot();signature=(id(snapshot),id(self.store),tuple(tuple(r.items()) for r in self._sessions),self.demo,self._busy)
+        if signature==self._checklist_signature:return
+        self._checklist_signature=signature;self.checklist.set_data(self.store,snapshot.events,snapshot.courses,self._sessions,self.demo or self._busy)
 
     def _ensure_diary(self):
         if self.diary is None:
@@ -899,17 +935,20 @@ class MainWindow(QMainWindow):
         except (OSError,ValueError, __import__('sqlite3').Error):
             # A recovery archive is deliberately retained for any partial disk failure.
             QMessageBox.warning(self,'복원 실패','복원을 완료하지 못했습니다. 복원 전 백업은 자료 폴더에 보관했습니다.');return
+        if self.checklist:self.checklist.undo_rows=[]
         self.holiday_calendar.reload();self._undo_stack.clear();self.undo_button.setEnabled(False);self._sessions=self.store.timetable();self._timetable_signature=None;self._reload()
         self.status.setText('백업 복원됨')
         if self.main_stack.currentIndex()==2:self.show_diary()
 
     def _focus_search(self):
+        if self.main_stack.currentIndex()==3:self.checklist.search.setFocus();return
         if self.main_stack.currentIndex()==2:self.diary.search.setFocus();return
         if self.main_stack.currentIndex()==0 or self.tabs.currentIndex()==3:self.open_details('all')
         self.search.setFocus()
 
     def add_manual(self,day=None,event=None):
         if self._busy:return
+        if self.main_stack.currentIndex()==3:self.checklist.add_task();return
         if self.main_stack.currentIndex()==2:
             if self.diary.stack.currentWidget()==self.diary.workspace:self.diary.new_entry()
             return
@@ -1092,6 +1131,11 @@ class MainWindow(QMainWindow):
         self.timetable.add_requested.connect(self.add_session);self.timetable.edit_requested.connect(self.edit_session)
         self.timetable.remove_requested.connect(self.remove_session);self.timetable.color_changed.connect(self._color_session)
         self.timetable.move_requested.connect(self._move_session);self.timetable.slot_requested.connect(self._add_at_slot)
+        self.timetable.off_days_changed.connect(self._set_off_days)
+
+    def _set_off_days(self,days):
+        if self._busy or self.demo:return
+        self.store.set_meta('timetable_off_days',json.dumps(sorted(days)));self._timetable_signature=None;self._refresh_timetable()
 
     def _refresh_timetable(self):
         if not self._timetable_built:return
@@ -1102,9 +1146,12 @@ class MainWindow(QMainWindow):
         workloads=defaultdict(lambda:[0,0])
         for event in self._current_snapshot().pending():
             if event.kind in ('assignment','movie'):workloads[event.course_id][0 if event.kind=='assignment' else 1]+=1
-        signature=(self.demo,tuple(names.items()),tuple(tuple(r.items()) for r in sessions),tuple(sorted((key,tuple(value)) for key,value in workloads.items())),self.theme_key,datetime.now(KST).date())
+        try:off_days=json.loads(self.store.get_meta('timetable_off_days','[]'))
+        except ValueError:off_days=[]
+        off_days={d for d in off_days if type(d) is int and 0<=d<7} if isinstance(off_days,list) else set()
+        signature=(self.demo,tuple(names.items()),tuple(tuple(r.items()) for r in sessions),tuple(sorted((key,tuple(value)) for key,value in workloads.items())),self.theme_key,datetime.now(KST).date(),tuple(sorted(off_days)))
         if signature==self._timetable_signature:self.timetable.surface.update();return
-        self._timetable_signature=signature;self.timetable.set_read_only(self.demo or self._busy);self.timetable.set_data(sessions,names,workloads)
+        self._timetable_signature=signature;self.timetable.set_read_only(self.demo or self._busy);self.timetable.set_data(sessions,names,workloads,off_days=off_days)
 
     def _selected_session(self,item_id=None):
         if not self._timetable_built:return None
@@ -1245,6 +1292,7 @@ class MainWindow(QMainWindow):
             self._shutdown_poll=QTimer(self);self._shutdown_poll.setInterval(50)
             self._shutdown_poll.timeout.connect(self.close);self._shutdown_poll.start()
         if not self._shutdown_forms_ready:
+            if self.checklist:self.checklist.flush_editor()
             if self._event_popover and not self._event_popover.close():
                 self._cancel_shutdown();self.status.setText('변경 사항을 저장하지 못했습니다.');event.ignore();return
             if self.diary and not self.diary.prepare_close():

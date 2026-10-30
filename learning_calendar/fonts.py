@@ -31,8 +31,19 @@ def apply_korean_font(app):
     font = QFont(family)
     font.setPointSizeF(10.0)
     font.setWeight(QFont.Weight.Normal)
-    font.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
+    font.setStyleStrategy(QFont.StyleStrategy.PreferDefault)
+    font.setHintingPreference(QFont.HintingPreference.PreferFullHinting)
     app.setFont(font)
     app.setProperty('bufsFontFamily', family)
+    app.setProperty('bufsBundledFontFamily', family)
     app.setProperty('bufsFontId', font_id)
+    return family
+
+
+def set_text_style(app,mode='pretendard'):
+    from PySide6.QtGui import QFont
+    bundled=app.property('bufsBundledFontFamily') or apply_korean_font(app)
+    family='Malgun Gothic' if mode=='windows' else bundled
+    font=QFont(family);font.setPointSizeF(10);font.setStyleStrategy(QFont.StyleStrategy.PreferDefault);font.setHintingPreference(QFont.HintingPreference.PreferFullHinting)
+    app.setFont(font);app.setProperty('bufsFontFamily',family)
     return family

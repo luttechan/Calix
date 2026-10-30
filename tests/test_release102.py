@@ -32,7 +32,7 @@ def test_local_edits_survive_sync_archive_reopen_and_source_changes(tmp_path):
 def test_backup_roundtrip_and_legacy_preserve_edited_names_and_types(tmp_path):
     store=Store(tmp_path/'learning.db');event=imported();store.apply_batch([Course(1,'과목')],{(1,'assignment'):[event]})
     tid=store.save_event_type('발표','#7582E6');store.save_event_details(event.key,'직접 쓴 이름',tid,'메모')
-    path=tmp_path/'backup.calix';write_backup(path,store,tmp_path);value=read_backup(path);assert value['version']==3
+    path=tmp_path/'backup.calix';write_backup(path,store,tmp_path);value=read_backup(path);assert value['version']==4
     store.save_event_details(event.key,'다른 이름',None,'');restore_backup(value,store,tmp_path);assert store.events()[0].title=='직접 쓴 이름'
     legacy=json.loads(json.dumps(value));legacy['version']=1;del legacy['schedule']['customizations'];legacy['schedule']['types']=[dict(id=tid,name='충돌 유형',color='#7582E6')]
     restore_backup(legacy,store,tmp_path);row=store.events()[0];assert (row.title,row.type_label,row.note)==('직접 쓴 이름','발표','메모')

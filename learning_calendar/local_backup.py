@@ -20,7 +20,8 @@ def write_backup(path,store,folder):
     schedule=dict(owner=store.get_meta('canvas_user_id'),courses=_rows(store.db,'SELECT id,name,alias FROM courses'),
         types=_rows(store.db,'SELECT id,name,color FROM event_types'),timetable=store.timetable(),customizations=store.local_customizations(),
         events=_rows(store.db,'SELECT key,course_id,title,due_at,completed,note,starred,type_id,series_id FROM events WHERE manual=1 AND active=1'))
-    payload=dict(format='Calix personal backup',version=3,schedule=schedule,journals=[],vault=None,holiday_overrides=[],holiday_preferences=dict(catholic=False,klone_birthday=False))
+    from .checklist_store import backup_state
+    payload=dict(format='Calix personal backup',version=4,schedule=schedule,checklist=backup_state(store),journals=[],vault=None,holiday_overrides=[],holiday_preferences=dict(catholic=False,klone_birthday=False))
     holiday_path=folder/'holidays.db'
     if holiday_path.is_file():
         db=sqlite3.connect(holiday_path);db.row_factory=sqlite3.Row
@@ -77,7 +78,10 @@ def read_backup(path,owner=''):
             files=archive.infolist()
             if len(files)!=1 or files[0].filename!='calix.json' or files[0].file_size>LIMIT:raise ValueError('Calix 백업 파일이 아닙니다.')
             value=json.loads(archive.read(files[0]))
-        if value.get('format')!='Calix personal backup' or value.get('version') not in (1,2,3):raise ValueError('지원하지 않는 백업입니다.')
+        if value.get('format')!='Calix personal backup' or value.get('version') not in (1,2,3,4):raise ValueError('지원하지 않는 백업입니다.')
+        if value['version']>=4 or 'checklist' in value:
+            from .checklist_store import validate_state
+            validate_state(value['checklist'])
         schedule=value['schedule'];source_owner=_string(schedule['owner'],100)
         if owner and source_owner and owner!=source_owner:raise ValueError('다른 학교 계정의 일정 백업입니다.')
         courses={}
@@ -161,6 +165,9 @@ def restore_backup(value,store,folder):
                 # SQLite's rollback journal coordinates these databases as one
                 # transaction. No user-provided SQL/schema enters this connection.
                 with db:
+                    if 'checklist' in value:
+                        from .checklist_store import restore_state
+                        restore_state(db,value['checklist'])
                     if 'holiday_preferences' in value:
                         db.execute('CREATE TABLE IF NOT EXISTS holiday_restore.settings(key TEXT PRIMARY KEY,value TEXT NOT NULL)')
                         for key in ('catholic','klone_birthday'):

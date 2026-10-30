@@ -51,6 +51,8 @@ class Store:
         self.db.execute('CREATE TABLE IF NOT EXISTS event_customizations(event_key TEXT PRIMARY KEY,title TEXT,type_id INTEGER,note TEXT NOT NULL DEFAULT \'\')')
         if not self.db.execute('SELECT 1 FROM event_types LIMIT 1').fetchone():
             self.db.executemany('INSERT INTO event_types(name,color) VALUES(?,?)',[('할 일','#7582E6'),('약속','#D48560'),('공부','#3AA68E')])
+        from .checklist_store import initialize
+        initialize(self.db)
         self.db.commit()
 
     def close(self):

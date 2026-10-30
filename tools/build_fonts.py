@@ -8,6 +8,9 @@ source=TTFont(root/'PretendardVariable.ttf',recalcTimestamp=False)
 for weight,style in ((400,'Regular'),(500,'Medium'),(600,'SemiBold'),(700,'Bold')):
     target=root/f'CalixSans-{style}.ttf'
     font=instantiateVariableFont(source,{'wght':weight},inplace=False,optimize=True)
+    # The source's variable-axis STAT names misidentify derived italic faces
+    # as upright Bold in DirectWrite. Static faces use explicit name/OS2 data.
+    if 'STAT' in font:del font['STAT']
     for record in font['name'].names:
         values={1:'Calix Sans',2:style,3:f'CalixSans-{weight}-1.0',4:f'Calix Sans {style}',6:f'CalixSans-{style}',16:'Calix Sans',17:style,25:'CalixSans'}
         if record.nameID in values:record.string=values[record.nameID].encode(record.getEncoding())

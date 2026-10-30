@@ -3,7 +3,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor,QIcon,QPainter,QPalette,QPen,QPixmap
 from PySide6.QtWidgets import QApplication
 
-VERSION='1.1.0'
+VERSION='1.2.0'
 THEME_NAMES={'pink':'핑크','sky':'스카이블루','mint':'민트','purple':'퍼플','dark':'다크'}
 THEMES={
  'pink':dict(bg='#FFF6FA',side='#FFFDFE',surface='#FFFFFF',soft='#FCE7F0',hover='#FFF0F6',ink='#342431',muted='#836875',line='#EDDCE5',accent='#B13970',onaccent='#FFFFFF',hero='#F8D7E7',hero2='#FFEDF5'),
@@ -50,6 +50,10 @@ def stylesheet(key=DEFAULT_THEME):
     app=QApplication.instance();c['font_family']=(app.property('bufsFontFamily') if app else None) or 'Pretendard Variable';c['feast_ink']='#C3A6EC' if QColor(c['bg']).lightness()<128 else '#765197'
     base='''
 QWidget {{ font-family:"{font_family}"; color:{ink}; font-size:14px; }}
+QTableView#checklistTable {{ background:{surface};alternate-background-color:{surface};border:1px solid {line};border-radius:12px;selection-background-color:{soft};selection-color:{ink}; }}
+QTableView#checklistTable::item {{ padding:7px 9px;border-bottom:1px solid {line}; }}
+QTabBar::tab {{ padding:9px 17px;border:0;border-bottom:2px solid transparent;color:{muted};background:transparent; }}
+QTabBar::tab:selected {{ color:{accent};border-bottom:2px solid {accent};font-weight:600; }}
 QMainWindow, QDialog, QWidget#root, QWidget#page {{ background:{bg}; }}
 QLabel {{ background:transparent; }}
 QFrame#sidebar {{ background:{side}; border-right:1px solid {line}; }}
