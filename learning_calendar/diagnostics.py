@@ -52,7 +52,8 @@ def finish_smoke(window,output):
     badge=next(b for b in window.calendar.badges if b.property('calendarDate')=='2026-11-29')
     native_index=window.calendar.view.indexAt(badge.geometry().center())
     result['calendar_nov29_overlay_matches']=badge.isVisible() and badge.movie.isVisible() and '영상 2건' in badge.accessibleName() and window.calendar.view.model().data(native_index)==29 and native_index.row()==6
-    result['compact_calendar_chips']=badge.height()==18
+    visible=[child for child in badge.children() if hasattr(child,'isVisible') and child.isVisible()]
+    result['compact_calendar_chips']=8<=badge.height()<=24 and all(badge.rect().contains(child.geometry()) for child in visible) and all(a.geometry().right()<b.geometry().left() for a,b in zip(visible,visible[1:]))
     result['calendar_full_width_default']=not window.day_panel.isVisible()
     from .design import glass_enabled
     result['glass_enabled']=glass_enabled()
