@@ -64,6 +64,28 @@ class ChecklistStore:
         except ValueError:return set()
         return set(value)&{'assignment','movie'} if isinstance(value,list) and all(isinstance(x,str) for x in value) else set()
     def set_included(self,kinds):self.store.set_meta('checklist_sources',json.dumps(sorted(set(kinds)&{'assignment','movie'})))
+    def freeze_imports(self,events):
+        kinds=self.included()
+        if not kinds:return
+        with self.db:
+            for event in events:
+                if not event.manual and event.kind in kinds:
+                    self.db.execute('INSERT OR IGNORE INTO checklist_tasks(id,section_id,source_key,note) VALUES(?,1,?,?)',('event:'+event.key,event.key,event.note))
+            self.db.execute("INSERT OR REPLACE INTO meta VALUES('checklist_sources','[]')")
+    def import_events(self,events):
+        count=0
+        with self.db:
+            for event in events:
+                if event.manual or event.kind not in ('assignment','movie'):continue
+                key='event:'+event.key;existing=self.db.execute('SELECT trashed FROM checklist_tasks WHERE id=?',(key,)).fetchone()
+                if existing is None:
+                    self.db.execute('INSERT INTO checklist_tasks(id,section_id,source_key,note) VALUES(?,1,?,?)',(key,event.key,event.note));count+=1
+                elif existing['trashed']:
+                    self.db.execute('UPDATE checklist_tasks SET trashed=0 WHERE id=?',(key,));count+=1
+        return count
+    def contains(self,event):
+        row=self.db.execute('SELECT trashed FROM checklist_tasks WHERE source_key=?',(event.key,)).fetchone()
+        return row is not None and not row['trashed']
     def rows(self,section_id,events=(),sessions=(),trash=False):
         records={r['id']:dict(r) for r in self.db.execute('SELECT * FROM checklist_tasks WHERE section_id=?',(section_id,))}
         states={s['id']:s for s in self.statuses()};result=[];professors={}
@@ -73,8 +95,8 @@ class ChecklistStore:
         if section_id==1:
             kinds=self.included()
             for e in events:
-                if e.manual or e.kind not in kinds and not trash:continue
                 key='event:'+e.key;record=records.get(key,{})
+                if e.manual or e.kind not in kinds and not record and not trash:continue
                 if bool(record.get('trashed',0))!=trash:continue
                 row=dict(id=key,section_id=1,source_key=e.key,title=e.title,due_at=e.due_at,category=e.course_name,role='',professor=' / '.join(sorted(professors.get(e.course_id,()))),status_id=4 if e.completed else 1,note=e.note,url=e.url,source_kind=e.kind,school_completed=e.completed)
                 row.update({k:v for k,v in record.items() if v is not None});result.append(row)
