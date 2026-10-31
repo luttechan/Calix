@@ -1,12 +1,12 @@
-name: Desktop 1.4.2 validation
+name: Desktop 1.4.21 validation
 on:
   workflow_dispatch:
   push:
-    branches: ['main']
+    branches: ['codex/calix1421-build']
 permissions:
   contents: read
 concurrency:
-  group: calix-142-build
+  group: calix-1421-build
   cancel-in-progress: true
 jobs:
   windows:
@@ -92,9 +92,71 @@ jobs:
           key: ${{ runner.os }}-calix141-rust-${{ hashFiles('desktop/src-tauri/Cargo.toml') }}-${{ github.sha }}
       - name: Package development build
         run: python desktop/tools/package_desktop.py
+      - name: Install and check runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $target = Join-Path $env:RUNNER_TEMP 'calix1421-installed'
+          if (Test-Path -LiteralPath $target) { throw 'Install directory must be new.' }
+          $setup = (Resolve-Path desktop/.build/packages/Calix-1.4.21-Setup-x64.exe).Path
+          $process = Start-Process -FilePath $setup -ArgumentList @('/S',"/D=$target") -WindowStyle Hidden -PassThru
+          if (-not $process.WaitForExit(180000)) { $process.Kill(); throw 'Installer timed out.' }
+          if ($process.ExitCode -ne 0) { throw 'Installer failed.' }
+          $portable = Join-Path $env:RUNNER_TEMP 'calix1421-portable'
+          Expand-Archive -LiteralPath desktop/.build/packages/Calix-1.4.21-Windows-x64.zip -DestinationPath $portable
+          $expected = Join-Path $portable 'Calix 1.4.21'
+          foreach ($name in @('calix-engine.exe','_internal')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $target $name))) { throw "Missing installed $name" }
+          }
+          $installedUi = [IO.File]::ReadAllBytes((Join-Path $target 'calix-desktop.exe'))
+          $portableUi = [IO.File]::ReadAllBytes((Join-Path $expected 'Calix.exe'))
+          $uiMatches = (Get-FileHash -LiteralPath (Join-Path $target 'calix-desktop.exe')).Hash -eq (Get-FileHash -LiteralPath (Join-Path $expected 'Calix.exe')).Hash
+          if (-not $uiMatches) {
+            # Tauri changes only its bundle marker from UNK to NSS for the NSIS payload.
+            # https://github.com/tauri-apps/tauri/blob/dev/crates/tauri-bundler/src/bundle.rs
+            $marker = '__TAURI_BUNDLE_TYPE_VAR_UNK'
+            $raw = [Text.Encoding]::ASCII.GetString($portableUi)
+            $offset = $raw.IndexOf($marker,[StringComparison]::Ordinal)
+            if ($offset -lt 0 -or $raw.LastIndexOf($marker,[StringComparison]::Ordinal) -ne $offset) { throw 'Expected one bundle marker.' }
+            $normalized = [byte[]]$portableUi.Clone()
+            $replacement = [Text.Encoding]::ASCII.GetBytes('__TAURI_BUNDLE_TYPE_VAR_NSS')
+            [Array]::Copy($replacement,0,$normalized,$offset,$replacement.Length)
+            $expectedHash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($normalized))
+            $installedHash = (Get-FileHash -LiteralPath (Join-Path $target 'calix-desktop.exe')).Hash
+            if ($expectedHash -ne $installedHash) { throw 'Unexpected installed UI code difference.' }
+            $uiMatches = $true
+            Write-Output 'Installed UI exactly matches portable UI with the expected Tauri NSIS marker.'
+          }
+          foreach ($file in Get-ChildItem -LiteralPath $expected -File -Recurse) {
+            $relative = [IO.Path]::GetRelativePath($expected,$file.FullName)
+            if ($relative -eq 'calix-engine.exe' -or $relative.StartsWith('_internal\')) {
+              if ((Get-FileHash -LiteralPath (Join-Path $target $relative)).Hash -ne (Get-FileHash -LiteralPath $file.FullName).Hash) { throw "Installed file differs: $relative" }
+            }
+          }
+          $info = [Diagnostics.ProcessStartInfo]::new((Join-Path $target 'calix-engine.exe'))
+          $info.Arguments = '--data-dir ' + (Join-Path $env:RUNNER_TEMP 'calix1421-installer-data')
+          $info.UseShellExecute = $false
+          $info.CreateNoWindow = $true
+          $info.RedirectStandardInput = $true
+          $info.RedirectStandardOutput = $true
+          $info.RedirectStandardError = $true
+          $info.StandardOutputEncoding = [Text.Encoding]::UTF8
+          $engine = [Diagnostics.Process]::Start($info)
+          $stdout = $engine.StandardOutput.ReadToEndAsync()
+          $stderr = $engine.StandardError.ReadToEndAsync()
+          $engine.StandardInput.WriteLine('{"id":1,"method":"bootstrap","params":{}}')
+          $engine.StandardInput.WriteLine('{"id":2,"method":"quit","params":{}}')
+          if (-not $engine.WaitForExit(30000)) { $engine.Kill(); throw 'Installed engine timed out.' }
+          $engine.StandardInput.Close()
+          if ($engine.ExitCode -ne 0) { throw $stderr.Result }
+          $reply = $stdout.Result -split "`n" | Where-Object { $_.Trim() } | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object id -eq 1
+          if ($reply.result.version -ne '1.4.21') { throw 'Installed engine bootstrap failed.' }
+          Write-Output 'Installer, embedded runtime hashes and installed engine startup verified.'
+          if (-not $uiMatches) { throw 'Inspect UI binary difference before publication.' }
+
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: Calix-1.4.2-development-Windows-x64
+          name: Calix-1.4.21-development-Windows-x64
           path: desktop/.build/packages/*
           compression-level: 0
           retention-days: 7

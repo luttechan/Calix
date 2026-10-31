@@ -77,15 +77,18 @@ def test_rendered_fixture_in_real_chromium():
     script=r'''
 import os,sys,json,time
 sys.path[:0]=json.loads(os.environ['CALIX_TEST_PATHS'])
+from engine_portable_browser import configure
+configure()
 from pathlib import Path
 from PySide6.QtCore import Qt,QUrl,QCoreApplication,QEvent
 QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
-from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWebEngineCore import QWebEngineProfile,QWebEnginePage
 from learning_calendar.dom_videos import SNAPSHOT_SCRIPT,parse_screen
 from learning_calendar.models import Course
-app=QApplication([]);profile=QWebEngineProfile();page=QWebEnginePage(profile);result=[]
+app=QGuiApplication([]);profile=QWebEngineProfile();page=QWebEnginePage(profile);result=[]
 page.setHtml(Path('tests/fixtures/learningx_rendered.html').read_text(encoding='utf-8'),QUrl('https://canvas.bufs.ac.kr/courses/1/external_tools/1'))
+page.setVisible(True)
 def collect(value):
     if not isinstance(value,str):return
     try:decoded=json.loads(value)
@@ -103,7 +106,7 @@ page.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDe
 profile.deleteLater();QCoreApplication.sendPostedEvents(None,QEvent.Type.DeferredDelete)
 print('RENDERED_DOM_OK')
 '''
-    env=os.environ.copy();env['CALIX_TEST_PATHS']=json.dumps(sys.path)
+    env=os.environ.copy();env['CALIX_TEST_PATHS']=json.dumps([str(Path(__file__).resolve().parents[1]/'desktop'),*sys.path])
     completed=subprocess.run([sys.executable,'-B','-c',script],env=env,capture_output=True,text=True,timeout=25)
     assert completed.returncode==0,completed.stderr[-2500:]
     assert 'RENDERED_DOM_OK' in completed.stdout

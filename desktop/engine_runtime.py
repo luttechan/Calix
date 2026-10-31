@@ -77,6 +77,11 @@ def main():
     from engine_logging import configure
 
     configure(folder)
+    from engine_diagnostics import Diagnostics
+
+    diagnostics = Diagnostics()
+    logging.getLogger().addHandler(diagnostics)
+    restore_trace = diagnostics.install_http_trace()
     api = EngineAPI(folder)
     if args.demo:
         if not args.data_dir:
@@ -122,6 +127,11 @@ def main():
             self.input = None
 
         def notify(self, event, **payload):
+            if event.startswith("sync-") or event in (
+                "session-error",
+                "authentication",
+            ):
+                diagnostics.add(f"{event}: {payload.get('message', '')}")
             emit(dict(event=event, **payload))
 
         def handle(self, request):
@@ -134,7 +144,20 @@ def main():
                 method, params = request.get("method"), request.get("params", {})
                 if self.closing and method != "quit":
                     raise ValueError("종료 중입니다.")
-                if method == "engine.state":
+                if method == "diagnostics.enable":
+                    if params.get("enabled") is True and (
+                        self.task or self.collector or self.pending_sync
+                    ):
+                        raise ValueError("로그 수집을 먼저 켠 뒤 동기화하세요.")
+                    result = diagnostics.set_enabled(params.get("enabled"))
+                    if self.collector:
+                        self.collector.write(b'{"method":"diagnostics.disable"}\n')
+                elif method == "diagnostics.read":
+                    after = params.get("after", 0)
+                    if type(after) is not int or after < 0:
+                        raise ValueError("로그 위치를 확인하세요.")
+                    result = diagnostics.read(after)
+                elif method == "engine.state":
                     result = dict(
                         loggedIn=self.logged_in,
                         busy=bool(self.task or self.collector or self.pending_sync),
@@ -328,6 +351,7 @@ def main():
             return process
 
         def sync(self):
+            diagnostics.add("동기화 요청")
             if self.task or self.collector or self.pending_sync:
                 raise ValueError("동기화 중입니다.")
             if not self.logged_in:
@@ -338,6 +362,10 @@ def main():
 
         def start_collector(self):
             process = self.child(["--collect"])
+            environment = process.processEnvironment()
+            environment.insert("CALIX_CRAWL_DEBUG", "1" if diagnostics.enabled else "0")
+            process.setProcessEnvironment(environment)
+            diagnostics.add("영상 수집 시작 / software rendering / 60초 제한")
             self.collector = process
             self.collector_received = False
             self.collector_buffer.clear()
@@ -358,7 +386,14 @@ def main():
                     if not isinstance(value, dict):
                         continue
                     event = value.get("event")
-                    if event == "videos_collected":
+                    if event == "collection_debug":
+                        diagnostics.add(value.get("message", ""))
+                    elif event == "videos_collected":
+                        snapshot = value.get("snapshot") or {}
+                        for row in snapshot.get("results", []):
+                            diagnostics.add(
+                                f"과목 {row.get('course_id')} 수집: {row.get('error') or '완료'} 단계={row.get('stage', 'ready')}"
+                            )
                         self.collector_received = True
                         self.start_sync(value.get("snapshot"))
                     elif event == "collection_progress":
@@ -392,8 +427,7 @@ def main():
 
             process.readyReadStandardOutput.connect(read)
             process.readyReadStandardError.connect(
-                lambda: logging.warning(
-                    "collector: %s",
+                lambda: diagnostics.add(
                     bytes(process.readAllStandardError()).decode("utf-8", "replace")[
                         -4000:
                     ],
@@ -561,4 +595,6 @@ def main():
     code = app.exec()
     if http:
         http.shutdown()
+    restore_trace()
+    logging.getLogger().removeHandler(diagnostics)
     return code

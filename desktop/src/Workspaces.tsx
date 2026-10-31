@@ -878,7 +878,7 @@ export function TimetablePage() {
   );
 }
 export function SettingsPage() {
-  const { data, mutate, notify, requestInstall } = useCalix(),
+  const { data, mutate, notify, requestInstall, requestRestart } = useCalix(),
     [type, setType] = useState(false),
     [holiday, setHoliday] = useState(false),
     [special, setSpecial] = useState(false),
@@ -1030,6 +1030,16 @@ export function SettingsPage() {
           <ArrowUpRight size={17} />
         </button>
       </section>
+      <button
+        className="settings-link"
+        onClick={() => {
+          if (isTauri()) requestRestart();
+          else notify("재시작은 Windows 앱에서 진행합니다.");
+        }}
+      >
+        재시작
+        <ArrowUpRight size={17} />
+      </button>
       {type && (
         <Modal title="사용자 유형" onClose={() => setType(false)}>
           <div className="type-list">

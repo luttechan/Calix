@@ -14,30 +14,30 @@ def main():
     exe = release / "calix-desktop.exe"
     assert exe.is_file()
     setup = next((release / "bundle/nsis").glob("*setup.exe"))
-    setup_output = output / "Calix-1.4.2-Setup-x64.exe"
+    setup_output = output / "Calix-1.4.21-Setup-x64.exe"
     shutil.copy2(setup, setup_output)
-    archive = output / "Calix-1.4.2-Windows-x64.zip"
+    archive = output / "Calix-1.4.21-Windows-x64.zip"
     with zipfile.ZipFile(
         archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=5
     ) as z:
-        z.write(exe, "Calix 1.4.2/Calix.exe")
+        z.write(exe, "Calix 1.4.21/Calix.exe")
         z.write(
             desktop / "src-tauri/binaries/calix-engine-x86_64-pc-windows-msvc.exe",
-            "Calix 1.4.2/calix-engine.exe",
+            "Calix 1.4.21/calix-engine.exe",
         )
         internal = desktop / "src-tauri/engine/_internal"
         for path in internal.rglob("*"):
             if path.is_file():
                 z.write(
                     path,
-                    "Calix 1.4.2/_internal/" + path.relative_to(internal).as_posix(),
+                    "Calix 1.4.21/_internal/" + path.relative_to(internal).as_posix(),
                 )
-        z.write(ROOT / "LICENSE", "Calix 1.4.2/LICENSE")
+        z.write(ROOT / "LICENSE", "Calix 1.4.21/LICENSE")
         z.write(
-            ROOT / "asset/style/Pretendard-OFL.txt", "Calix 1.4.2/Pretendard-OFL.txt"
+            ROOT / "asset/style/Pretendard-OFL.txt", "Calix 1.4.21/Pretendard-OFL.txt"
         )
         z.writestr(
-            "Calix 1.4.2/run.bat",
+            "Calix 1.4.21/run.bat",
             '@echo off\r\nstart "" /D "%~dp0" "%~dp0Calix.exe"\r\n',
         )
     hashes = []

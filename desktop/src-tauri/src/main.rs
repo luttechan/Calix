@@ -7,6 +7,11 @@ mod auth;
 #[tauri::command]
 fn quit_app(app: tauri::AppHandle, webview: tauri::Webview) -> Result<(), String> { auth::trusted(&webview, &["main"])?;app.exit(0);Ok(()) }
 #[tauri::command]
+fn restart_app(app: tauri::AppHandle, webview: tauri::Webview) -> Result<(), String> {
+    auth::trusted(&webview, &["main"])?;
+    app.restart();
+}
+#[tauri::command]
 fn app_ready(app: tauri::AppHandle, webview: tauri::Webview) -> Result<(), String> {
     auth::trusted(&webview, &["main"])?;
     if let Some(window) = app.get_webview_window("main") { let _ = window.set_always_on_top(false); }
@@ -25,7 +30,7 @@ fn main() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show(app)))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![quit_app, app_ready, auth::auth_open, auth::auth_mount, auth::auth_complete, auth::auth_status, auth::auth_reload, auth::auth_logout, auth::backup_file])
+        .invoke_handler(tauri::generate_handler![quit_app, restart_app, app_ready, auth::auth_open, auth::auth_mount, auth::auth_complete, auth::auth_status, auth::auth_reload, auth::auth_logout, auth::backup_file])
         .setup(|app| {
             let open = MenuItem::with_id(app, "open", "열기", true, None::<&str>)?;
             let exit = MenuItem::with_id(app, "exit", "종료", true, None::<&str>)?;

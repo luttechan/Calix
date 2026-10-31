@@ -49,6 +49,7 @@ import {
 import type { Snapshot, EventItem, Page } from "./types";
 import { ChecklistPage, TimetablePage, SettingsPage } from "./Workspaces";
 import { DiaryPage } from "./Diary";
+import { DeveloperConsole } from "./DeveloperConsole";
 import { Onboarding } from "./Profile";
 const CachedDiary = memo(DiaryPage),
   CachedChecklist = memo(ChecklistPage);
@@ -64,6 +65,7 @@ type ContextValue = {
   leave: RefObject<(() => Promise<void>) | null>;
   draft: RefObject<(() => Promise<void>) | null>;
   requestInstall: () => void;
+  requestRestart: () => void;
   resetView: () => void;
 };
 const Context = createContext<ContextValue | null>(null);
@@ -230,7 +232,8 @@ export function App() {
     [loggedIn, setLoggedIn] = useState(false),
     [credits, setCredits] = useState(false),
     [exit, setExit] = useState(false),
-    [install, setInstall] = useState(false);
+    [install, setInstall] = useState(false),
+    [restart, setRestart] = useState(false);
   const [stateGeneration, setStateGeneration] = useState(0);
   const draft = useRef<(() => Promise<void>) | null>(null),
     leave = useRef<(() => Promise<void>) | null>(null),
@@ -461,6 +464,10 @@ export function App() {
             openEvent,
             leave,
             draft,
+            requestRestart: () => {
+              setRestart(true);
+              setExit(true);
+            },
             requestInstall: () => {
               setInstall(true);
               setExit(true);
@@ -480,6 +487,7 @@ export function App() {
   );
   return (
     <div className="app-shell">
+      <DeveloperConsole />
       <aside className="sidebar">
         <a
           className="brand"
@@ -832,7 +840,7 @@ export function App() {
                 ? `최근 동기화 ${dueText(data.lastSync)}`
                 : "동기화 기록 없음"}
           </span>
-          <span className="status-version">v1.4.2</span>
+          <span className="status-version">v1.4.21</span>
         </footer>
       </div>
       {toast && (
@@ -849,7 +857,7 @@ export function App() {
           <div className="credit-profile">
             <img src="/assets/profile-avatar.png" alt="Lutté Laurent" />
             <h2>Lutté Laurent</h2>
-            <p>Calix 1.4.2</p>
+            <p>Calix 1.4.21</p>
           </div>
           <div className="credit-links">
             <a
@@ -890,10 +898,17 @@ export function App() {
       )}
       {exit && (
         <Modal
-          title={install ? "업데이트를 설치하시겠습니까?" : "종료하시겠습니까?"}
+          title={
+            restart
+              ? "재시작하시겠습니까?"
+              : install
+                ? "업데이트를 설치하시겠습니까?"
+                : "종료하시겠습니까?"
+          }
           onClose={() => {
             setExit(false);
             setInstall(false);
+            setRestart(false);
           }}
         >
           <div className="dialog-actions">
@@ -902,6 +917,7 @@ export function App() {
               onClick={() => {
                 setExit(false);
                 setInstall(false);
+                setRestart(false);
               }}
             >
               취소
@@ -912,12 +928,17 @@ export function App() {
                 void (async () => {
                   await finishEditing();
                   await stopEngine(install);
-                  if (isTauri()) await invoke("quit_app");
+                  if (isTauri())
+                    await invoke(restart ? "restart_app" : "quit_app");
                   else setExit(false);
                 })().catch((e) => notify(e.message))
               }
             >
-              {install ? "설치하고 종료" : "저장하고 종료"}
+              {restart
+                ? "저장하고 재시작"
+                : install
+                  ? "설치하고 종료"
+                  : "저장하고 종료"}
             </button>
           </div>
         </Modal>

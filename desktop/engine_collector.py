@@ -1,5 +1,6 @@
 """Invisible browser adapter. The course collector and extraction algorithm stay unchanged."""
 
+import os
 import base64
 import json
 import sys
@@ -8,6 +9,9 @@ from pathlib import Path
 
 
 def run(folder):
+    from engine_portable_browser import configure, collector_class
+
+    configure()
     from PySide6.QtCore import (
         QCoreApplication,
         QEvent,
@@ -34,9 +38,38 @@ def run(folder):
         write_cookies,
     )
     from engine_sessions import SessionValidation
-    from learning_calendar.dom_collector import ScreenCollector
+
+    ScreenCollector = collector_class(
+        lambda message: (
+            emit("collection_debug", message=message)
+            if os.environ.get("CALIX_CRAWL_DEBUG") == "1"
+            else None
+        )
+    )
 
     app = QGuiApplication([])
+    from engine_diagnostics import Diagnostics
+
+    diagnostics = Diagnostics()
+    diagnostics.set_enabled(os.environ.get("CALIX_CRAWL_DEBUG") == "1")
+    restore_trace = (
+        diagnostics.install_http_trace() if diagnostics.enabled else lambda: None
+    )
+    from PySide6.QtCore import QTimer as DebugTimer
+
+    debug_timer = DebugTimer()
+    debug_timer.setInterval(250)
+    debug_after = 0
+
+    def flush_debug():
+        nonlocal debug_after
+        for row in diagnostics.read(debug_after)["rows"]:
+            emit("collection_debug", message=row["message"])
+            debug_after = row["id"]
+
+    if diagnostics.enabled:
+        debug_timer.timeout.connect(flush_debug)
+        debug_timer.start()
     app.setQuitOnLastWindowClosed(False)
     rows = read_cookies(Path(folder) / "canvas_session.dpapi")
     if not canvas_session_available(rows):
@@ -65,9 +98,14 @@ def run(folder):
 
     class TokenInterceptor(QWebEngineUrlRequestInterceptor):
         captured_token = Signal(str)
+        request_seen = Signal(str)
 
         def interceptRequest(self, info):
             url = info.requestUrl()
+            if diagnostics.enabled and url.scheme() in ("https", "http"):
+                self.request_seen.emit(
+                    f"브라우저 {bytes(info.requestMethod()).decode('ascii', 'replace')} {url.host()}{url.path()}"
+                )
             if (
                 url.scheme() != "https"
                 or url.host() != "canvas.bufs.ac.kr"
@@ -94,12 +132,16 @@ def run(folder):
 
     interceptor = TokenInterceptor(profile)
     interceptor.captured_token.connect(token_captured)
+    interceptor.request_seen.connect(
+        lambda message: (
+            emit("collection_debug", message=message) if diagnostics.enabled else None
+        )
+    )
     profile.setUrlRequestInterceptor(interceptor)
     required = {
-        r["name"]
+        (r["domain"].lstrip("."), r["name"], r["path"])
         for r in rows
         if r["domain"].lstrip(".") in ("canvas.bufs.ac.kr", "bufs.ac.kr")
-        and "session" in r["name"].lower()
     }
     accepted = set()
     validator = None
@@ -132,8 +174,7 @@ def run(folder):
         record = cookie_record(cookie)
         if record:
             captured[(record["domain"], record["name"], record["path"])] = record
-            if record["name"] in required:
-                accepted.add(record["name"])
+            accepted.add((record["domain"].lstrip("."), record["name"], record["path"]))
 
     store.cookieAdded.connect(added)
     for row in rows:
@@ -184,6 +225,11 @@ def run(folder):
 
     def cancel(_request=None):
         nonlocal finished
+        if _request and _request.get("method") == "diagnostics.disable":
+            diagnostics.set_enabled(False)
+            os.environ["CALIX_CRAWL_DEBUG"] = "0"
+            debug_timer.stop()
+            return
         finished = True
         if collector:
             collector.cancel()
@@ -198,7 +244,7 @@ def run(folder):
         nonlocal retries
         if finished:
             return
-        if required.issubset(accepted) or retries >= 100:
+        if required.issubset(accepted) or retries >= 400:
             begin()
         else:
             retries += 1
@@ -208,6 +254,9 @@ def run(folder):
     QTimer.singleShot(0, wait_cookies)
     app.exec()
     incoming.stop()
+    debug_timer.stop()
+    flush_debug()
+    restore_trace()
     if collector:
         collector.cancel()
     if validator and validator.isRunning():

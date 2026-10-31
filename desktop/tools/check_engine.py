@@ -48,6 +48,8 @@ def check(exe):
         "engine_updates",
         "engine_collector",
         "engine_reset",
+        "engine_diagnostics",
+        "engine_portable_browser",
         "learning_calendar.dom_videos",
         "learning_calendar.dom_collector",
         "learning_calendar.worker",
@@ -76,7 +78,7 @@ def check(exe):
         responses = [json.loads(line) for line in completed.stdout.splitlines()]
         assert (
             next(r for r in responses if r.get("id") == 1)["result"]["version"]
-            == "1.4.2"
+            == "1.4.21"
         )
         assert (
             next(r for r in responses if r.get("id") == 2)["result"]["initialized"]
