@@ -67,11 +67,26 @@ def collector_class(report):
                 and generation == self.generation
                 and isinstance(current, dict)
             ):
+                if current.get("state") == "ready" and (
+                    str(current.get("course_id")) != str(self.courses[self.index]["id"])
+                    or str(current.get("owner")) != str(self.owner)
+                    or not isinstance(current.get("items"), list)
+                    or len(current["items"]) > 10000
+                ):
+                    self.waiting = False
+                    self._ready_signature = None
+                    self.last = None
+                    self.stable = 0
+                    return
                 state = (
                     self.index,
                     current.get("state"),
                     current.get("weeks"),
-                    len(current["items"]) if isinstance(current.get("items"), list) else 0,
+                    (
+                        len(current["items"])
+                        if isinstance(current.get("items"), list)
+                        else 0
+                    ),
                 )
                 if state != self._reported_state:
                     self._reported_state = state
@@ -92,6 +107,8 @@ def collector_class(report):
                         return
                 else:
                     self._ready_signature = None
+                    self.last = None
+                    self.stable = 0
             super().observed(generation, value)
 
     return PortableCollector

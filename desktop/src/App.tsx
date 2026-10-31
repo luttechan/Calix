@@ -233,7 +233,9 @@ export function App() {
     [credits, setCredits] = useState(false),
     [exit, setExit] = useState(false),
     [install, setInstall] = useState(false),
-    [restart, setRestart] = useState(false);
+    [restart, setRestart] = useState(false),
+    [exiting, setExiting] = useState(false);
+  const exitLock = useRef(false);
   const [stateGeneration, setStateGeneration] = useState(0);
   const draft = useRef<(() => Promise<void>) | null>(null),
     leave = useRef<(() => Promise<void>) | null>(null),
@@ -256,13 +258,16 @@ export function App() {
       notify("로그인은 Windows 앱에서 진행합니다.");
       return;
     }
-    await Promise.all([
-      rpc("session.prepare"),
-      invoke("auth_open", {
+    await rpc("session.prepare");
+    try {
+      await invoke("auth_open", {
         theme: document.documentElement.dataset.theme || "pink",
         font: document.documentElement.dataset.font || "pretendard",
-      }),
-    ]);
+      });
+    } catch (error) {
+      await rpc("session.cancel").catch(() => {});
+      throw error;
+    }
   };
   const refresh = useCallback(async () => {
     const snapshot = await rpc<Snapshot>("bootstrap");
@@ -304,12 +309,11 @@ export function App() {
       .catch(() => {});
     const unsubscribe = subscribe((message) => {
       if (message.event === "data-changed") {
-        setBusy(false);
         void refresh().catch((e) => notify(e.message));
       }
       if (message.event === "auth-required")
         void openLogin().catch((error) => notify(String(error)));
-      if (message.event === "auth-cancelled") setBusy(false);
+      if (message.event === "sync-state") setBusy(Boolean(message.busy));
       if (message.event === "session-error" && isTauri())
         void invoke("auth_status", {
           success: false,
@@ -333,10 +337,8 @@ export function App() {
         setLoggedIn(Boolean(message.loggedIn));
       if (message.event === "sync-progress") {
         notify(String(message.message));
-        if (String(message.message).includes("완료")) setBusy(false);
       }
       if (message.event === "sync-error") {
-        setBusy(false);
         notify(String(message.message));
       }
     });
@@ -499,7 +501,7 @@ export function App() {
         >
           <img src="/assets/icons/calix.svg" alt="" />
           <span>Calix</span>
-          <small>1.4</small>
+          <small>{data?.version}</small>
         </a>
         <div className="nav-label">워크스페이스</div>
         <nav>
@@ -592,11 +594,12 @@ export function App() {
             </button>
             <button
               className="quiet"
+              disabled={busy}
               onClick={() =>
                 void (async () => {
                   if (loggedIn) {
-                    if (isTauri()) await invoke("auth_logout");
                     await rpc("session.logout");
+                    if (isTauri()) await invoke("auth_logout");
                   } else await openLogin();
                 })().catch((error) => notify(String(error)))
               }
@@ -840,7 +843,9 @@ export function App() {
                 ? `최근 동기화 ${dueText(data.lastSync)}`
                 : "동기화 기록 없음"}
           </span>
-          <span className="status-version">v1.4.21</span>
+          <span className="status-version">
+            {data?.version && `v${data.version}`}
+          </span>
         </footer>
       </div>
       {toast && (
@@ -857,7 +862,7 @@ export function App() {
           <div className="credit-profile">
             <img src="/assets/profile-avatar.png" alt="Lutté Laurent" />
             <h2>Lutté Laurent</h2>
-            <p>Calix 1.4.21</p>
+            <p>Calix {data?.version}</p>
           </div>
           <div className="credit-links">
             <a
@@ -906,6 +911,7 @@ export function App() {
                 : "종료하시겠습니까?"
           }
           onClose={() => {
+            if (exitLock.current) return;
             setExit(false);
             setInstall(false);
             setRestart(false);
@@ -914,6 +920,7 @@ export function App() {
           <div className="dialog-actions">
             <span />
             <button
+              disabled={exiting}
               onClick={() => {
                 setExit(false);
                 setInstall(false);
@@ -924,13 +931,22 @@ export function App() {
             </button>
             <button
               className="primary"
+              disabled={exiting}
               onClick={() =>
                 void (async () => {
-                  await finishEditing();
-                  await stopEngine(install);
-                  if (isTauri())
-                    await invoke(restart ? "restart_app" : "quit_app");
-                  else setExit(false);
+                  if (exitLock.current) return;
+                  exitLock.current = true;
+                  setExiting(true);
+                  try {
+                    await finishEditing();
+                    await stopEngine(install);
+                    if (isTauri())
+                      await invoke(restart ? "restart_app" : "quit_app");
+                    else setExit(false);
+                  } finally {
+                    exitLock.current = false;
+                    setExiting(false);
+                  }
                 })().catch((e) => notify(e.message))
               }
             >

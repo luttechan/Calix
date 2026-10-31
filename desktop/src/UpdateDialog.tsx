@@ -31,10 +31,10 @@ export function UpdateDialog({
   onClose: () => void;
   onInstall: () => void;
 }) {
-  const { notify } = useCalix(),
+  const { notify, data } = useCalix(),
     [state, setState] = useState<State>({
       phase: "checking",
-      current: "1.4.21",
+      current: data.version,
       message: "업데이트 확인 중",
     }),
     keep = useRef(false);
@@ -63,7 +63,7 @@ export function UpdateDialog({
         if (active)
           setState({
             phase: "error",
-            current: "1.4.21",
+            current: data.version,
             message: error.message,
           });
       });

@@ -2,7 +2,9 @@ import { isTauri } from "@tauri-apps/api/core";
 import { Command, type Child } from "@tauri-apps/plugin-shell";
 let child: Child | null = null,
   starting: Promise<void> | null = null,
-  sequence = 0;
+  sequence = 0,
+  generation = 0,
+  stopping = false;
 const pending = new Map<
   number,
   {
@@ -34,17 +36,27 @@ function failAll(message: string) {
 }
 async function start() {
   if (starting) return starting;
+  const current = ++generation;
   starting = (async () => {
     const command = Command.sidecar("binaries/calix-engine");
     command.stdout.on("data", (line: string) => {
+      if (current !== generation) return;
       let message;
       try {
         message = JSON.parse(line);
       } catch {
         return;
       }
+      if (!message || typeof message !== "object" || Array.isArray(message))
+        return;
       if (message.event) {
-        for (const listener of listeners) listener(message);
+        for (const listener of listeners) {
+          try {
+            listener(message);
+          } catch {
+            /* Other subscribers still receive the event. */
+          }
+        }
         return;
       }
       const request = pending.get(message.id);
@@ -54,11 +66,21 @@ async function start() {
       if (message.error) request.reject(new Error(message.error));
       else request.resolve(message.result);
     });
-    command.on("error", () => failAll("일정 서비스 연결이 끊겼습니다."));
-    command.on("close", () => failAll("일정 서비스가 종료되었습니다."));
-    child = await command.spawn();
+    const failed = (message: string) => {
+      if (current !== generation) return;
+      generation++;
+      failAll(message);
+    };
+    command.on("error", () => failed("일정 서비스 연결이 끊겼습니다."));
+    command.on("close", () => failed("일정 서비스가 종료되었습니다."));
+    const spawned = await command.spawn();
+    if (current !== generation) {
+      await spawned.kill().catch(() => {});
+      throw new Error("일정 서비스를 시작하지 못했습니다.");
+    }
+    child = spawned;
   })().catch((error) => {
-    starting = null;
+    if (current === generation) starting = null;
     throw error;
   });
   return starting;
@@ -67,6 +89,7 @@ export async function rpc<T = unknown>(
   method: string,
   params: Record<string, unknown> = {},
 ): Promise<T> {
+  if (stopping && method !== "quit") throw new Error("종료 중입니다.");
   const id = ++sequence;
   if (!isTauri()) {
     const response = await fetch("/api", {
@@ -80,6 +103,7 @@ export async function rpc<T = unknown>(
     return payload.result;
   }
   await start();
+  if (stopping && method !== "quit") throw new Error("종료 중입니다.");
   if (!child) throw new Error("일정 서비스를 시작하지 못했습니다.");
   if (pending.size >= 128)
     throw new Error("처리 중인 작업이 많습니다. 잠시 후 다시 시도하세요.");
@@ -99,8 +123,22 @@ export async function rpc<T = unknown>(
   });
 }
 export async function stopEngine(install = false) {
+  stopping = true;
+  if (starting) {
+    try {
+      await starting;
+    } catch (error) {
+      stopping = false;
+      throw error;
+    }
+  }
   if (!isTauri()) {
-    await rpc("quit", { install });
+    try {
+      await rpc("quit", { install });
+    } catch (error) {
+      stopping = false;
+      throw error;
+    }
     return;
   }
   if (!child) return;
@@ -125,6 +163,9 @@ export async function stopEngine(install = false) {
       }),
       closed,
     ]);
+  } catch (error) {
+    stopping = false;
+    throw error;
   } finally {
     clearTimeout(timer);
     stopped.delete(done);
