@@ -59,12 +59,14 @@ async fn request(app: &AppHandle, view: &WebviewWindow, operation: &str, course:
         current(app, epoch)?;
         if Instant::now() > deadline { return Err("BROWSER_REQUEST_TIMEOUT".into()); }
         let script = if !started {
-            format!("(()=>{{if(location.origin!=='https://canvas.bufs.ac.kr')return {{status:'loading'}};const s=window[Symbol.for('calix.campus.reader')];if(!s)return {{status:'loading'}};s.start({},{},{});return {{status:'started'}};}})()", json!(id), json!(operation), json!(course))
+            format!("(()=>{{if(location.origin!=='https://canvas.bufs.ac.kr')return {{status:'loading'}};const s=window[Symbol.for('calix.campus.reader')];if(!s)return {{status:'loading'}};s.debug={debug};s.start({},{},{});return {{status:'started'}};}})()", json!(id), json!(operation), json!(course), debug=app.state::<CampusState>().debug.load(Ordering::SeqCst))
         } else {
-            format!("(()=>{{const s=window[Symbol.for('calix.campus.reader')];return s?.jobs[{}]||{{status:'lost'}};}})()", json!(id))
+            format!("(()=>{{const s=window[Symbol.for('calix.campus.reader')];return s?.jobs[{}]?{{...s.jobs[{}],logs:s.logs.splice(0)}}:{{status:'lost'}};}})()", json!(id),json!(id))
         };
         let value = evaluate(view, script).await?;
-        if value.get("error").is_some() { return Err("SNAPSHOT_FAILED".into()); }
+        if app.state::<CampusState>().debug.load(Ordering::SeqCst) {
+            if let Some(logs)=value["logs"].as_array() { for log in logs { if let Some(message)=log.as_str() { let _=app.emit_to("main","campus:diagnostic",json!({"message":message})); } } }
+        }
         match value["status"].as_str() {
             Some("started") => started = true,
             Some("ready") => return Ok(value["value"].clone()),
@@ -120,11 +122,13 @@ async fn course_snapshot(app: &AppHandle, view: &WebviewWindow, owner: &str, cou
     let mut last = String::new();
     let mut since = Instant::now();
     let mut shown = false;
+    let course_key = course.to_string();
     loop {
         current(app, epoch)?;
         if Instant::now() > deadline { return Err("COURSE_CONTENT_TIMEOUT".into()); }
-        let script = format!(r#"(()=>{{try{{const snapshot=JSON.parse({SNAPSHOT});let network=null,viewport={{width:innerWidth,height:innerHeight}};const scan=(d,n=0)=>{{if(n>6)return;const root=d.querySelector('#root[data-canvas_course_id]');if(root&&root.getAttribute('data-canvas_course_id')==={course_id}){{const w=d.defaultView;network=w[Symbol.for('calix.campus.reader')]?.courses[{course_id}]||null;viewport={{width:w.innerWidth,height:w.innerHeight}};}}for(const f of d.querySelectorAll('iframe')){{try{{if(f.contentDocument)scan(f.contentDocument,n+1)}}catch{{}}}}}};scan(document);return {{snapshot,network,viewport}};}}catch{{return {{error:'SNAPSHOT_FAILED'}};}}}})()"#, course_id=json!(course.to_string()));
+        let script = format!(r#"(()=>{{try{{const snapshot=JSON.parse({SNAPSHOT});let network=null,viewport={{width:innerWidth,height:innerHeight}};const scan=(d,n=0)=>{{if(n>6)return;const root=d.querySelector('#root[data-canvas_course_id]');if(root&&root.getAttribute('data-canvas_course_id')==={course_id}){{const w=d.defaultView;if(w[Symbol.for('calix.campus.reader')])w[Symbol.for('calix.campus.reader')].debug={debug};network=w[Symbol.for('calix.campus.reader')]?.courses[{course_id}]||null;viewport={{width:w.innerWidth,height:w.innerHeight}};}}for(const f of d.querySelectorAll('iframe')){{try{{if(f.contentDocument)scan(f.contentDocument,n+1)}}catch{{}}}}}};scan(document);return {{snapshot,network,viewport}};}}catch{{return {{error:'SNAPSHOT_FAILED'}};}}}})()"#, course_id=json!(course.to_string()),debug=app.state::<CampusState>().debug.load(Ordering::SeqCst));
         let value = evaluate(view, script).await?;
+        if value.get("error").is_some() { return Err("SNAPSHOT_FAILED".into()); }
         let snap = &value["snapshot"];
         if value["viewport"]["width"].as_u64().unwrap_or(0) == 0 || value["viewport"]["height"].as_u64().unwrap_or(0) == 0 {
             if !shown { view.show().map_err(|_| "COLLECTION_VIEWPORT_ZERO")?; shown = true; }
@@ -137,12 +141,13 @@ async fn course_snapshot(app: &AppHandle, view: &WebviewWindow, owner: &str, cou
                 if routes.insert(url.to_string()) { view.navigate(parsed).map_err(|_| "COURSE_NAVIGATION_FAILED")?; }
             }
             last.clear();
-        } else if snap["state"] == "ready" && snap["course_id"].as_str() == Some(&course.to_string()) && snap["owner"].as_str() == Some(owner) {
+        } else if snap["state"] == "ready" && snap["course_id"].as_str() == Some(course_key.as_str()) && snap["owner"].as_str() == Some(owner) {
             let network = &value["network"];
             let items = snap["items"].as_array().ok_or("INVALID_VIDEO_LIST")?;
             let loaded = network["modules"] == true && network["lessons"] == true && network["pending"].as_u64() == Some(0) && network["failed"] != true;
             let allowed_empty = !items.is_empty() || network["hasVideo"] == false;
-            if loaded && allowed_empty {
+            let complete_count = items.len() as u64 >= network["videoCount"].as_u64().unwrap_or(0);
+            if loaded && allowed_empty && complete_count {
                 let signature = serde_json::to_string(snap).map_err(|_| "INVALID_SNAPSHOT")?;
                 if signature != last { last = signature; since = Instant::now(); }
                 else if since.elapsed() >= Duration::from_secs(1) { let _ = view.hide(); return Ok(snap.clone()); }

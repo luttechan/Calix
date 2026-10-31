@@ -2,7 +2,13 @@
   if (location.origin !== "https://canvas.bufs.ac.kr") return;
   const key = Symbol.for("calix.campus.reader");
   if (window[key]) return;
-  const state = { jobs: {}, courses: {} };
+  const state = { jobs: {}, courses: {}, debug: false, logs: [] };
+  const log = (message) => {
+    if (state.debug) {
+      state.logs.push(message);
+      if (state.logs.length > 100) state.logs.shift();
+    }
+  };
   window[key] = state;
   const identify = (url) => {
     try {
@@ -26,6 +32,7 @@
       lessons: false,
       failed: false,
       hasVideo: false,
+      videoCount: 0,
     });
     row.pending++;
     return { row, done: false };
@@ -40,10 +47,21 @@
       return;
     }
     row[match[2]] = true;
-    let remaining = 100000;
+    let remaining = 100000,
+      videoCount = 0;
     const walk = (value, depth = 0) => {
       if (!value || typeof value !== "object" || depth > 16 || --remaining < 0)
         return;
+      if (value.content_data && typeof value.content_data === "object") {
+        const data = value.content_data,
+          media = data.item_content_data || {};
+        if (
+          ["movie", "mp4", "zoom"].includes(
+            media.content_type || data.item_content_type,
+          )
+        )
+          videoCount++;
+      }
       if (
         Object.entries(value).some(
           ([k, v]) =>
@@ -55,6 +73,8 @@
       for (const child of Object.values(value)) walk(child, depth + 1);
     };
     walk(payload);
+    row.videoCount = Math.max(row.videoCount || 0, videoCount);
+    log(`LearningX ${match[1]} ${match[2]} 완료`);
     if (remaining < 0) row.failed = true;
   };
   const fetchOriginal = window.fetch.bind(window);
@@ -115,6 +135,7 @@
     }
   };
   const jsonRequest = async (url) => {
+    log(`HTTP 시작 GET ${new URL(url, location.origin).pathname}`);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 20000);
     try {
@@ -123,6 +144,9 @@
         redirect: "error",
         signal: controller.signal,
       });
+      log(
+        `HTTP 응답 ${response.status} GET ${new URL(url, location.origin).pathname}`,
+      );
       if (response.status === 401 || response.status === 403)
         throw Error("AUTH_REQUIRED");
       if (

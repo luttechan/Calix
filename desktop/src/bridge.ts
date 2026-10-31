@@ -26,6 +26,7 @@ export function subscribe(
   };
 }
 let browserEvents: Promise<unknown> | null = null;
+let diagnosticEvents: Promise<unknown> | null = null;
 function browserMessage(message: Record<string, unknown>) {
   if (message.event === "browser-collect") {
     const runId = String(message.runId);
@@ -72,6 +73,17 @@ async function start() {
         browserEvents = null;
       });
     await browserEvents;
+    if (!diagnosticEvents)
+      diagnosticEvents = listen("campus:diagnostic", (event) => {
+        if (!stopping)
+          void rpc(
+            "diagnostics.record",
+            event.payload as Record<string, unknown>,
+          ).catch(() => {});
+      }).catch(() => {
+        diagnosticEvents = null;
+      });
+    await diagnosticEvents;
     const command = Command.sidecar("binaries/calix-engine");
     command.stdout.on("data", (line: string) => {
       if (current !== generation) return;

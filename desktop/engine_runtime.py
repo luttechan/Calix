@@ -157,6 +157,9 @@ def main():
                         raise ValueError("로그 수집을 먼저 켠 뒤 동기화하세요.")
                     result = diagnostics.set_enabled(params.get("enabled"))
 
+                elif method == "diagnostics.record":
+                    diagnostics.add(str(params.get("message", ""))[:4096])
+                    result = True
                 elif method == "diagnostics.read":
                     after = params.get("after", 0)
                     if type(after) is not int or after < 0:
