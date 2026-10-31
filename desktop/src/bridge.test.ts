@@ -2,9 +2,18 @@ import { beforeEach, expect, test, vi } from "vitest";
 
 const mock = vi.hoisted(() => ({
   commands: [] as any[],
+  invoke: vi.fn(
+    async (_command: string, _args?: unknown) => undefined as unknown,
+  ),
   spawn: null as null | ((child: any) => Promise<any>),
 }));
-vi.mock("@tauri-apps/api/core", () => ({ isTauri: () => true }));
+vi.mock("@tauri-apps/api/core", () => ({
+  isTauri: () => true,
+  invoke: mock.invoke,
+}));
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(async () => () => {}),
+}));
 vi.mock("@tauri-apps/plugin-shell", () => ({
   Command: {
     sidecar: () => {
@@ -42,6 +51,7 @@ beforeEach(() => {
   vi.resetModules();
   mock.commands.length = 0;
   mock.spawn = null;
+  mock.invoke.mockReset().mockResolvedValue(undefined);
 });
 async function boot() {
   const bridge = await import("./bridge");
@@ -140,4 +150,41 @@ test("a child arriving after startup failure is stopped without affecting its re
   );
   await expect(currentRequest).resolves.toBe(true);
   current.handlers.close();
+});
+
+test("collection uses native WebView2 and forwards only the snapshot result", async () => {
+  const { bridge, command } = await boot();
+  const payload = { transport: "webview2", owner: "7", results: [] };
+  mock.invoke.mockResolvedValueOnce(payload);
+  command.handlers.stdout(
+    JSON.stringify({ event: "browser-collect", runId: "a".repeat(32) }),
+  );
+  await vi.waitFor(() => expect(command.writes.length).toBe(2));
+  const row = JSON.parse(command.writes[1]);
+  expect(mock.invoke).toHaveBeenCalledWith("campus_collect", {
+    runId: "a".repeat(32),
+  });
+  expect(row.method).toBe("browser.complete");
+  expect(row.params.payload).toEqual(payload);
+  command.handlers.stdout(JSON.stringify({ id: row.id, result: true }));
+  command.handlers.close();
+});
+
+test("a stale browser result cannot restart a failed backend", async () => {
+  const { bridge, command } = await boot();
+  let complete: (value: unknown) => void = () => {};
+  mock.invoke.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        complete = resolve;
+      }),
+  );
+  command.handlers.stdout(
+    JSON.stringify({ event: "browser-collect", runId: "a".repeat(32) }),
+  );
+  command.handlers.error();
+  complete({ transport: "webview2" });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(mock.commands.length).toBe(1);
+  expect(command.writes.length).toBe(1);
 });

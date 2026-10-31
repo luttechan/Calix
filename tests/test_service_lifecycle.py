@@ -4,6 +4,7 @@ import ast
 import json
 import logging
 import sys
+import secrets
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -37,6 +38,7 @@ def service(tmp_path):
         ROOT=ROOT,
         folder=tmp_path,
         emit=output.append,
+        secrets=secrets,
     )
     exec(
         compile(
@@ -62,7 +64,7 @@ def test_account_changes_are_blocked_while_collection_runs(service, method):
 
 def test_sync_waits_for_existing_login_validation(service):
     instance, output = service
-    instance.validator = object()
+    instance.restore_token = "restore-in-progress"
     instance.handle(dict(id=1, method="sync", params={}))
     assert instance.pending_sync
     assert not any(row.get("event") == "auth-required" for row in output)
@@ -81,38 +83,52 @@ def test_busy_stays_true_until_both_workers_finish(service):
     assert output[-1] == dict(event="sync-state", busy=False)
 
 
-def test_bad_collector_packet_reports_error_instead_of_crashing(service):
+def test_bad_browser_packet_ends_collection_without_touching_data(service):
     instance, output = service
-
-    class Event:
-        def connect(self, callback):
-            self.callback = callback
-
-    class Process:
-        def __init__(self):
-            self.readyReadStandardOutput = Event()
-            self.readyReadStandardError = Event()
-            self.finished = Event()
-            self.errorOccurred = Event()
-            self.killed = False
-
-        def processEnvironment(self):
-            return QProcessEnvironment()
-
-        def setProcessEnvironment(self, environment):
-            pass
-
-        def readAllStandardOutput(self):
-            return b'{"event":"videos_collected","snapshot":[1]}\n'
-
-        def kill(self):
-            self.killed = True
-
-        def start(self):
-            self.readyReadStandardOutput.callback()
-
-    process = Process()
-    instance.child = lambda args: process
-    instance.start_collector()
-    assert process.killed
+    instance.collector = "a" * 32
+    instance.handle(
+        dict(
+            id=1,
+            method="browser.complete",
+            params=dict(runId=instance.collector, payload=[1]),
+        )
+    )
+    assert instance.collector is None
     assert any(row.get("event") == "sync-error" for row in output)
+    assert next(row for row in output if row.get("id") == 1).get("error")
+
+
+def test_late_completion_from_cancelled_browser_is_ignored(service):
+    instance, output = service
+    instance.collector = "b" * 32
+    assert instance.browser_complete(dict(runId="a" * 32, payload={})) is False
+    assert instance.collector == "b" * 32
+
+
+def test_cancelled_restore_cannot_reactivate_old_session(service):
+    instance, output = service
+    instance.restore_token = "old"
+    instance.handle(dict(id=1, method="session.prepare", params={}))
+    assert (
+        instance.accept_browser_identity(
+            dict(
+                owner="7",
+                courses=[dict(id=2, name="수업")],
+                interactive=False,
+                token="old",
+            )
+        )
+        is False
+    )
+    assert not instance.logged_in
+
+
+def test_restore_failure_opens_login_only_for_a_waiting_sync(service):
+    instance, output = service
+    instance.restore_token = "pending"
+    instance.pending_sync = True
+    instance.handle(
+        dict(id=1, method="browser.restore.failed", params=dict(token="pending"))
+    )
+    assert instance.restore_token is None
+    assert any(row.get("event") == "auth-required" for row in output)

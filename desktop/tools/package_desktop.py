@@ -26,6 +26,7 @@ def main():
             "Calix 1.4.21/calix-engine.exe",
         )
         internal = desktop / "src-tauri/engine/_internal"
+        assert not any(path.name.lower() == "qtwebengineprocess.exe" for path in internal.rglob("*.exe")), "Legacy Qt video browser is still bundled"
         for path in internal.rglob("*"):
             if path.is_file():
                 z.write(

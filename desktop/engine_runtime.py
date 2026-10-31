@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 import threading
+import secrets
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,8 +29,6 @@ def main():
         sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-dir")
-    parser.add_argument("--collect", action="store_true")
-    parser.add_argument("--collector-check")
     parser.add_argument("--dev-http", type=int)
     parser.add_argument("--demo", action="store_true")
     parser.add_argument("--utility", choices=["install"])
@@ -38,14 +37,6 @@ def main():
     parser.add_argument("--wait-pid", type=int)
     args = parser.parse_args()
     folder = Path(args.data_dir) if args.data_dir else data_folder()
-    if args.collector_check:
-        from engine_browser_check import run
-
-        return run(args.collector_check)
-    if args.collect:
-        from engine_collector import run
-
-        return run(folder)
     if args.utility:
         from engine_utility import install
 
@@ -55,17 +46,9 @@ def main():
         QObject,
         Signal,
         QTimer,
-        QProcess,
-        QProcessEnvironment,
     )
     from engine_api import EngineAPI
     from engine_transport import StdioInput
-    from engine_sessions import import_cookie_records, SessionValidation
-    from learning_calendar.cookies import (
-        read_cookies,
-        write_cookies,
-        canvas_session_available,
-    )
 
     app = QCoreApplication([])
     app.setApplicationName("Calix")
@@ -114,10 +97,7 @@ def main():
             self.incoming.connect(self.handle)
             self.task = None
             self.collector = None
-            self.collector_received = False
-            self.collector_buffer = bytearray()
-            self.validator = None
-            self.validation_generation = 0
+            self.restore_token = None
             self.pending_sync = False
             self.logged_in = False
             self.closing = False
@@ -126,6 +106,13 @@ def main():
             self.install_on_exit = False
             self.input = None
             self.reported_busy = None
+            self.collection_timer = QTimer(self)
+            self.collection_timer.setSingleShot(True)
+            self.collection_timer.timeout.connect(
+                lambda: self.browser_failed(
+                    {"runId": self.collector, "message": "수집 시간이 초과됐습니다."}
+                )
+            )
 
         def publish_busy(self):
             if self.closing:
@@ -166,8 +153,10 @@ def main():
                     ):
                         raise ValueError("로그 수집을 먼저 켠 뒤 동기화하세요.")
                     result = diagnostics.set_enabled(params.get("enabled"))
-                    if self.collector:
-                        self.collector.write(b'{"method":"diagnostics.disable"}\n')
+
+                elif method == "diagnostics.record":
+                    diagnostics.add(str(params.get("message", ""))[:4096])
+                    result = True
                 elif method == "diagnostics.read":
                     after = params.get("after", 0)
                     if type(after) is not int or after < 0:
@@ -178,33 +167,55 @@ def main():
                         loggedIn=self.logged_in,
                         busy=bool(self.task or self.collector or self.pending_sync),
                     )
-                elif method == "session.import":
-                    self.validate(import_cookie_records(params.get("cookies")))
-                    result = True
-                elif method == "session.restore":
-                    rows = read_cookies(folder / "canvas_session.dpapi")
-                    result = canvas_session_available(rows)
+                elif method == "browser.restore.begin":
+                    if self.task or self.collector or self.pending_sync:
+                        raise ValueError("진행 중인 작업을 마친 뒤 확인하세요.")
+                    self.restore_token = secrets.token_hex(16)
+                    result = self.restore_token
+                elif method == "browser.restore.failed":
+                    result = bool(
+                        self.restore_token and params.get("token") == self.restore_token
+                    )
                     if result:
-                        self.validate(rows, quiet=True)
+                        self.restore_token = None
+                        self.logged_in = False
+                        self.notify("authentication", loggedIn=False)
+                        if self.pending_sync:
+                            self.notify("auth-required")
+                elif method == "browser.identity":
+                    result = self.accept_browser_identity(params)
+                elif method == "browser.complete":
+                    result = self.browser_complete(params)
+                elif method == "browser.failed":
+                    result = self.browser_failed(params)
+                elif method == "browser.progress":
+                    result = (
+                        params.get("runId") == self.collector
+                        and self.collector is not None
+                    )
+                    if result:
+                        message = str(params.get("message", ""))[:300]
+                        if params.get("log") is True:
+                            diagnostics.add(message)
+                        else:
+                            self.notify("sync-progress", message=message)
+                elif method == "session.import":
+                    raise ValueError("학교 로그인 창에서 완료를 누르세요.")
+                elif method == "session.restore":
+                    result = False
                 elif method == "session.prepare":
-                    self.validation_generation += 1
-                    if self.validator:
-                        self.validator.cancel()
+                    self.restore_token = None
                     result = True
                 elif method == "session.logout":
-                    self.validation_generation += 1
-                    if self.validator:
-                        self.validator.cancel()
+                    self.restore_token = None
                     (folder / "canvas_session.dpapi").unlink(missing_ok=True)
                     self.logged_in = False
                     self.pending_sync = False
                     self.notify("authentication", loggedIn=False)
                     result = True
                 elif method == "session.cancel":
-                    self.validation_generation += 1
+                    self.restore_token = None
                     self.pending_sync = False
-                    if self.validator:
-                        self.validator.cancel()
                     self.notify("auth-cancelled")
                     result = True
                 elif method == "login":
@@ -264,9 +275,7 @@ def main():
                 elif method == "data.reset":
                     if self.task or self.collector:
                         raise ValueError("진행 중인 작업을 마친 뒤 초기화하세요.")
-                    self.validation_generation += 1
-                    if self.validator:
-                        self.validator.cancel()
+                    self.restore_token = None
                     self.pending_sync = False
                     result = api.dispatch(method, params)
                     self.logged_in = False
@@ -275,7 +284,7 @@ def main():
                     self.notify("data-changed")
                 else:
                     if method.startswith("backup.") and (
-                        self.task or self.collector or self.validator
+                        self.task or self.collector or self.restore_token
                     ):
                         raise ValueError("동기화가 끝난 뒤 다시 시도하세요.")
                     result = api.dispatch(method, params)
@@ -300,75 +309,29 @@ def main():
             else:
                 emit(response)
 
-        def validate(self, rows, quiet=False):
-            if self.validator:
-                raise ValueError("로그인 상태를 확인 중입니다.")
-            self.validation_generation += 1
-            generation = self.validation_generation
-            task = SessionValidation(rows, self)
-            self.validator = task
+        def accept_browser_identity(self, params):
+            if params.get("interactive") is not True and (
+                not self.restore_token or params.get("token") != self.restore_token
+            ):
+                return False
+            if self.task or self.collector:
+                raise ValueError("동기화가 끝난 뒤 로그인 상태를 변경하세요.")
+            from engine_webview import identity
 
-            def checked(identity):
-                if self.closing or generation != self.validation_generation:
-                    return
-                try:
-                    changed = api.activate_account(identity["owner"])
-                    if changed:
-                        self.notify("data-changed")
-                    write_cookies(folder / "canvas_session.dpapi", rows)
-                except Exception:
-                    logging.exception("Verified session could not be saved")
-                    self.pending_sync = False
-                    self.notify(
-                        "session-error",
-                        message="로그인 정보를 저장하지 못했습니다. 다시 시도하세요.",
-                    )
-                    self.notify("auth-cancelled")
-                    self.publish_busy()
-                    return
-                self.logged_in = True
-                self.notify("authentication", loggedIn=True, interactive=not quiet)
-                if self.pending_sync:
-                    self.pending_sync = False
-                    self.start_collector()
-                self.publish_busy()
-
-            def failed(message):
-                if self.closing or generation != self.validation_generation:
-                    return
-                self.logged_in = False
-                self.pending_sync = False
-                self.notify("authentication", loggedIn=False)
-                if not quiet:
-                    self.notify("session-error", message=message)
-                self.notify("auth-cancelled")
-                self.publish_busy()
-
-            def finished():
-                self.validator = None
-                task.deleteLater()
-                if self.closing:
-                    self.finish_shutdown()
-
-            task.checked.connect(checked)
-            task.failed.connect(failed)
-            task.finished.connect(finished)
-            task.start()
-
-        def child(self, arguments):
-            process = QProcess(self)
-            environment = QProcessEnvironment.systemEnvironment()
-            if getattr(sys, "frozen", False):
-                environment.insert("PYINSTALLER_RESET_ENVIRONMENT", "1")
-            process.setProcessEnvironment(environment)
-            process.setProgram(sys.executable)
-            prefix = (
-                []
-                if getattr(sys, "frozen", False)
-                else [str(ROOT / "desktop/engine_main.py")]
+            owner, _courses = identity(params)
+            api.activate_account(owner)
+            self.restore_token = None
+            self.logged_in = True
+            self.notify(
+                "authentication",
+                loggedIn=True,
+                interactive=params.get("interactive") is True,
             )
-            process.setArguments(prefix + arguments + ["--data-dir", str(folder)])
-            return process
+            self.notify("data-changed")
+            if self.pending_sync:
+                self.pending_sync = False
+                self.start_collector()
+            return True
 
         def sync(self):
             diagnostics.add("동기화 요청")
@@ -376,122 +339,64 @@ def main():
                 raise ValueError("동기화 중입니다.")
             if not self.logged_in:
                 self.pending_sync = True
-                if not self.validator:
+                if not self.restore_token:
                     self.notify("auth-required")
                 return
             self.start_collector()
 
         def start_collector(self):
-            process = self.child(["--collect"])
-            environment = process.processEnvironment()
-            environment.insert("CALIX_CRAWL_DEBUG", "1" if diagnostics.enabled else "0")
-            process.setProcessEnvironment(environment)
-            diagnostics.add("영상 수집 시작 / software rendering / 60초 제한")
-            self.collector = process
-            self.collector_received = False
-            self.collector_buffer.clear()
+            self.collector = secrets.token_hex(16)
+            self.collection_timer.start(900000)
+            diagnostics.add("WebView2 로그인 프로필에서 수집 시작")
+            self.notify("browser-collect", runId=self.collector)
+            self.notify("sync-progress", message="학교 일정 확인 중")
 
-            def read():
-                self.collector_buffer.extend(bytes(process.readAllStandardOutput()))
-                if len(self.collector_buffer) > 8 * 1024 * 1024:
-                    self.notify("sync-error", message="주차학습 응답이 너무 큽니다.")
-                    process.kill()
-                    return
-                while b"\n" in self.collector_buffer:
-                    line, _, rest = self.collector_buffer.partition(b"\n")
-                    self.collector_buffer = bytearray(rest)
-                    try:
-                        value = json.loads(line)
-                    except ValueError:
-                        continue
-                    if not isinstance(value, dict):
-                        continue
-                    event = value.get("event")
-                    if event == "collection_debug":
-                        diagnostics.add(value.get("message", ""))
-                    elif event == "videos_collected":
-                        if self.collector_received:
-                            continue
-                        snapshot = value.get("snapshot")
-                        if (
-                            not isinstance(snapshot, dict)
-                            or not isinstance(snapshot.get("results"), list)
-                            or any(
-                                not isinstance(row, dict) for row in snapshot["results"]
-                            )
-                        ):
-                            self.collector_received = True
-                            self.notify(
-                                "sync-error",
-                                message="주차학습 응답 형식을 확인하지 못했습니다.",
-                            )
-                            process.kill()
-                            continue
-                        for row in snapshot.get("results", []):
-                            diagnostics.add(
-                                f"과목 {row.get('course_id')} 수집: {row.get('error') or '완료'} 단계={row.get('stage', 'ready')}"
-                            )
-                        self.collector_received = True
-                        self.start_sync(value.get("snapshot"))
-                    elif event == "collection_progress":
-                        self.notify(
-                            "sync-progress",
-                            message=value.get("message", "주차학습 확인 중"),
-                        )
-                    elif event in ("collection_auth_required", "collection_error"):
-                        self.collector_received = True
-                        if event == "collection_auth_required":
-                            self.logged_in = False
-                            self.notify("authentication", loggedIn=False)
-                        self.notify(
-                            "sync-error",
-                            message=value.get("message", "주차학습 확인 실패"),
-                        )
+        def browser_failed(self, params):
+            if not self.collector or params.get("runId") != self.collector:
+                return False
+            run = self.collector
+            self.collector = None
+            self.collection_timer.stop()
+            self.notify("browser-cancel", runId=run)
+            if params.get("authentication") is True:
+                self.logged_in = False
+                self.notify("authentication", loggedIn=False)
+            self.notify(
+                "sync-error",
+                message=str(
+                    params.get("message") or "학교 일정을 확인하지 못했습니다."
+                )[:300],
+            )
+            self.publish_busy()
+            return True
 
-            def finished(*_):
-                if self.collector is not process:
-                    return
-                read()
-                self.collector = None
-                self.collector_buffer.clear()
-                self.publish_busy()
-                process.deleteLater()
-                if not self.closing and not self.collector_received:
-                    self.notify(
-                        "sync-error",
-                        message="주차학습 연결이 종료됐습니다. 다시 시도하세요.",
+        def browser_complete(self, params):
+            if not self.collector or params.get("runId") != self.collector:
+                return False
+            payload = params.get("payload")
+            from engine_webview import identity
+
+            try:
+                owner, _courses = identity(payload)
+                if owner != api.store.get_meta("canvas_user_id"):
+                    raise ValueError("수집한 학교 계정이 일치하지 않습니다.")
+                if payload.get("transport") != "webview2" or not isinstance(
+                    payload.get("results"), list
+                ):
+                    raise ValueError("수집 응답을 확인하지 못했습니다.")
+            except (ValueError, TypeError):
+                self.browser_failed(
+                    dict(
+                        runId=self.collector,
+                        message="수집 응답과 학교 계정을 확인하지 못했습니다.",
                     )
-                if self.closing:
-                    self.finish_shutdown()
-
-            process.readyReadStandardOutput.connect(read)
-            process.readyReadStandardError.connect(
-                lambda: diagnostics.add(
-                    bytes(process.readAllStandardError()).decode("utf-8", "replace")[
-                        -4000:
-                    ],
                 )
-            )
-            process.finished.connect(finished)
-            process.errorOccurred.connect(
-                lambda error: (
-                    finished() if error == QProcess.ProcessError.FailedToStart else None
-                )
-            )
-            self.notify("sync-progress", message="주차학습 연결 중")
-            process.start()
+                raise
+            self.collector = None
+            self.collection_timer.stop()
+            from engine_webview import BrowserSyncTask
 
-        def start_sync(self, snapshot):
-            if self.closing:
-                return
-            from learning_calendar.worker import SyncTask
-
-            self.task = SyncTask(
-                read_cookies(folder / "canvas_session.dpapi"),
-                api.store.path,
-                self,
-                dom_snapshot=snapshot,
-            )
+            self.task = BrowserSyncTask(payload, api.store.path, self)
             self.task.progress.connect(
                 lambda message: self.notify("sync-progress", message=message)
             )
@@ -504,6 +409,7 @@ def main():
             )
             self.task.finished.connect(self.sync_finished)
             self.task.start()
+            return True
 
         def synced(self, result):
             api.switch_store(result["path"])
@@ -524,25 +430,21 @@ def main():
             if self.closing:
                 return
             self.closing = True
-            self.validation_generation += 1
+            self.restore_token = None
             if self.input:
                 self.input.stop()
-            if self.validator:
-                self.validator.cancel()
             if self.task:
                 self.task.cancel()
             if self.collector:
-                process = self.collector
-                process.write(b'{"id":0,"method":"quit"}\n')
-                QTimer.singleShot(
-                    3000, lambda: process.kill() if self.collector is process else None
-                )
+                self.notify("browser-cancel", runId=self.collector)
+                self.collector = None
+                self.collection_timer.stop()
             if self.updates:
                 self.updates.cancel(keep_installer=self.install_on_exit)
             self.finish_shutdown()
 
         def finish_shutdown(self):
-            if self.closed or self.task or self.collector or self.validator:
+            if self.closed or self.task or self.collector or self.restore_token:
                 return
             self.closed = True
             api.close()
