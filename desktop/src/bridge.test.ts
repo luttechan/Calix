@@ -4,7 +4,13 @@ const mock = vi.hoisted(() => ({
   commands: [] as any[],
   spawn: null as null | ((child: any) => Promise<any>),
 }));
-vi.mock("@tauri-apps/api/core", () => ({ isTauri: () => true }));
+vi.mock("@tauri-apps/api/core", () => ({
+  isTauri: () => true,
+  invoke: vi.fn(async () => undefined),
+}));
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn(async () => () => {}),
+}));
 vi.mock("@tauri-apps/plugin-shell", () => ({
   Command: {
     sidecar: () => {

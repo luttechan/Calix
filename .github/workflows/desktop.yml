@@ -59,18 +59,6 @@ jobs:
         run: python desktop/tools/build_engine.py
       - name: Check packaged Python engine
         run: python desktop/tools/check_engine.py desktop/.build/dist/calix-engine/calix-engine.exe
-      - name: Check packaged course browser
-        env:
-          QT_QPA_PLATFORM: offscreen
-        run: |
-          $exe = (Resolve-Path desktop/.build/dist/calix-engine/calix-engine.exe).Path
-          $report = Join-Path $env:RUNNER_TEMP 'calix141-course-browser.json'
-          $process = Start-Process -FilePath $exe -ArgumentList @('--collector-check',$report) -WindowStyle Hidden -PassThru
-          if (-not $process.WaitForExit(30000)) { $process.Kill(); throw 'Course browser timed out.' }
-          if ($process.ExitCode -ne 0) { throw 'Course browser failed to initialize.' }
-          $result = Get-Content $report -Raw | ConvertFrom-Json
-          if (-not $result.passed) { throw 'Course page did not render.' }
-          Get-Content $report -Raw
       - name: Restore Rust build cache
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -84,6 +72,16 @@ jobs:
         run: |
           pnpm tauri build
           if ($LASTEXITCODE -ne 0) { throw 'Desktop build failed.' }
+      - name: Check native WebView2 profile and viewport
+        run: |
+          $exe = (Resolve-Path desktop/src-tauri/target/release/calix-desktop.exe).Path
+          $report = Join-Path $env:RUNNER_TEMP 'calix-webview2-check.json'
+          $process = Start-Process -FilePath $exe -ArgumentList @('--campus-check',$report) -WindowStyle Hidden -PassThru
+          if (-not $process.WaitForExit(90000)) { $process.Kill(); throw 'WebView2 check timed out.' }
+          if ($process.ExitCode -ne 0) { if (Test-Path $report) { Get-Content $report }; throw 'WebView2 profile or viewport check failed.' }
+          $result = Get-Content $report -Raw | ConvertFrom-Json
+          if (-not $result.passed -or -not $result.sameProfile -or $result.viewport.width -le 0 -or $result.viewport.height -le 0) { throw 'Invalid WebView2 check result.' }
+          Get-Content $report -Raw
       - name: Retain Rust build cache
         if: always()
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830

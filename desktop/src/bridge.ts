@@ -1,4 +1,5 @@
-import { isTauri } from "@tauri-apps/api/core";
+import { isTauri, invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { Command, type Child } from "@tauri-apps/plugin-shell";
 let child: Child | null = null,
   starting: Promise<void> | null = null,
@@ -11,6 +12,7 @@ const pending = new Map<
     resolve: (value: unknown) => void;
     reject: (error: Error) => void;
     timer: ReturnType<typeof setTimeout>;
+    method: string;
   }
 >();
 const listeners = new Set<(message: Record<string, unknown>) => void>();
@@ -22,6 +24,27 @@ export function subscribe(
   return () => {
     listeners.delete(listener);
   };
+}
+let browserEvents: Promise<unknown> | null = null;
+function browserMessage(message: Record<string, unknown>) {
+  if (message.event === "browser-collect") {
+    const runId = String(message.runId);
+    void invoke("campus_collect", { runId })
+      .then((payload) => rpc("browser.complete", { runId, payload }))
+      .catch((error) => {
+        if (stopping) return;
+        const text = String(error);
+        return rpc("browser.failed", {
+          runId,
+          authentication: text.includes("AUTH_REQUIRED"),
+          message: text.includes("AUTH_REQUIRED")
+            ? "학교에 다시 로그인하세요."
+            : `학교 일정 확인 실패: ${text.slice(0, 160)}`,
+        }).catch(() => {});
+      });
+  }
+  if (message.event === "browser-cancel")
+    void invoke("campus_cancel").catch(() => {});
 }
 function failAll(message: string) {
   for (const request of pending.values()) {
@@ -38,6 +61,17 @@ async function start() {
   if (starting) return starting;
   const current = ++generation;
   starting = (async () => {
+    if (!browserEvents)
+      browserEvents = listen("campus:progress", (event) => {
+        if (!stopping)
+          void rpc(
+            "browser.progress",
+            event.payload as Record<string, unknown>,
+          ).catch(() => {});
+      }).catch(() => {
+        browserEvents = null;
+      });
+    await browserEvents;
     const command = Command.sidecar("binaries/calix-engine");
     command.stdout.on("data", (line: string) => {
       if (current !== generation) return;
@@ -50,6 +84,7 @@ async function start() {
       if (!message || typeof message !== "object" || Array.isArray(message))
         return;
       if (message.event) {
+        browserMessage(message);
         for (const listener of listeners) {
           try {
             listener(message);
@@ -64,7 +99,13 @@ async function start() {
       pending.delete(message.id);
       clearTimeout(request.timer);
       if (message.error) request.reject(new Error(message.error));
-      else request.resolve(message.result);
+      else {
+        if (request.method === "diagnostics.enable")
+          void invoke("campus_debug", {
+            enabled: message.result === true,
+          }).catch(() => {});
+        request.resolve(message.result);
+      }
     });
     const failed = (message: string) => {
       if (current !== generation) return;
@@ -112,7 +153,12 @@ export async function rpc<T = unknown>(
       pending.delete(id);
       reject(new Error("처리 시간이 초과되었습니다."));
     }, 120000);
-    pending.set(id, { resolve: (value) => resolve(value as T), reject, timer });
+    pending.set(id, {
+      resolve: (value) => resolve(value as T),
+      reject,
+      timer,
+      method,
+    });
     child!
       .write(JSON.stringify({ id, method, params }) + "\n")
       .catch((error) => {
@@ -124,6 +170,7 @@ export async function rpc<T = unknown>(
 }
 export async function stopEngine(install = false) {
   stopping = true;
+  if (isTauri()) await invoke("campus_cancel").catch(() => {});
   if (starting) {
     try {
       await starting;

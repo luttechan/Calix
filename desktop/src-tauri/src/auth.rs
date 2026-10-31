@@ -14,7 +14,7 @@ pub(crate) fn trusted(view: &Webview, labels: &[&str]) -> Result<(), String> {
     Ok(())
 }
 
-fn campus(url: &url::Url) -> bool {
+pub(crate) fn campus(url: &url::Url) -> bool {
     url.scheme() == "https" && url.port_or_known_default() == Some(443)
         && url.username().is_empty() && url.password().is_none()
         && url.host_str().is_some_and(|host| host == "bufs.ac.kr" || host.ends_with(".bufs.ac.kr"))
@@ -63,7 +63,7 @@ pub async fn auth_mount(app: AppHandle, webview: Webview, bounds: Bounds) -> Res
     let page_app = app.clone();
     let popup_app = app.clone();
     let builder = WebviewBuilder::new("school-login", WebviewUrl::External("https://canvas.bufs.ac.kr/login".parse().unwrap()))
-        .data_directory(directory).incognito(false).general_autofill_enabled(false)
+        .data_directory(directory).additional_browser_args(crate::campus::ARGS).incognito(false).general_autofill_enabled(false)
         .on_navigation(campus)
         .on_page_load(move |_view, payload| {
             let _ = page_app.emit_to("login", "auth:page", json!({"loaded":matches!(payload.event(),PageLoadEvent::Finished)}));
@@ -85,17 +85,8 @@ pub async fn auth_mount(app: AppHandle, webview: Webview, bounds: Bounds) -> Res
 #[tauri::command]
 pub async fn auth_complete(app: AppHandle, webview: Webview) -> Result<(), String> {
     trusted(&webview, &["login"])?;
-    let child = app.get_webview("school-login").ok_or("로그인 화면을 준비 중입니다.")?;
-    let cookies = tauri::async_runtime::spawn_blocking(move || child.cookies()).await
-        .map_err(|_| "로그인 쿠키를 확인하지 못했습니다.")?
-        .map_err(|_| "로그인 쿠키를 확인하지 못했습니다.")?;
-    let values: Vec<Value> = cookies.into_iter().filter_map(|cookie| {
-        let domain = cookie.domain().unwrap_or("").trim_start_matches('.');
-        if domain != "bufs.ac.kr" && !domain.ends_with(".bufs.ac.kr") { return None; }
-        Some(json!({"name":cookie.name(),"value":cookie.value(),"domain":cookie.domain(),"path":cookie.path().unwrap_or("/"),"secure":cookie.secure().unwrap_or(false),"httpOnly":cookie.http_only().unwrap_or(false),"expires":cookie.expires_datetime().map(|date| date.unix_timestamp())}))
-    }).collect();
-    if values.is_empty() { return Err("학교 로그인 후 완료를 누르세요.".into()); }
-    app.emit_to("main", "auth:cookies", json!({"cookies":values})).map_err(|_| "로그인 정보를 전달하지 못했습니다.".into())
+    let identity = crate::campus::identity_internal(&app).await?;
+    app.emit_to("main", "auth:identity", identity).map_err(|_| "로그인 정보를 전달하지 못했습니다.".into())
 }
 
 #[tauri::command]
@@ -129,7 +120,7 @@ pub async fn auth_logout(app: AppHandle, webview: Webview) -> Result<(), String>
         let directory = app.path().app_local_data_dir().map_err(|_| "로그인 저장소를 찾지 못했습니다.")?.join("campus-session");
         if directory.exists() {
             let cleanup = WebviewWindowBuilder::new(&app, "session-clear", WebviewUrl::External("about:blank".parse().unwrap()))
-                .data_directory(directory).visible(false).skip_taskbar(true).build().map_err(|_| "로그아웃을 준비하지 못했습니다.")?;
+                .data_directory(directory).additional_browser_args(crate::campus::ARGS).visible(false).skip_taskbar(true).build().map_err(|_| "로그아웃을 준비하지 못했습니다.")?;
             let view = cleanup.clone();
             let result = tauri::async_runtime::spawn_blocking(move || view.clear_all_browsing_data()).await
                 .map_err(|_| "로그아웃하지 못했습니다.")?;

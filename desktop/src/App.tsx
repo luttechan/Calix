@@ -301,7 +301,12 @@ export function App() {
       .catch((e) => {
         if (alive) setError(e.message);
       });
-    void rpc("session.restore").catch(() => {});
+    if (isTauri())
+      void invoke<Record<string, unknown>>("campus_identity")
+        .then((identity) =>
+          rpc("browser.identity", { ...identity, interactive: false }),
+        )
+        .catch(() => {});
     rpc<{ loggedIn: boolean }>("engine.state")
       .then((value) => {
         if (alive) setLoggedIn(value.loggedIn);
@@ -372,12 +377,12 @@ export function App() {
         },
       ],
       [
-        "auth:cookies",
+        "auth:identity",
         (message: { payload: unknown }) => {
-          void rpc(
-            "session.import",
-            message.payload as Record<string, unknown>,
-          ).catch((error) =>
+          void rpc("browser.identity", {
+            ...(message.payload as Record<string, unknown>),
+            interactive: true,
+          }).catch((error) =>
             invoke("auth_status", {
               success: false,
               message: error.message,

@@ -3,6 +3,7 @@ use tauri::{Emitter, Manager, WindowEvent};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState};
 mod auth;
+mod campus;
 
 #[tauri::command]
 fn quit_app(app: tauri::AppHandle, webview: tauri::Webview) -> Result<(), String> { auth::trusted(&webview, &["main"])?;app.exit(0);Ok(()) }
@@ -25,13 +26,29 @@ fn show(app: &tauri::AppHandle) {
 }
 
 fn main() {
-    tauri::Builder::default()
+    let args: Vec<String> = std::env::args().collect();
+    let check = args.iter().position(|arg| arg == "--campus-check").and_then(|index|args.get(index+1)).cloned();
+    let mut context = tauri::generate_context!();
+    if check.is_some() { context.config_mut().app.windows.clear(); }
+    let check_mode = check.is_some();
+    let builder = tauri::Builder::default()
+        .manage(campus::CampusState::default())
         .manage(auth::AuthGate(std::sync::Mutex::new(())))
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show(app)))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![quit_app, restart_app, app_ready, auth::auth_open, auth::auth_mount, auth::auth_complete, auth::auth_status, auth::auth_reload, auth::auth_logout, auth::backup_file])
-        .setup(|app| {
+        .invoke_handler(tauri::generate_handler![campus::campus_identity, campus::campus_collect, campus::campus_cancel, campus::campus_debug, quit_app, restart_app, app_ready, auth::auth_open, auth::auth_mount, auth::auth_complete, auth::auth_status, auth::auth_reload, auth::auth_logout, auth::backup_file])
+        .setup(move |app| {
+            if let Some(path) = check.clone() {
+                let handle=app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    let result=campus::self_check(handle.clone()).await;
+                    let passed=result.is_ok();
+                    let report=result.unwrap_or_else(|error|serde_json::json!({"passed":false,"error":error}));
+                    let _=std::fs::write(path,report.to_string());
+                    handle.exit(if passed {0}else{1});
+                });
+                return Ok(());
+            }
             let open = MenuItem::with_id(app, "open", "열기", true, None::<&str>)?;
             let exit = MenuItem::with_id(app, "exit", "종료", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&open, &exit])?;
@@ -55,6 +72,7 @@ fn main() {
                 else if window.label() == "login" { let _ = window.app_handle().emit_to("main", "auth:dismissed", ()); }
             }
         })
-        .run(tauri::generate_context!())
-        .expect("Calix failed to start");
+        ;
+    let builder = if check_mode { builder } else { builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show(app))) };
+    builder.run(context).expect("Calix failed to start");
 }
