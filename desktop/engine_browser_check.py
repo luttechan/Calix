@@ -5,6 +5,8 @@ from pathlib import Path
 
 
 def run(output):
+    from engine_portable_browser import configure
+    configure()
     from PySide6.QtCore import QCoreApplication, QEvent, QTimer, Qt
 
     QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
@@ -37,6 +39,7 @@ def run(output):
     )
     QTimer.singleShot(10000, app.quit)
     page.setHtml('<!doctype html><div id="answer">42</div>')
+    page.setVisible(True)
     app.exec()
     page.deleteLater()
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)

@@ -34,7 +34,7 @@ export function UpdateDialog({
   const { notify } = useCalix(),
     [state, setState] = useState<State>({
       phase: "checking",
-      current: "1.4.2",
+      current: "1.4.21",
       message: "업데이트 확인 중",
     }),
     keep = useRef(false);
@@ -63,7 +63,7 @@ export function UpdateDialog({
         if (active)
           setState({
             phase: "error",
-            current: "1.4.2",
+            current: "1.4.21",
             message: error.message,
           });
       });

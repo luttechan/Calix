@@ -2,8 +2,6 @@
 
 import logging
 import re
-from logging.handlers import RotatingFileHandler
-from pathlib import Path
 
 
 class SecretSafeFormatter(logging.Formatter):
@@ -28,12 +26,7 @@ class SecretSafeFormatter(logging.Formatter):
 
 
 def configure(folder):
-    directory = Path(folder) / "logs"
-    directory.mkdir(parents=True, exist_ok=True)
-    handler = RotatingFileHandler(
-        directory / "engine.log", maxBytes=524288, backupCount=1, encoding="utf-8"
-    )
-    handler.setFormatter(SecretSafeFormatter("%(asctime)s [%(levelname)s] %(message)s"))
+    # Normal operation neither collects diagnostics nor opens a log file.
     logger = logging.getLogger()
     logger.setLevel(logging.WARNING)
-    logger.addHandler(handler)
+    logger.addHandler(logging.NullHandler())
