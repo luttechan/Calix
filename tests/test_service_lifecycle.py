@@ -64,7 +64,7 @@ def test_account_changes_are_blocked_while_collection_runs(service, method):
 
 def test_sync_waits_for_existing_login_validation(service):
     instance, output = service
-    instance.validator = object()
+    instance.restore_token = "restore-in-progress"
     instance.handle(dict(id=1, method="sync", params={}))
     assert instance.pending_sync
     assert not any(row.get("event") == "auth-required" for row in output)
@@ -103,3 +103,32 @@ def test_late_completion_from_cancelled_browser_is_ignored(service):
     instance.collector = "b" * 32
     assert instance.browser_complete(dict(runId="a" * 32, payload={})) is False
     assert instance.collector == "b" * 32
+
+
+def test_cancelled_restore_cannot_reactivate_old_session(service):
+    instance, output = service
+    instance.restore_token = "old"
+    instance.handle(dict(id=1, method="session.prepare", params={}))
+    assert (
+        instance.accept_browser_identity(
+            dict(
+                owner="7",
+                courses=[dict(id=2, name="수업")],
+                interactive=False,
+                token="old",
+            )
+        )
+        is False
+    )
+    assert not instance.logged_in
+
+
+def test_restore_failure_opens_login_only_for_a_waiting_sync(service):
+    instance, output = service
+    instance.restore_token = "pending"
+    instance.pending_sync = True
+    instance.handle(
+        dict(id=1, method="browser.restore.failed", params=dict(token="pending"))
+    )
+    assert instance.restore_token is None
+    assert any(row.get("event") == "auth-required" for row in output)

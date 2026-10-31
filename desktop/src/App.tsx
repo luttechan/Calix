@@ -259,6 +259,7 @@ export function App() {
       return;
     }
     await rpc("session.prepare");
+    await invoke("campus_cancel").catch(() => {});
     try {
       await invoke("auth_open", {
         theme: document.documentElement.dataset.theme || "pink",
@@ -302,10 +303,20 @@ export function App() {
         if (alive) setError(e.message);
       });
     if (isTauri())
-      void invoke<Record<string, unknown>>("campus_identity")
-        .then((identity) =>
-          rpc("browser.identity", { ...identity, interactive: false }),
-        )
+      void rpc<string>("browser.restore.begin")
+        .then(async (token) => {
+          try {
+            const identity =
+              await invoke<Record<string, unknown>>("campus_identity");
+            await rpc("browser.identity", {
+              ...identity,
+              interactive: false,
+              token,
+            });
+          } catch {
+            await rpc("browser.restore.failed", { token }).catch(() => {});
+          }
+        })
         .catch(() => {});
     rpc<{ loggedIn: boolean }>("engine.state")
       .then((value) => {

@@ -30,10 +30,14 @@ let diagnosticEvents: Promise<unknown> | null = null;
 function browserMessage(message: Record<string, unknown>) {
   if (message.event === "browser-collect") {
     const runId = String(message.runId);
+    const peer = generation;
     void invoke("campus_collect", { runId })
-      .then((payload) => rpc("browser.complete", { runId, payload }))
+      .then((payload) => {
+        if (stopping || generation !== peer) return;
+        return rpc("browser.complete", { runId, payload });
+      })
       .catch((error) => {
-        if (stopping) return;
+        if (stopping || generation !== peer) return;
         const text = String(error);
         return rpc("browser.failed", {
           runId,
@@ -62,9 +66,10 @@ async function start() {
   if (starting) return starting;
   const current = ++generation;
   starting = (async () => {
+    await invoke("campus_debug", { enabled: false }).catch(() => {});
     if (!browserEvents)
       browserEvents = listen("campus:progress", (event) => {
-        if (!stopping)
+        if (!stopping && child)
           void rpc(
             "browser.progress",
             event.payload as Record<string, unknown>,
@@ -75,7 +80,7 @@ async function start() {
     await browserEvents;
     if (!diagnosticEvents)
       diagnosticEvents = listen("campus:diagnostic", (event) => {
-        if (!stopping)
+        if (!stopping && child)
           void rpc(
             "diagnostics.record",
             event.payload as Record<string, unknown>,

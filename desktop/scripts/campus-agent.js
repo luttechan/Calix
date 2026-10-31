@@ -52,6 +52,7 @@
     const walk = (value, depth = 0) => {
       if (!value || typeof value !== "object" || depth > 16 || --remaining < 0)
         return;
+      if (value.published === false) return;
       if (value.content_data && typeof value.content_data === "object") {
         const data = value.content_data,
           media = data.item_content_data || {};

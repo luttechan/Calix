@@ -85,7 +85,10 @@ pub async fn auth_mount(app: AppHandle, webview: Webview, bounds: Bounds) -> Res
 #[tauri::command]
 pub async fn auth_complete(app: AppHandle, webview: Webview) -> Result<(), String> {
     trusted(&webview, &["login"])?;
-    let identity = crate::campus::identity_internal(&app).await?;
+    let identity = crate::campus::identity_internal(&app).await.map_err(|error| {
+        if error.contains("AUTH_REQUIRED") { "학교 로그인 후 완료를 누르세요.".to_string() }
+        else { format!("학교 로그인 상태를 확인하지 못했습니다. ({error})") }
+    })?;
     app.emit_to("main", "auth:identity", identity).map_err(|_| "로그인 정보를 전달하지 못했습니다.".into())
 }
 

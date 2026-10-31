@@ -97,10 +97,7 @@ def main():
             self.incoming.connect(self.handle)
             self.task = None
             self.collector = None
-            self.collector_received = False
-            self.collector_buffer = bytearray()
-            self.validator = None
-            self.validation_generation = 0
+            self.restore_token = None
             self.pending_sync = False
             self.logged_in = False
             self.closing = False
@@ -170,24 +167,23 @@ def main():
                         loggedIn=self.logged_in,
                         busy=bool(self.task or self.collector or self.pending_sync),
                     )
-                elif method == "browser.identity":
-                    if self.task or self.collector:
-                        raise ValueError("동기화가 끝난 뒤 로그인 상태를 변경하세요.")
-                    from engine_webview import identity
-
-                    owner, _courses = identity(params)
-                    api.activate_account(owner)
-                    self.logged_in = True
-                    self.notify(
-                        "authentication",
-                        loggedIn=True,
-                        interactive=params.get("interactive") is True,
+                elif method == "browser.restore.begin":
+                    if self.task or self.collector or self.pending_sync:
+                        raise ValueError("진행 중인 작업을 마친 뒤 확인하세요.")
+                    self.restore_token = secrets.token_hex(16)
+                    result = self.restore_token
+                elif method == "browser.restore.failed":
+                    result = bool(
+                        self.restore_token and params.get("token") == self.restore_token
                     )
-                    self.notify("data-changed")
-                    if self.pending_sync:
-                        self.pending_sync = False
-                        self.start_collector()
-                    result = True
+                    if result:
+                        self.restore_token = None
+                        self.logged_in = False
+                        self.notify("authentication", loggedIn=False)
+                        if self.pending_sync:
+                            self.notify("auth-required")
+                elif method == "browser.identity":
+                    result = self.accept_browser_identity(params)
                 elif method == "browser.complete":
                     result = self.browser_complete(params)
                 elif method == "browser.failed":
@@ -205,28 +201,21 @@ def main():
                             self.notify("sync-progress", message=message)
                 elif method == "session.import":
                     raise ValueError("학교 로그인 창에서 완료를 누르세요.")
-                    result = True
                 elif method == "session.restore":
                     result = False
                 elif method == "session.prepare":
-                    self.validation_generation += 1
-                    if self.validator:
-                        self.validator.cancel()
+                    self.restore_token = None
                     result = True
                 elif method == "session.logout":
-                    self.validation_generation += 1
-                    if self.validator:
-                        self.validator.cancel()
+                    self.restore_token = None
                     (folder / "canvas_session.dpapi").unlink(missing_ok=True)
                     self.logged_in = False
                     self.pending_sync = False
                     self.notify("authentication", loggedIn=False)
                     result = True
                 elif method == "session.cancel":
-                    self.validation_generation += 1
+                    self.restore_token = None
                     self.pending_sync = False
-                    if self.validator:
-                        self.validator.cancel()
                     self.notify("auth-cancelled")
                     result = True
                 elif method == "login":
@@ -286,9 +275,7 @@ def main():
                 elif method == "data.reset":
                     if self.task or self.collector:
                         raise ValueError("진행 중인 작업을 마친 뒤 초기화하세요.")
-                    self.validation_generation += 1
-                    if self.validator:
-                        self.validator.cancel()
+                    self.restore_token = None
                     self.pending_sync = False
                     result = api.dispatch(method, params)
                     self.logged_in = False
@@ -297,7 +284,7 @@ def main():
                     self.notify("data-changed")
                 else:
                     if method.startswith("backup.") and (
-                        self.task or self.collector or self.validator
+                        self.task or self.collector or self.restore_token
                     ):
                         raise ValueError("동기화가 끝난 뒤 다시 시도하세요.")
                     result = api.dispatch(method, params)
@@ -322,13 +309,37 @@ def main():
             else:
                 emit(response)
 
+        def accept_browser_identity(self, params):
+            if params.get("interactive") is not True and (
+                not self.restore_token or params.get("token") != self.restore_token
+            ):
+                return False
+            if self.task or self.collector:
+                raise ValueError("동기화가 끝난 뒤 로그인 상태를 변경하세요.")
+            from engine_webview import identity
+
+            owner, _courses = identity(params)
+            api.activate_account(owner)
+            self.restore_token = None
+            self.logged_in = True
+            self.notify(
+                "authentication",
+                loggedIn=True,
+                interactive=params.get("interactive") is True,
+            )
+            self.notify("data-changed")
+            if self.pending_sync:
+                self.pending_sync = False
+                self.start_collector()
+            return True
+
         def sync(self):
             diagnostics.add("동기화 요청")
             if self.task or self.collector or self.pending_sync:
                 raise ValueError("동기화 중입니다.")
             if not self.logged_in:
                 self.pending_sync = True
-                if not self.validator:
+                if not self.restore_token:
                     self.notify("auth-required")
                 return
             self.start_collector()
@@ -419,11 +430,9 @@ def main():
             if self.closing:
                 return
             self.closing = True
-            self.validation_generation += 1
+            self.restore_token = None
             if self.input:
                 self.input.stop()
-            if self.validator:
-                self.validator.cancel()
             if self.task:
                 self.task.cancel()
             if self.collector:
@@ -435,7 +444,7 @@ def main():
             self.finish_shutdown()
 
         def finish_shutdown(self):
-            if self.closed or self.task or self.collector or self.validator:
+            if self.closed or self.task or self.collector or self.restore_token:
                 return
             self.closed = True
             api.close()

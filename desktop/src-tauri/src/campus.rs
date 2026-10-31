@@ -58,6 +58,9 @@ async fn request(app: &AppHandle, view: &WebviewWindow, operation: &str, course:
     loop {
         current(app, epoch)?;
         if Instant::now() > deadline { return Err("BROWSER_REQUEST_TIMEOUT".into()); }
+        if let Ok(url) = view.url() {
+            if url.host_str().is_some_and(|host| host != "canvas.bufs.ac.kr") { return Err("AUTH_REQUIRED".into()); }
+        }
         let script = if !started {
             format!("(()=>{{if(location.origin!=='https://canvas.bufs.ac.kr')return {{status:'loading'}};const s=window[Symbol.for('calix.campus.reader')];if(!s)return {{status:'loading'}};s.debug={debug};s.start({},{},{});return {{status:'started'}};}})()", json!(id), json!(operation), json!(course), debug=app.state::<CampusState>().debug.load(Ordering::SeqCst))
         } else {
@@ -84,9 +87,22 @@ async fn identity(app: &AppHandle, view: &WebviewWindow, epoch: u64) -> Result<V
 
 pub async fn identity_internal(app: &AppHandle) -> Result<Value, String> {
     let state = app.state::<CampusState>();
-    let _guard = state.gate.lock().await;
     let epoch = state.epoch.load(Ordering::SeqCst);
-    identity(app, &worker(app)?, epoch).await
+    let _guard = state.gate.lock().await;
+    current(app, epoch)?;
+    let view = worker(app)?;
+    if view.url().ok().and_then(|u|u.host_str().map(str::to_owned)).as_deref() != Some("canvas.bufs.ac.kr") {
+        view.navigate("https://canvas.bufs.ac.kr/".parse().unwrap()).map_err(|_|"BROWSER_NAVIGATION_FAILED")?;
+        let deadline = Instant::now()+Duration::from_secs(20);
+        loop {
+            current(app,epoch)?;
+            if Instant::now()>deadline { return Err("AUTH_REQUIRED".into()); }
+            let ready=evaluate(&view,"(location.origin==='https://canvas.bufs.ac.kr'&&!!window[Symbol.for('calix.campus.reader')])".into()).await?;
+            if ready==true { break; }
+            tokio::time::sleep(Duration::from_millis(150)).await;
+        }
+    }
+    identity(app, &view, epoch).await
 }
 
 #[tauri::command]
@@ -99,6 +115,11 @@ pub async fn campus_identity(app: AppHandle, webview: Webview) -> Result<Value, 
 pub fn campus_debug(app: AppHandle, webview: Webview, enabled: bool) -> Result<(), String> {
     crate::auth::trusted(&webview, &["main"])?;
     app.state::<CampusState>().debug.store(enabled, Ordering::SeqCst);
+    if !enabled {
+        if let Some(view)=app.get_webview_window("campus-worker") {
+            let _=view.eval("(()=>{const walk=(w,n=0)=>{if(n>6)return;try{const s=w[Symbol.for('calix.campus.reader')];if(s){s.debug=false;s.logs=[];}for(const f of w.document.querySelectorAll('iframe'))if(f.contentWindow)walk(f.contentWindow,n+1);}catch{}};walk(window);})()");
+        }
+    }
     Ok(())
 }
 
@@ -123,14 +144,16 @@ async fn course_snapshot(app: &AppHandle, view: &WebviewWindow, owner: &str, cou
     let mut since = Instant::now();
     let mut shown = false;
     let course_key = course.to_string();
+    let started = Instant::now();
     loop {
         current(app, epoch)?;
         if Instant::now() > deadline { return Err("COURSE_CONTENT_TIMEOUT".into()); }
-        let script = format!(r#"(()=>{{try{{const snapshot=JSON.parse({SNAPSHOT});let network=null,viewport={{width:innerWidth,height:innerHeight}};const scan=(d,n=0)=>{{if(n>6)return;const root=d.querySelector('#root[data-canvas_course_id]');if(root&&root.getAttribute('data-canvas_course_id')==={course_id}){{const w=d.defaultView;if(w[Symbol.for('calix.campus.reader')])w[Symbol.for('calix.campus.reader')].debug={debug};network=w[Symbol.for('calix.campus.reader')]?.courses[{course_id}]||null;viewport={{width:w.innerWidth,height:w.innerHeight}};}}for(const f of d.querySelectorAll('iframe')){{try{{if(f.contentDocument)scan(f.contentDocument,n+1)}}catch{{}}}}}};scan(document);return {{snapshot,network,viewport}};}}catch{{return {{error:'SNAPSHOT_FAILED'}};}}}})()"#, course_id=json!(course.to_string()),debug=app.state::<CampusState>().debug.load(Ordering::SeqCst));
+        if view.url().ok().and_then(|u|u.host_str().map(str::to_owned)).is_some_and(|host|host!="canvas.bufs.ac.kr") { return Err("AUTH_REQUIRED".into()); }
+        let script = format!(r#"(()=>{{try{{const snapshot=JSON.parse({SNAPSHOT});let network=null,viewport={{width:innerWidth,height:innerHeight,hidden:document.hidden}};const scan=(d,n=0)=>{{if(n>6)return;const root=d.querySelector('#root[data-canvas_course_id]');if(root&&root.getAttribute('data-canvas_course_id')==={course_id}){{const w=d.defaultView;if(w[Symbol.for('calix.campus.reader')])w[Symbol.for('calix.campus.reader')].debug={debug};network=w[Symbol.for('calix.campus.reader')]?.courses[{course_id}]||null;viewport={{width:w.innerWidth,height:w.innerHeight,hidden:d.hidden}};}}for(const f of d.querySelectorAll('iframe')){{try{{if(f.contentDocument)scan(f.contentDocument,n+1)}}catch{{}}}}}};scan(document);return {{snapshot,network,viewport}};}}catch{{return {{error:'SNAPSHOT_FAILED'}};}}}})()"#, course_id=json!(course.to_string()),debug=app.state::<CampusState>().debug.load(Ordering::SeqCst));
         let value = evaluate(view, script).await?;
         if value.get("error").is_some() { return Err("SNAPSHOT_FAILED".into()); }
         let snap = &value["snapshot"];
-        if value["viewport"]["width"].as_u64().unwrap_or(0) == 0 || value["viewport"]["height"].as_u64().unwrap_or(0) == 0 {
+        if value["viewport"]["width"].as_u64().unwrap_or(0) == 0 || value["viewport"]["height"].as_u64().unwrap_or(0) == 0 || (!shown && value["viewport"]["hidden"]==true && started.elapsed()>=Duration::from_secs(3)) {
             if !shown { view.show().map_err(|_| "COLLECTION_VIEWPORT_ZERO")?; shown = true; }
             tokio::time::sleep(Duration::from_millis(250)).await; continue;
         }
@@ -162,8 +185,9 @@ pub async fn campus_collect(app: AppHandle, webview: Webview, run_id: String) ->
     crate::auth::trusted(&webview, &["main"])?;
     if run_id.len() != 32 || !run_id.bytes().all(|b| b.is_ascii_hexdigit()) { return Err("INVALID_RUN".into()); }
     let state = app.state::<CampusState>();
-    let _guard = state.gate.lock().await;
     let epoch = state.epoch.load(Ordering::SeqCst);
+    let _guard = state.gate.lock().await;
+    current(&app, epoch)?;
     let view = worker(&app)?;
     let _hide = HideOnDrop(view.clone());
     let who = identity(&app, &view, epoch).await?;
@@ -177,7 +201,7 @@ pub async fn campus_collect(app: AppHandle, webview: Webview, run_id: String) ->
         progress(&app, &run_id, format!("{} / 주차학습 확인 중", course["name"].as_str().unwrap_or("수업")), false);
         match course_snapshot(&app, &view, owner, id, epoch).await {
             Ok(snapshot) => { progress(&app, &run_id, format!("과목 {id} 영상 {}건 확인", snapshot["items"].as_array().map_or(0, |v|v.len())), true); results.push(json!({"course_id":id,"verified":true,"empty_confirmed":snapshot["items"].as_array().is_some_and(|v|v.is_empty()),"snapshot":snapshot})); },
-            Err(error) => { if error == "CANCELLED" { return Err(error); } progress(&app, &run_id, format!("과목 {id} 영상 확인 실패: {error}"), true); results.push(json!({"course_id":id,"error":error})); },
+            Err(error) => { if error == "CANCELLED" || error == "AUTH_REQUIRED" { return Err(error); } progress(&app, &run_id, format!("과목 {id} 영상 확인 실패: {error}"), true); results.push(json!({"course_id":id,"error":error})); },
         }
         match request(&app, &view, "assignments", Some(id), epoch).await {
             Ok(Value::Object(values)) => responses.extend(values),
@@ -210,7 +234,7 @@ pub async fn self_check(app: AppHandle) -> Result<Value, String> {
                     let request = String::from_utf8_lossy(&bytes[..count]);
                     let setting = request.starts_with("GET /set ");
                     let shared = request.lines().any(|l|l.to_ascii_lowercase().starts_with("cookie:") && l.contains("calix_probe=shared"));
-                    let body = format!("<!doctype html><div id='probe' data-shared='{shared}'>Calix offline check</div>");
+                    let body = if setting { "<!doctype html><div id='probe'>Calix offline check</div>".to_string() } else { format!("<!doctype html><script>function ready(){{if(!document.hidden&&!document.getElementById('probe'))document.body.innerHTML=\"<div id='probe' data-shared='{shared}'>Calix offline check</div>\";}}document.addEventListener('visibilitychange',ready);document.addEventListener('DOMContentLoaded',ready);</script>") };
                     let cookie = if setting { "Set-Cookie: calix_probe=shared; Path=/; HttpOnly; SameSite=Lax\r\n" } else { "" };
                     let response = format!("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\n{cookie}Connection: close\r\n\r\n{body}",body.len());
                     let _ = stream.write_all(response.as_bytes());
@@ -229,9 +253,11 @@ pub async fn self_check(app: AppHandle) -> Result<Value, String> {
                 .build().map_err(|e|e.to_string())?;
             views.push(view.clone());
             let deadline = Instant::now()+Duration::from_secs(25);
+            let started=Instant::now();
             loop {
                 if Instant::now()>deadline { return Err("WEBVIEW2_CHECK_TIMEOUT".to_string()); }
-                let value=evaluate(&view,"({ready:!!document.getElementById('probe'),shared:document.getElementById('probe')?.dataset.shared,width:innerWidth,height:innerHeight,httpOnlyHidden:!document.cookie.includes('calix_probe')})".into()).await?;
+                let value=evaluate(&view,"({ready:!!document.getElementById('probe'),shared:document.getElementById('probe')?.dataset.shared,width:innerWidth,height:innerHeight,hidden:document.hidden,httpOnlyHidden:!document.cookie.includes('calix_probe')})".into()).await?;
+                if started.elapsed()>=Duration::from_secs(3) && value["hidden"]==true { view.show().map_err(|e|e.to_string())?; }
                 if value["ready"]==true {
                     if value["width"].as_u64().unwrap_or(0)==0 || value["height"].as_u64().unwrap_or(0)==0 { view.show().map_err(|e|e.to_string())?; }
                     else { readings.push(value); break; }
