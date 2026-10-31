@@ -91,6 +91,7 @@ export function DeveloperConsole() {
                   setError("");
                 })
                 .catch((e) => {
+                  if (generation !== revision.current) return;
                   setEnabled(!value);
                   setError(e.message);
                 });

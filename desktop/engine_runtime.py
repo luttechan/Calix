@@ -125,9 +125,18 @@ def main():
             self.updates = None
             self.install_on_exit = False
             self.input = None
+            self.reported_busy = None
+
+        def publish_busy(self):
+            if self.closing:
+                return
+            busy = bool(self.task or self.collector or self.pending_sync)
+            if busy != self.reported_busy:
+                self.reported_busy = busy
+                self.notify("sync-state", busy=busy)
 
         def notify(self, event, **payload):
-            if event.startswith("sync-") or event in (
+            if (event.startswith("sync-") and event != "sync-state") or event in (
                 "session-error",
                 "authentication",
             ):
@@ -144,6 +153,13 @@ def main():
                 method, params = request.get("method"), request.get("params", {})
                 if self.closing and method != "quit":
                     raise ValueError("종료 중입니다.")
+                if method in (
+                    "session.prepare",
+                    "session.import",
+                    "session.restore",
+                    "session.logout",
+                ) and (self.task or self.collector):
+                    raise ValueError("동기화가 끝난 뒤 로그인 상태를 변경하세요.")
                 if method == "diagnostics.enable":
                     if params.get("enabled") is True and (
                         self.task or self.collector or self.pending_sync
@@ -278,6 +294,7 @@ def main():
                 response = dict(
                     id=request.get("id"), error="요청을 처리하지 못했습니다."
                 )
+            self.publish_busy()
             if reply:
                 reply(response)
             else:
@@ -307,12 +324,14 @@ def main():
                         message="로그인 정보를 저장하지 못했습니다. 다시 시도하세요.",
                     )
                     self.notify("auth-cancelled")
+                    self.publish_busy()
                     return
                 self.logged_in = True
                 self.notify("authentication", loggedIn=True, interactive=not quiet)
                 if self.pending_sync:
                     self.pending_sync = False
                     self.start_collector()
+                self.publish_busy()
 
             def failed(message):
                 if self.closing or generation != self.validation_generation:
@@ -323,6 +342,7 @@ def main():
                 if not quiet:
                     self.notify("session-error", message=message)
                 self.notify("auth-cancelled")
+                self.publish_busy()
 
             def finished():
                 self.validator = None
@@ -356,7 +376,8 @@ def main():
                 raise ValueError("동기화 중입니다.")
             if not self.logged_in:
                 self.pending_sync = True
-                self.notify("auth-required")
+                if not self.validator:
+                    self.notify("auth-required")
                 return
             self.start_collector()
 
@@ -389,7 +410,23 @@ def main():
                     if event == "collection_debug":
                         diagnostics.add(value.get("message", ""))
                     elif event == "videos_collected":
-                        snapshot = value.get("snapshot") or {}
+                        if self.collector_received:
+                            continue
+                        snapshot = value.get("snapshot")
+                        if (
+                            not isinstance(snapshot, dict)
+                            or not isinstance(snapshot.get("results"), list)
+                            or any(
+                                not isinstance(row, dict) for row in snapshot["results"]
+                            )
+                        ):
+                            self.collector_received = True
+                            self.notify(
+                                "sync-error",
+                                message="주차학습 응답 형식을 확인하지 못했습니다.",
+                            )
+                            process.kill()
+                            continue
                         for row in snapshot.get("results", []):
                             diagnostics.add(
                                 f"과목 {row.get('course_id')} 수집: {row.get('error') or '완료'} 단계={row.get('stage', 'ready')}"
@@ -416,6 +453,8 @@ def main():
                     return
                 read()
                 self.collector = None
+                self.collector_buffer.clear()
+                self.publish_busy()
                 process.deleteLater()
                 if not self.closing and not self.collector_received:
                     self.notify(
@@ -477,6 +516,7 @@ def main():
             task, self.task = self.task, None
             if task:
                 task.deleteLater()
+            self.publish_busy()
             if self.closing:
                 self.finish_shutdown()
 
