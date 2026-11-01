@@ -63,7 +63,9 @@ pub fn reminder_show(app:AppHandle,webview:Webview,payload:Value)->Result<(),Str
 #[tauri::command]
 pub fn reminder_payload(app:AppHandle,webview:Webview)->Result<Value,String>{
     crate::auth::trusted(&webview,&["reminder"])?;
-    Ok(app.state::<ReminderState>().0.lock().map_err(|_|"알림을 읽지 못했습니다.")?.clone())
+    let state=app.state::<ReminderState>();
+    let value=state.0.lock().map_err(|_|"알림을 읽지 못했습니다.")?.clone();
+    Ok(value)
 }
 #[tauri::command]
 pub fn reminder_close(app:AppHandle,webview:Webview)->Result<(),String>{

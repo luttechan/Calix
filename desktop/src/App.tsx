@@ -465,8 +465,16 @@ export function App() {
     void listen<{ key: string }>("reminder:open", (event) => {
       if (active) {
         setQuery("");
-        setSelected(event.payload.key || null);
-        setPage("calendar");
+        if (event.payload.key) setSelected(event.payload.key);
+        else
+          void finishEditing()
+            .then(() => {
+              if (!active) return;
+              setSelected(null);
+              setAddDate(null);
+              setPage("calendar");
+            })
+            .catch((error) => notify(error.message));
       }
     }).then((clean) => {
       if (active) stop = clean;
