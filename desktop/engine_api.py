@@ -90,7 +90,7 @@ class EngineAPI:
         events = self.store.events()
         year = datetime.now(KST).year
         return dict(
-            version="1.4.21",
+            version="1.5.0",
             events=[asdict(e) for e in events],
             courses=[asdict(c) for c in self.store.courses()],
             types=self.store.event_types(),
@@ -338,13 +338,15 @@ class EngineAPI:
         if method == "timetable.save":
             return self.store.add_timetable(
                 p["course_id"],
-                p["day"],
-                p["start_time"],
-                p["end_time"],
+                p.get("day", 0),
+                p.get("start_time", ""),
+                p.get("end_time", ""),
                 p.get("professor", ""),
                 p.get("room", ""),
                 p.get("id"),
                 color=p.get("color", ""),
+                title=p.get("title", ""),
+                is_online=p.get("is_online", False),
             )
         if method == "timetable.delete":
             self.store.remove_timetable(p["id"])

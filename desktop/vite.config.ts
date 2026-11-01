@@ -16,6 +16,13 @@ const startup = {
   },
 };
 export default defineConfig({
+  define: {
+    __CALIX_VERSION__: JSON.stringify(
+      JSON.parse(
+        readFileSync(new URL("./package.json", import.meta.url), "utf8"),
+      ).version,
+    ),
+  },
   plugins: [startup, react()],
   clearScreen: false,
   server: {

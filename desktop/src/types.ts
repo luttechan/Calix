@@ -18,6 +18,8 @@ export type EventItem = {
 };
 export type Course = { id: number; name: string };
 export type Session = {
+  title: string;
+  is_online: number;
   id: number;
   course_id: number;
   day: number;

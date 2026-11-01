@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
-export function useTimetableScale(start: number, end: number) {
+export function useTimetableScale(start: number, end: number, reserved = 0) {
   const panel = useRef<HTMLElement>(null),
     [unit, setUnit] = useState(64);
   useLayoutEffect(() => {
@@ -11,9 +11,9 @@ export function useTimetableScale(start: number, end: number) {
         const main = panel.current.closest("main");
         const bottom = main?.getBoundingClientRect().bottom || innerHeight;
         const available =
-          bottom - panel.current.getBoundingClientRect().top - 80;
+          bottom - panel.current.getBoundingClientRect().top - 80 - reserved;
         const hours = Math.max(1, (end - start) / 60);
-        const next = Math.max(32, Math.min(64, available / hours));
+        const next = Math.max(20, Math.min(64, available / hours));
         setUnit((previous) =>
           Math.abs(previous - next) > 0.2 ? next : previous,
         );
@@ -29,6 +29,6 @@ export function useTimetableScale(start: number, end: number) {
       observer.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [start, end]);
+  }, [start, end, reserved]);
   return { panel, unit, height: ((end - start) / 60) * unit };
 }

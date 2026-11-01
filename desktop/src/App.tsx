@@ -32,6 +32,8 @@ import {
   Sun,
   Power,
 } from "lucide-react";
+import { getVersion } from "@tauri-apps/api/app";
+import { matchesEventFilter, type EventFilter } from "./eventFilters";
 import { isTauri, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { WindowControls } from "./WindowControls";
@@ -221,6 +223,20 @@ const navigation: [Page, string, typeof Home][] = [
   ["diary", "일기장", BookOpen],
 ];
 export function App() {
+  const [appVersion, setAppVersion] = useState(__CALIX_VERSION__);
+  useEffect(() => {
+    let active = true;
+    if (isTauri())
+      void getVersion()
+        .then((value) => {
+          if (active && typeof value === "string" && value)
+            setAppVersion(value);
+        })
+        .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
   const developerClicks = useRef({ count: 0, time: 0 });
   const [data, setData] = useState<Snapshot | null>(null),
     [error, setError] = useState(""),
@@ -477,7 +493,7 @@ export function App() {
     () =>
       data
         ? {
-            data,
+            data: { ...data, version: appVersion },
             mutate,
             notify,
             openEvent,
@@ -502,7 +518,7 @@ export function App() {
             },
           }
         : null,
-    [data, mutate, notify, openEvent],
+    [data, appVersion, mutate, notify, openEvent],
   );
   return (
     <div className="app-shell">
@@ -532,7 +548,7 @@ export function App() {
               }
             }}
           >
-            {data?.version}
+            {appVersion}
           </small>
         </a>
         <div className="nav-label">워크스페이스</div>
@@ -814,33 +830,11 @@ export function App() {
                 <CalendarPage events={sorted} onAdd={setAddDate} />
               )}
               {(page === "assignments" || page === "videos") && (
-                <>
-                  <div className="page-heading">
-                    <div>
-                      <p className="eyebrow">수업 일정</p>
-                      <h1>{page === "assignments" ? "과제" : "영상"}</h1>
-                    </div>
-                    <span className="count-pill">
-                      {
-                        sorted.filter(
-                          (e) =>
-                            e.kind ===
-                            (page === "assignments" ? "assignment" : "movie"),
-                        ).length
-                      }
-                      개
-                    </span>
-                  </div>
-                  <section className="glass list-panel">
-                    <EventRows
-                      events={sorted.filter(
-                        (e) =>
-                          e.kind ===
-                          (page === "assignments" ? "assignment" : "movie"),
-                      )}
-                    />
-                  </section>
-                </>
+                <EventListPage
+                  key={page}
+                  kind={page === "assignments" ? "assignment" : "movie"}
+                  events={sorted}
+                />
               )}
               <div hidden={page !== "checklist"}>
                 <CachedChecklist />
@@ -875,9 +869,7 @@ export function App() {
                 ? `최근 동기화 ${dueText(data.lastSync)}`
                 : "동기화 기록 없음"}
           </span>
-          <span className="status-version">
-            {data?.version && `v${data.version}`}
-          </span>
+          <span className="status-version">{`v${appVersion}`}</span>
         </footer>
       </div>
       {toast && (
@@ -894,7 +886,7 @@ export function App() {
           <div className="credit-profile">
             <img src="/assets/profile-avatar.png" alt="Lutté Laurent" />
             <h2>Lutté Laurent</h2>
-            <p>Calix {data?.version}</p>
+            <p>Calix {appVersion}</p>
           </div>
           <div className="credit-links">
             <a
@@ -992,6 +984,58 @@ export function App() {
         </Modal>
       )}
     </div>
+  );
+}
+function EventListPage({
+  kind,
+  events,
+}: {
+  kind: string;
+  events: EventItem[];
+}) {
+  const [filter, setFilter] = useState<EventFilter>("all");
+  const rows = events.filter((event) => event.kind === kind);
+  const now = Date.now();
+  const filtered = rows.filter((event) =>
+    matchesEventFilter(event, filter, now),
+  );
+  const options: [EventFilter, string][] = [
+    ["all", "전체"],
+    ["pending", "미완료"],
+    ["done", "완료"],
+    ["overdue", "기한 경과"],
+  ];
+  return (
+    <>
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow">수업 일정</p>
+          <h1>{kind === "assignment" ? "과제" : "영상"}</h1>
+        </div>
+        <span className="count-pill">{filtered.length}개</span>
+      </div>
+      <div className="event-status-filters" aria-label="일정 상태">
+        {options.map(([value, label]) => (
+          <button
+            key={value}
+            className={filter === value ? "selected" : ""}
+            aria-pressed={filter === value}
+            onClick={() => setFilter(value)}
+          >
+            {label}
+            <span>
+              {
+                rows.filter((event) => matchesEventFilter(event, value, now))
+                  .length
+              }
+            </span>
+          </button>
+        ))}
+      </div>
+      <section className="glass list-panel">
+        <EventRows events={filtered} />
+      </section>
+    </>
   );
 }
 function CalendarPage({
