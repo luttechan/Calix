@@ -21,13 +21,26 @@ export function DeveloperConsole() {
   };
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
-      if (event.ctrlKey && event.shiftKey && event.code === "KeyD") {
+      if (
+        event.ctrlKey &&
+        event.shiftKey &&
+        !event.altKey &&
+        !event.repeat &&
+        (event.code === "KeyD" ||
+          event.key.toLowerCase() === "d" ||
+          event.keyCode === 68)
+      ) {
         event.preventDefault();
         setOpen((value) => !value);
       }
     };
-    window.addEventListener("keydown", key);
-    return () => window.removeEventListener("keydown", key);
+    const show = () => setOpen(true);
+    window.addEventListener("keydown", key, true);
+    window.addEventListener("calix:developer-console", show);
+    return () => {
+      window.removeEventListener("keydown", key, true);
+      window.removeEventListener("calix:developer-console", show);
+    };
   }, []);
   useEffect(() => {
     if (!open) {
