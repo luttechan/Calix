@@ -7,7 +7,9 @@ const startup = {
   transformIndexHtml: {
     order: "pre" as const,
     handler: (html: string, context: { filename: string }) =>
-      context.filename.endsWith("login.html")
+      ["login.html", "reminder.html", "reminder-probe.html"].some((name) =>
+        context.filename.endsWith(name),
+      )
         ? html
         : html.replace(
             "<body>",
@@ -42,6 +44,10 @@ export default defineConfig({
     rolldownOptions: {
       input: {
         main: fileURLToPath(new URL("./index.html", import.meta.url)),
+        reminder: fileURLToPath(new URL("./reminder.html", import.meta.url)),
+        reminderProbe: fileURLToPath(
+          new URL("./reminder-probe.html", import.meta.url),
+        ),
         login: fileURLToPath(new URL("./login.html", import.meta.url)),
       },
     },

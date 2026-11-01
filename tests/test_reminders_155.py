@@ -185,3 +185,12 @@ def test_all_alarm_tracks_and_ui_browser_settings_are_packaged():
     assert "additional_browser_args(crate::reminder::UI_ARGS)" in (
         root / "desktop/src-tauri/src/auth.rs"
     ).read_text(encoding="utf-8")
+
+
+def test_seven_day_sync_includes_video_and_assignment(api):
+    api.settings["reminders"].update(general_days=7)
+    save(api, [event("video7", 7*1440, "movie"), event("assignment7", 7*1440), event("later", 7*1440+1), event("done", 1, completed=True)])
+    payload=check(api, "sync", NOW)
+    assert payload["total"]==2
+    assert {row["key"] for row in payload["events"]}=={"video7", "assignment7"}
+    assert not payload["urgent"]

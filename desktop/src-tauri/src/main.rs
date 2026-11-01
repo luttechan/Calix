@@ -92,6 +92,11 @@ fn main() {
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 if window.label() == "main" { api.prevent_close();let _ = window.emit("app:hidden", ());let _ = window.hide(); }
+                else if window.label() == "reminder" {
+                    api.prevent_close();
+                    let app=window.app_handle().clone();
+                    tauri::async_runtime::spawn(async move {let _=reminder::dismiss_window(app).await;});
+                }
                 else if window.label() == "login" { let _ = window.app_handle().emit_to("main", "auth:dismissed", ()); }
             }
         })

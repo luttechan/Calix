@@ -4,7 +4,11 @@ use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, Webview, WebviewUrl, 
 
 pub const UI_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows";
 #[derive(Default)]
-pub struct ReminderState(pub Mutex<Value>);
+pub struct ReminderState {
+    payload: Mutex<Value>,
+    gate: tokio::sync::Mutex<()>,
+    checking: std::sync::atomic::AtomicBool,
+}
 
 fn validate(value: &Value) -> Result<(),String> {
     if value.to_string().len()>180000 { return Err("알림 내용이 너무 큽니다.".into()); }
@@ -26,19 +30,39 @@ fn validate(value: &Value) -> Result<(),String> {
     Ok(())
 }
 
-fn show(app:&AppHandle,payload:Value,visible:bool)->Result<(),String>{
-    validate(&payload)?;
-    *app.state::<ReminderState>().0.lock().map_err(|_|"알림을 준비하지 못했습니다.")?=payload.clone();
+fn snapshot(app: &AppHandle) -> Result<Value, String> {
+    Ok(app.state::<ReminderState>().payload.lock().map_err(|_| "알림을 읽지 못했습니다.")?.clone())
+}
+
+fn publish(app: &AppHandle, payload: Value) -> Result<u64, String> {
+    let revision;
+    let envelope;
+    {
+        let state=app.state::<ReminderState>();
+        let mut current=state.payload.lock().map_err(|_|"알림을 준비하지 못했습니다.")?;
+        revision=current["revision"].as_u64().unwrap_or(0)+1;
+        envelope=json!({"revision":revision,"payload":payload});
+        *current=envelope.clone();
+    }
     if let Some(window)=app.get_webview_window("reminder") {
-        window.emit("reminder:updated",payload).map_err(|_|"알림을 갱신하지 못했습니다.")?;
-        if visible { let _=window.show(); }
+        window.emit("reminder:state",envelope).map_err(|_|"알림을 갱신하지 못했습니다.")?;
+    }
+    Ok(revision)
+}
+
+fn show(app:&AppHandle,payload:Value)->Result<u64,String>{
+    validate(&payload)?;
+    let visible=!app.state::<ReminderState>().checking.load(std::sync::atomic::Ordering::SeqCst);
+    let revision=publish(app,payload)?;
+    if let Some(window)=app.get_webview_window("reminder") {
+        if visible { window.show().map_err(|_|"알림을 표시하지 못했습니다.")?; }
         crate::focus_developer(app);
-        return Ok(());
+        return Ok(revision);
     }
     let developer=app.state::<crate::DeveloperState>().0.load(std::sync::atomic::Ordering::SeqCst);
     let monitor=app.primary_monitor().ok().flatten();
     let height=monitor.as_ref().map(|m|(m.size().height as f64/m.scale_factor()-100.0).clamp(360.0,580.0)).unwrap_or(580.0);
-    let mut builder=WebviewWindowBuilder::new(app,"reminder",WebviewUrl::App("index.html?reminder".into()))
+    let mut builder=WebviewWindowBuilder::new(app,"reminder",WebviewUrl::App("reminder.html".into()))
         .title("Calix 알림").inner_size(440.0,height).decorations(false).resizable(false)
         .visible(visible).focused(false).skip_taskbar(true).always_on_top(!developer)
         .additional_browser_args(UI_ARGS);
@@ -53,43 +77,83 @@ fn show(app:&AppHandle,payload:Value,visible:bool)->Result<(),String>{
         let _=window.set_position(PhysicalPosition::new(x,y));
     }
     crate::focus_developer(app);
-    Ok(())
+    Ok(revision)
 }
 
+// WebView2 construction must never run inside a synchronous Windows IPC handler.
 #[tauri::command]
-pub fn reminder_show(app:AppHandle,webview:Webview,payload:Value)->Result<(),String>{
-    crate::auth::trusted(&webview,&["main"])?;show(&app,payload,true)
+pub async fn reminder_show(app:AppHandle,webview:Webview,payload:Value)->Result<u64,String>{
+    crate::auth::trusted(&webview,&["main"])?;
+    validate(&payload)?;
+    let state=app.state::<ReminderState>();
+    let _guard=state.gate.lock().await;
+    let handle=app.clone();
+    tauri::async_runtime::spawn_blocking(move ||show(&handle,payload)).await.map_err(|_|"알림을 준비하지 못했습니다.")?
 }
 #[tauri::command]
 pub fn reminder_payload(app:AppHandle,webview:Webview)->Result<Value,String>{
     crate::auth::trusted(&webview,&["reminder"])?;
-    let state=app.state::<ReminderState>();
-    let value=state.0.lock().map_err(|_|"알림을 읽지 못했습니다.")?.clone();
-    Ok(value)
+    snapshot(&app)
 }
-#[tauri::command]
-pub fn reminder_close(app:AppHandle,webview:Webview)->Result<(),String>{
-    crate::auth::trusted(&webview,&["main","reminder"])?;
-    if let Some(window)=app.get_webview_window("reminder") { let _=window.destroy(); }
-    *app.state::<ReminderState>().0.lock().map_err(|_|"알림을 닫지 못했습니다.")?=Value::Null;
-    Ok(())
-}
-#[tauri::command]
-pub fn reminder_open_event(app:AppHandle,webview:Webview,key:String)->Result<(),String>{
-    crate::auth::trusted(&webview,&["reminder"])?;
-    let value=app.state::<ReminderState>().0.lock().map_err(|_|"일정을 열지 못했습니다.")?.clone();
-    if key!="" && !value["events"].as_array().is_some_and(|rows|rows.iter().any(|row|row["key"]==key)) { return Err("일정을 확인하세요.".into()); }
-    if let Some(window)=app.get_webview_window("main") {
-        let _=window.unminimize();let _=window.show();let _=window.set_focus();
-        window.emit("reminder:open",json!({"key":key})).map_err(|_|"일정을 열지 못했습니다.")?;
+fn dismiss(app:&AppHandle,revision:Option<u64>)->Result<(),String>{
+    let value=snapshot(app)?;
+    if revision.is_some_and(|r|value["revision"].as_u64()!=Some(r)) {return Ok(());}
+    if let Some(window)=app.get_webview_window("reminder") {
+        window.hide().map_err(|_|"알림을 닫지 못했습니다.")?;
     }
-    if let Some(window)=app.get_webview_window("reminder") { let _=window.destroy(); }
+    publish(app,Value::Null)?;
     Ok(())
+}
+pub async fn dismiss_window(app:AppHandle)->Result<(),String>{
+    let state=app.state::<ReminderState>();
+    let _guard=state.gate.lock().await;
+    let handle=app.clone();
+    tauri::async_runtime::spawn_blocking(move ||dismiss(&handle,None)).await.map_err(|_|"알림을 닫지 못했습니다.")?
+}
+#[tauri::command]
+pub async fn reminder_close(app:AppHandle,webview:Webview,revision:Option<u64>)->Result<(),String>{
+    crate::auth::trusted(&webview,&["main","reminder"])?;
+    if webview.label()=="reminder" && revision.is_none() {return Err("알림을 확인하세요.".into());}
+    let state=app.state::<ReminderState>();
+    let _guard=state.gate.lock().await;
+    let handle=app.clone();
+    tauri::async_runtime::spawn_blocking(move ||dismiss(&handle,revision)).await.map_err(|_|"알림을 닫지 못했습니다.")?
+}
+#[tauri::command]
+pub async fn reminder_open_event(app:AppHandle,webview:Webview,key:String,revision:u64)->Result<(),String>{
+    crate::auth::trusted(&webview,&["reminder"])?;
+    let state=app.state::<ReminderState>();
+    let _guard=state.gate.lock().await;
+    let handle=app.clone();
+    tauri::async_runtime::spawn_blocking(move ||{
+        let value=snapshot(&handle)?;
+        if value["revision"].as_u64()!=Some(revision) || value["payload"].is_null() {return Ok(());}
+        if !key.is_empty() && !value["payload"]["events"].as_array().is_some_and(|rows|rows.iter().any(|row|row["key"]==key)) {return Err("일정을 확인하세요.".into());}
+        if let Some(window)=handle.get_webview_window("main") {
+            let _=window.unminimize();let _=window.show();let _=window.set_focus();
+            window.emit("reminder:open",json!({"key":key})).map_err(|_|"일정을 열지 못했습니다.")?;
+        }
+        dismiss(&handle,Some(revision))
+    }).await.map_err(|_|"일정을 열지 못했습니다.")?
 }
 
 pub async fn self_check(app:AppHandle)->Result<Value,String>{
-    let payload=json!({"title":"알림 실행 검사","message":"로컬 미디어 검사","urgent":true,"theme":"pink","glass":true,"sound":"crit","volume":0.0,"total":0,"events":[]});
-    show(&app,payload,false)?;
+    app.state::<ReminderState>().checking.store(true,std::sync::atomic::Ordering::SeqCst);
+    let probe=WebviewWindowBuilder::new(&app,"main",WebviewUrl::App("reminder-probe.html".into()))
+        .visible(false).additional_browser_args(UI_ARGS)
+        .data_directory(std::env::temp_dir().join(format!("calix-media-check-{}",std::process::id())))
+        .build().map_err(|e|format!("PROBE_WINDOW_FAILED: {e}"))?;
+    let deadline=Instant::now()+Duration::from_secs(45);
+    let ipc=loop {
+        if Instant::now()>deadline {return Err("REMINDER_IPC_TIMEOUT".into());}
+        let value=crate::campus::evaluate(&probe,"window.__reminderProbe||null".into()).await?;
+        if !value.is_null() {
+            if value["passed"]!=true {return Err(value.to_string());}
+            break value;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    };
+    if snapshot(&app)?["revision"]!=ipc["revision"] || app.webview_windows().len()!=2 {return Err("REMINDER_LIFECYCLE_MISMATCH".into());}
     let window=app.get_webview_window("reminder").ok_or("알림 창이 없습니다.")?;
     let result=async {
         let deadline=Instant::now()+Duration::from_secs(45);
@@ -103,9 +167,9 @@ pub async fn self_check(app:AppHandle)->Result<Value,String>{
         loop {
             if Instant::now()>deadline { return Err("MEDIA_PROBE_TIMEOUT".into()); }
             let value=crate::campus::evaluate(&window,"window.__mediaCheck||null".into()).await?;
-            if !value.is_null() { if value["passed"]!=true{return Err(value.to_string());}return Ok(value); }
+            if !value.is_null() { if value["passed"]!=true{return Err(value.to_string());}return Ok(json!({"passed":true,"imageDecoded":value["imageDecoded"],"sounds":value["sounds"],"ipc":ipc,"windowCount":app.webview_windows().len()})); }
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
     }.await;
-    let _=window.destroy();result
+    let _=window.destroy();let _=probe.destroy();result
 }
