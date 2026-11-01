@@ -38,10 +38,14 @@ fn show(app:&AppHandle,payload:Value,visible:bool)->Result<(),String>{
     let developer=app.state::<crate::DeveloperState>().0.load(std::sync::atomic::Ordering::SeqCst);
     let monitor=app.primary_monitor().ok().flatten();
     let height=monitor.as_ref().map(|m|(m.size().height as f64/m.scale_factor()-100.0).clamp(360.0,580.0)).unwrap_or(580.0);
-    let window=WebviewWindowBuilder::new(app,"reminder",WebviewUrl::App("index.html?reminder".into()))
+    let mut builder=WebviewWindowBuilder::new(app,"reminder",WebviewUrl::App("index.html?reminder".into()))
         .title("Calix 알림").inner_size(440.0,height).decorations(false).resizable(false)
         .visible(visible).focused(false).skip_taskbar(true).always_on_top(!developer)
-        .additional_browser_args(UI_ARGS).build().map_err(|e|format!("알림 창을 열지 못했습니다. ({e})"))?;
+        .additional_browser_args(UI_ARGS);
+    if !visible {
+        builder=builder.data_directory(std::env::temp_dir().join(format!("calix-media-check-{}",std::process::id())));
+    }
+    let window=builder.build().map_err(|e|format!("알림 창을 열지 못했습니다. ({e})"))?;
     if let Some(m)=monitor {
         let scale=m.scale_factor();let p=m.position();
         let x=p.x+(m.size().width as i32-(464.0*scale) as i32).max(0);
