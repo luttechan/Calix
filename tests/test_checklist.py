@@ -78,7 +78,7 @@ def test_backup_restores_checklist_sections_states_source_overrides_and_off_days
     _,events=school(store);repo=ChecklistStore(store);repo.set_included(['assignment']);repo.save(repo.rows(1,events)[0],'role','조장')
     section=repo.save_section('개인');repo.add(section,'취업 준비');repo.save_status('지원 완료','#217A5B','done');store.set_meta('timetable_off_days','[2,4]')
     before=backup_state(store);archive=tmp_path/'backup.calix';write_backup(archive,store,tmp_path)
-    value=read_backup(archive);assert value['version']==4
+    value=read_backup(archive);assert value['version']==5
     repo.save_section('바뀐 이름',section);repo.set_included([]);restore_backup(value,store,tmp_path)
     assert backup_state(store)==before
     for change in [dict(off_days=[True]),dict(sources=['javascript']),dict(sections=[]),dict(tasks=[{**before['tasks'][0],'section_id':999}])]:

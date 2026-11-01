@@ -57,9 +57,16 @@ class Store:
         for name, definition in (
             ("title", "TEXT NOT NULL DEFAULT ''"),
             ("is_online", "INTEGER NOT NULL DEFAULT 0"),
+            ("semester", "TEXT NOT NULL DEFAULT ''"),
         ):
             if name not in timetable_columns:
                 self.db.execute(f"ALTER TABLE timetable ADD COLUMN {name} {definition}")
+        from .timetable_terms import initialize as initialize_terms
+
+        initialize_terms(self)
+        self.db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_timetable_semester ON timetable(semester,day,start_time)"
+        )
         event_columns = {
             r["name"] for r in self.db.execute("PRAGMA table_info(events)")
         }
@@ -437,11 +444,19 @@ class Store:
                 "UPDATE courses SET alias=? WHERE id=?", (alias.strip()[:80], course_id)
             )
 
-    def timetable(self) -> list[dict]:
+    def timetable_config(self):
+        from .timetable_terms import config
+
+        return config(self)
+
+    def timetable(self, *, all_terms=False) -> list[dict]:
         return [
             dict(r)
             for r in self.db.execute(
-                "SELECT * FROM timetable ORDER BY day,start_time,course_id"
+                "SELECT * FROM timetable"
+                + ("" if all_terms else " WHERE semester=?")
+                + " ORDER BY day,start_time,course_id,id",
+                () if all_terms else (self.timetable_config()["main"],),
             )
         ]
 
@@ -458,10 +473,17 @@ class Store:
         color="",
         title="",
         is_online=False,
+        semester=None,
+        _commit=True,
     ):
         from .schedule_colors import normalize_color
 
         color = normalize_color(color)
+        semester = semester or self.timetable_config()["main"]
+        if not isinstance(semester, str) or semester not in {
+            t["name"] for t in self.timetable_config()["terms"]
+        }:
+            raise ValueError("학기를 선택하세요.")
         if (
             type(course_id) is not int
             or course_id < 0
@@ -485,14 +507,14 @@ class Store:
         if item_id is not None and (
             type(item_id) is not int
             or not self.db.execute(
-                "SELECT 1 FROM timetable WHERE id=?", (item_id,)
+                "SELECT 1 FROM timetable WHERE id=? AND semester=?", (item_id, semester)
             ).fetchone()
         ):
             raise ValueError("수업이 존재하지 않습니다.")
         if is_online:
             day, start, end = 0, "", ""
         else:
-            self.validate_timetable(day, start, end, item_id)
+            self.validate_timetable(day, start, end, item_id, semester)
         values = (
             course_id,
             day,
@@ -503,20 +525,48 @@ class Store:
             color,
             title.strip(),
             int(is_online),
+            semester,
         )
-        with self.db:
+        with self.db if _commit else nullcontext():
             if item_id:
                 self.db.execute(
-                    "UPDATE timetable SET course_id=?,day=?,start_time=?,end_time=?,professor=?,room=?,color=?,title=?,is_online=? WHERE id=?",
+                    "UPDATE timetable SET course_id=?,day=?,start_time=?,end_time=?,professor=?,room=?,color=?,title=?,is_online=?,semester=? WHERE id=?",
                     values + (item_id,),
                 )
                 return item_id
             return self.db.execute(
-                "INSERT INTO timetable(course_id,day,start_time,end_time,professor,room,color,title,is_online) VALUES (?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO timetable(course_id,day,start_time,end_time,professor,room,color,title,is_online,semester) VALUES (?,?,?,?,?,?,?,?,?,?)",
                 values,
             ).lastrowid
 
-    def validate_timetable(self, day, start, end, item_id=None):
+    def add_timetable_slots(self, shared, slots, item_id=None):
+        if (
+            not isinstance(slots, list)
+            or not 1 <= len(slots) <= 14
+            or any(not isinstance(slot, dict) for slot in slots)
+        ):
+            raise ValueError("수업 시간은 1~14개로 설정하세요.")
+        result = []
+        with self.db:
+            for index, slot in enumerate(slots):
+                result.append(
+                    self.add_timetable(
+                        shared["course_id"],
+                        slot.get("day"),
+                        slot.get("start_time"),
+                        slot.get("end_time"),
+                        shared.get("professor", ""),
+                        slot.get("room", ""),
+                        item_id if index == 0 else None,
+                        color=shared.get("color", ""),
+                        title=shared.get("title", ""),
+                        semester=shared.get("semester"),
+                        _commit=False,
+                    )
+                )
+        return result
+
+    def validate_timetable(self, day, start, end, item_id=None, semester=None):
         from .schedule_colors import minutes
 
         if (
@@ -526,8 +576,14 @@ class Store:
         ):
             raise ValueError("시간이나 요일이 올바르지 않습니다.")
         conflict = self.db.execute(
-            "SELECT id FROM timetable WHERE is_online=0 AND day=? AND start_time<? AND end_time>? AND id<>? LIMIT 1",
-            (day, end, start, item_id or -1),
+            "SELECT id FROM timetable WHERE is_online=0 AND semester=? AND day=? AND start_time<? AND end_time>? AND id<>? LIMIT 1",
+            (
+                semester or self.timetable_config()["main"],
+                day,
+                end,
+                start,
+                item_id or -1,
+            ),
         ).fetchone()
         if conflict:
             raise ValueError("같은 요일에 겹치는 수업이 있습니다.")

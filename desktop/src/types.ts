@@ -18,6 +18,7 @@ export type EventItem = {
 };
 export type Course = { id: number; name: string };
 export type Session = {
+  semester: string;
   title: string;
   is_online: number;
   id: number;
@@ -68,6 +69,9 @@ export type Snapshot = {
   courses: Course[];
   types: { id: number; name: string; color: string }[];
   sessions: Session[];
+  timetableTerms: { name: string; offDays: number[] }[];
+  mainTerm: string;
+  timetableConfigured: boolean;
   sections: { id: number; name: string }[];
   statuses: { id: number; name: string; color: string; kind: string }[];
   tasks: Task[];

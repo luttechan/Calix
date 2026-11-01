@@ -1,5 +1,10 @@
 import { useLayoutEffect, useRef, useState } from "react";
-export function useTimetableScale(start: number, end: number, reserved = 0) {
+export function useTimetableScale(
+  start: number,
+  end: number,
+  reserved = 0,
+  ready = true,
+) {
   const panel = useRef<HTMLElement>(null),
     [unit, setUnit] = useState(64);
   useLayoutEffect(() => {
@@ -29,6 +34,6 @@ export function useTimetableScale(start: number, end: number, reserved = 0) {
       observer.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [start, end, reserved]);
+  }, [start, end, reserved, ready]);
   return { panel, unit, height: ((end - start) / 60) * unit };
 }

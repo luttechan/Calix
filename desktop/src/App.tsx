@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { getVersion } from "@tauri-apps/api/app";
 import { matchesEventFilter, type EventFilter } from "./eventFilters";
+import { groupByCourse } from "./eventGroups";
 import { isTauri, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { WindowControls } from "./WindowControls";
@@ -1005,7 +1006,17 @@ function EventListPage({
   events: EventItem[];
 }) {
   const [filter, setFilter] = useState<EventFilter>("all");
-  const rows = events.filter((event) => event.kind === kind);
+  const [view, setView] = useState<"all" | "course">("all");
+  const [course, setCourse] = useState("all");
+  const courses = useMemo(
+    () => groupByCourse(events.filter((event) => event.kind === kind)),
+    [events, kind],
+  );
+  const rows = events.filter(
+    (event) =>
+      event.kind === kind &&
+      (course === "all" || String(event.course_id) === course),
+  );
   const now = Date.now();
   const filtered = rows.filter((event) =>
     matchesEventFilter(event, filter, now),
@@ -1025,6 +1036,37 @@ function EventListPage({
         </div>
         <span className="count-pill">{filtered.length}개</span>
       </div>
+      <div className="event-view-toolbar">
+        <div className="segmented" aria-label="일정 보기">
+          {(
+            [
+              ["all", "전체 보기"],
+              ["course", "강의별 보기"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              aria-pressed={view === id}
+              className={view === id ? "selected" : ""}
+              onClick={() => setView(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <select
+          aria-label="강의 선택"
+          value={course}
+          onChange={(event) => setCourse(event.target.value)}
+        >
+          <option value="all">전체 강의</option>
+          {courses.map((group) => (
+            <option key={group.id} value={group.id}>
+              {group.name}
+            </option>
+          ))}
+        </select>
+      </div>
       <div className="event-status-filters" aria-label="일정 상태">
         {options.map(([value, label]) => (
           <button
@@ -1043,9 +1085,26 @@ function EventListPage({
           </button>
         ))}
       </div>
-      <section className="glass list-panel">
-        <EventRows events={filtered} />
-      </section>
+      {view === "all" ? (
+        <section className="glass list-panel">
+          <EventRows key={`${kind}:${course}:${filter}`} events={filtered} />
+        </section>
+      ) : (
+        <div className="course-event-groups">
+          {groupByCourse(filtered).map((group) => (
+            <details className="glass course-event-group" key={group.id} open>
+              <summary>
+                <strong>{group.name}</strong>
+                <span className="count-pill">{group.events.length}개</span>
+              </summary>
+              <EventRows key={`${course}:${filter}`} events={group.events} />
+            </details>
+          ))}
+          {!filtered.length && (
+            <div className="glass empty">일정이 없습니다.</div>
+          )}
+        </div>
+      )}
     </>
   );
 }

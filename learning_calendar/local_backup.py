@@ -23,7 +23,8 @@ def write_backup(path, store, folder):
         owner=store.get_meta("canvas_user_id"),
         courses=_rows(store.db, "SELECT id,name,alias FROM courses"),
         types=_rows(store.db, "SELECT id,name,color FROM event_types"),
-        timetable=store.timetable(),
+        timetable=store.timetable(all_terms=True),
+        timetable_config=store.timetable_config(),
         customizations=store.local_customizations(),
         events=_rows(
             store.db,
@@ -34,7 +35,7 @@ def write_backup(path, store, folder):
 
     payload = dict(
         format="Calix personal backup",
-        version=4,
+        version=5,
         schedule=schedule,
         checklist=backup_state(store),
         journals=[],
@@ -148,7 +149,7 @@ def read_backup(path, owner=""):
             value = json.loads(archive.read(files[0]))
         if value.get("format") != "Calix personal backup" or value.get(
             "version"
-        ) not in (1, 2, 3, 4):
+        ) not in (1, 2, 3, 4, 5):
             raise ValueError("지원하지 않는 백업입니다.")
         if value["version"] >= 4 or "checklist" in value:
             from .checklist_store import validate_state
@@ -239,8 +240,18 @@ def read_backup(path, owner=""):
                 or parse_datetime(row["due_at"]) is None
             ):
                 raise ValueError("기한을 확인하세요.")
+        term_names = None
+        if value["version"] >= 5 or "timetable_config" in schedule:
+            from .timetable_terms import validate as validate_terms
+
+            term_names = {
+                t["name"] for t in validate_terms(schedule["timetable_config"])["terms"]
+            }
         occupied = []
         for row in _list(schedule["timetable"], 1000):
+            semester = row.get("semester", "")
+            if term_names is not None and semester not in term_names:
+                raise ValueError("수업의 학기를 확인하세요.")
             online = row.get("is_online", 0)
             _integer(online, 0, 1)
             title = row.get("title", "")
@@ -257,9 +268,12 @@ def read_backup(path, owner=""):
                 end = minutes(row["end_time"])
                 if start >= end:
                     raise ValueError("수업 시간을 확인하세요.")
-                if any(d == day and start < b and end > a for d, a, b in occupied):
+                if any(
+                    t == semester and d == day and start < b and end > a
+                    for t, d, a, b in occupied
+                ):
                     raise ValueError("수업 시간이 겹칩니다.")
-                occupied.append((day, start, end))
+                occupied.append((semester, day, start, end))
             normalize_color(row["color"])
             _string(row["professor"], 120)
             _string(row["room"], 100)
@@ -454,9 +468,19 @@ def restore_backup(value, store, folder):
                                 )
                             ),
                         )
+                    term_config = (
+                        schedule.get("timetable_config") or store.timetable_config()
+                    )
+                    db.execute(
+                        "INSERT OR REPLACE INTO meta VALUES(?,?)",
+                        (
+                            "timetable_config",
+                            json.dumps(term_config, ensure_ascii=False),
+                        ),
+                    )
                     for row in schedule["timetable"]:
                         db.execute(
-                            "INSERT INTO timetable(course_id,day,start_time,end_time,professor,room,color,title,is_online) VALUES(?,?,?,?,?,?,?,?,?)",
+                            "INSERT INTO timetable(course_id,day,start_time,end_time,professor,room,color,title,is_online,semester) VALUES(?,?,?,?,?,?,?,?,?,?)",
                             tuple(
                                 row[key]
                                 for key in (
@@ -469,7 +493,16 @@ def restore_backup(value, store, folder):
                                     "color",
                                 )
                             )
-                            + (row.get("title", ""), row.get("is_online", 0)),
+                            + (
+                                row.get("title", ""),
+                                row.get("is_online", 0),
+                                (
+                                    row.get("semester")
+                                    if "timetable_config" in schedule
+                                    else None
+                                )
+                                or term_config["main"],
+                            ),
                         )
                     db.execute("DELETE FROM diary_restore.entries")
                     db.executemany(

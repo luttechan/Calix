@@ -90,11 +90,14 @@ class EngineAPI:
         events = self.store.events()
         year = datetime.now(KST).year
         return dict(
-            version="1.5.3",
+            version="1.5.4",
             events=[asdict(e) for e in events],
             courses=[asdict(c) for c in self.store.courses()],
             types=self.store.event_types(),
-            sessions=self.store.timetable(),
+            sessions=self.store.timetable(all_terms=True),
+            timetableTerms=self.store.timetable_config()["terms"],
+            mainTerm=self.store.timetable_config()["main"],
+            timetableConfigured=self.store.timetable_config().get("confirmed", False),
             sections=self.checklist.sections(),
             statuses=self.checklist.statuses(),
             tasks=[
@@ -137,14 +140,9 @@ class EngineAPI:
         )
 
     def _off_days(self):
-        try:
-            items = json.loads(self.store.get_meta("timetable_off_days", "[]"))
-        except ValueError:
-            return []
-        return (
-            [day for day in items if type(day) is int and 0 <= day < 7]
-            if isinstance(items, list)
-            else []
+        config = self.store.timetable_config()
+        return next(
+            t["offDays"] for t in config["terms"] if t["name"] == config["main"]
         )
 
     def event(self, key):
@@ -341,6 +339,8 @@ class EngineAPI:
             self.checklist.delete_status(p["id"])
             return True
         if method == "timetable.save":
+            if "slots" in p and not p.get("is_online", False):
+                return self.store.add_timetable_slots(p, p["slots"], p.get("id"))
             return self.store.add_timetable(
                 p["course_id"],
                 p.get("day", 0),
@@ -352,17 +352,51 @@ class EngineAPI:
                 color=p.get("color", ""),
                 title=p.get("title", ""),
                 is_online=p.get("is_online", False),
+                semester=p.get("semester"),
             )
         if method == "timetable.delete":
             self.store.remove_timetable(p["id"])
             return True
+        if method in (
+            "timetable.term.add",
+            "timetable.term.main",
+            "timetable.term.configure",
+        ):
+            from learning_calendar.timetable_terms import update
+
+            year, term = p.get("year"), p.get("term")
+            if not method.endswith("main"):
+                if (
+                    type(year) is not int
+                    or not 1900 <= year <= 2200
+                    or not (
+                        (type(term) is int and term in (1, 2))
+                        or (type(term) is str and term in ("여름", "겨울"))
+                    )
+                ):
+                    raise ValueError("학년도와 학기를 확인하세요.")
+                name = (
+                    f"{year}학년도 {term}학기"
+                    if type(term) is int
+                    else f"{year}학년도 {term} 계절학기"
+                )
+            else:
+                name = p["name"]
+            return update(self.store, method.rsplit(".", 1)[1], name)
         if method == "timetable.off":
             days = p["days"]
             if not isinstance(days, list) or any(
                 type(day) is not int or not 0 <= day < 7 for day in days
             ):
                 raise ValueError("요일을 확인하세요.")
-            self.store.set_meta("timetable_off_days", json.dumps(sorted(set(days))))
+            from learning_calendar.timetable_terms import update
+
+            update(
+                self.store,
+                "off",
+                p.get("semester") or self.store.timetable_config()["main"],
+                sorted(set(days)),
+            )
             return True
         if method == "diary.list":
             return self._diary(p.get("secret", False)).summaries()
