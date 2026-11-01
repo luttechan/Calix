@@ -13,7 +13,12 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     exe = release / "calix-desktop.exe"
     assert exe.is_file()
-    setup = next((release / "bundle/nsis").glob("*setup.exe"))
+    config = json.loads((desktop / "src-tauri/tauri.conf.json").read_text(encoding="utf-8"))
+    version = config["version"]
+    assert version == json.loads((desktop / "package.json").read_text(encoding="utf-8"))["version"]
+    setup = release / "bundle/nsis" / f"{config['productName']}_{version}_x64-setup.exe"
+    assert setup.is_file(), f"Current installer missing: {setup.name}"
+    print(json.dumps(dict(selected_installer=setup.name,available_installers=sorted(p.name for p in setup.parent.glob("*setup.exe")))))
     setup_output = output / "Calix-1.5.0-Setup-x64.exe"
     shutil.copy2(setup, setup_output)
     archive = output / "Calix-1.5.0-Windows-x64.zip"
