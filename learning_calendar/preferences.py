@@ -22,7 +22,10 @@ def prepare_credentials():
 
 
 def read_settings(path: str | Path) -> dict:
+    from .reminders import DEFAULTS, validate as validate_reminders
+
     defaults = {
+        "reminders": DEFAULTS.copy(),
         "window_width": 1240,
         "window_height": 840,
         "active_db": "learning.db",
@@ -38,6 +41,12 @@ def read_settings(path: str | Path) -> dict:
     try:
         settings = json.loads(Path(path).read_text(encoding="utf-8"))
         if isinstance(settings, dict):
+            try:
+                defaults["reminders"] = validate_reminders(
+                    settings.get("reminders", {})
+                )
+            except (ValueError, TypeError):
+                pass
             for key in ("window_width", "window_height"):
                 value = settings.get(key)
                 if type(value) is int and 240 <= value <= 16384:
@@ -101,6 +110,7 @@ def write_settings(path: str | Path, settings: dict):
             "active_db",
             "theme",
             "notifications",
+            "reminders",
             "glass",
             "font_mode",
             "nickname",

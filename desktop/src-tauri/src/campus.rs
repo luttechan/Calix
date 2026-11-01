@@ -40,7 +40,7 @@ fn current(app: &AppHandle, epoch: u64) -> Result<(), String> {
     if app.state::<CampusState>().epoch.load(Ordering::SeqCst) != epoch { Err("CANCELLED".into()) } else { Ok(()) }
 }
 
-async fn evaluate(view: &WebviewWindow, script: String) -> Result<Value, String> {
+pub(crate) async fn evaluate(view: &WebviewWindow, script: String) -> Result<Value, String> {
     let (sender, receiver) = tokio::sync::oneshot::channel::<String>();
     let sender = Mutex::new(Some(sender));
     view.eval_with_callback(script, move |value| {

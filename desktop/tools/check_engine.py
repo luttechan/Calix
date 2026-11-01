@@ -51,6 +51,7 @@ def check(exe):
         "learning_calendar.dom_videos",
         "learning_calendar.media_types",
         "learning_calendar.timetable_terms",
+        "learning_calendar.reminders",
         "learning_calendar.worker",
         "learning_calendar.sync",
     ):
@@ -80,7 +81,7 @@ def check(exe):
         responses = [json.loads(line) for line in completed.stdout.splitlines()]
         assert (
             next(r for r in responses if r.get("id") == 1)["result"]["version"]
-            == "1.5.4"
+            == "1.5.5"
         )
         assert (
             next(r for r in responses if r.get("id") == 2)["result"]["initialized"]

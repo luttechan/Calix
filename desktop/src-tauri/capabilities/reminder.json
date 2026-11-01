@@ -1,0 +1,11 @@
+{
+  "identifier": "reminder",
+  "description": "Calix deadline reminder window",
+  "windows": [
+    "reminder"
+  ],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging"
+  ]
+}

@@ -107,6 +107,11 @@ def main():
             self.install_on_exit = False
             self.input = None
             self.reported_busy = None
+            self.reminders_ready = False
+            self.reminder_timer = QTimer(self)
+            self.reminder_timer.setInterval(30000)
+            self.reminder_timer.timeout.connect(lambda: self.check_reminders("timer"))
+            self.reminder_timer.start()
             self.collection_timer = QTimer(self)
             self.collection_timer.setSingleShot(True)
             self.collection_timer.timeout.connect(
@@ -232,6 +237,11 @@ def main():
                     result = True
                 elif method == "sync.cancel":
                     self.stop_sync()
+                    result = True
+                elif method == "reminders.ready":
+                    if not self.reminders_ready:
+                        self.reminders_ready = True
+                        self.check_reminders("startup")
                     result = True
                 elif method == "sync.force":
                     self.stop_sync(restart=True)
@@ -460,9 +470,22 @@ def main():
             self.task.start()
             return True
 
+        def check_reminders(self, trigger):
+            if self.closing or not self.reminders_ready:
+                return
+            from learning_calendar.reminders import check
+
+            try:
+                payload = check(api, trigger)
+                if payload:
+                    self.notify("reminder", payload=payload)
+            except Exception as error:
+                diagnostics.add(f"Reminder failed: {type(error).__name__}")
+
         def synced(self, result):
             api.switch_store(result["path"])
             self.notify("data-changed")
+            self.check_reminders("sync")
             self.notify(
                 "sync-progress", message=result.get("sync_summary") or "동기화 완료"
             )
@@ -482,6 +505,7 @@ def main():
             if self.closing:
                 return
             self.closing = True
+            self.reminder_timer.stop()
             self.restart_sync = False
             self.restore_token = None
             if self.input:

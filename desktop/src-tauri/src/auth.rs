@@ -37,7 +37,7 @@ pub async fn auth_open(app: AppHandle, webview: Webview, theme: Option<String>, 
     let font = if font.as_deref() == Some("windows") { "windows" } else { "pretendard" };
     let page = format!("login.html?theme={theme}&font={font}");
     WebviewWindowBuilder::new(&app, "login", WebviewUrl::App(page.into()))
-        .title("Calix 로그인").inner_size(1040.0, 780.0).min_inner_size(820.0, 600.0)
+        .additional_browser_args(crate::reminder::UI_ARGS).title("Calix 로그인").inner_size(1040.0, 780.0).min_inner_size(820.0, 600.0)
         .decorations(false).always_on_top(!app.state::<crate::DeveloperState>().0.load(std::sync::atomic::Ordering::SeqCst)).center().build()
         .map_err(|error| format!("로그인 창을 열지 못했습니다. ({error})"))?;
     crate::focus_developer(&app);

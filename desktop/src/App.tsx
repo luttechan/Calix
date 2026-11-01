@@ -345,6 +345,11 @@ export function App() {
       })
       .catch(() => {});
     const unsubscribe = subscribe((message) => {
+      if (message.event === "reminder" && isTauri()) {
+        void invoke("reminder_show", { payload: message.payload }).catch(
+          (error) => notify(String(error)),
+        );
+      }
       if (message.event === "data-changed") {
         void refresh().catch((e) => notify(e.message));
       }
@@ -449,6 +454,29 @@ export function App() {
     data?.preferences.glass,
     data?.preferences.font_mode,
   ]);
+  useEffect(() => {
+    if (isTauri() && data?.preferences.onboarding_complete)
+      void rpc("reminders.ready").catch(() => {});
+  }, [data?.preferences.onboarding_complete]);
+  useEffect(() => {
+    if (!isTauri()) return;
+    let active = true;
+    let stop: (() => void) | undefined;
+    void listen<{ key: string }>("reminder:open", (event) => {
+      if (active) {
+        setQuery("");
+        setSelected(event.payload.key || null);
+        setPage("calendar");
+      }
+    }).then((clean) => {
+      if (active) stop = clean;
+      else clean();
+    });
+    return () => {
+      active = false;
+      stop?.();
+    };
+  }, []);
   const navigate = async (next: Page) => {
     try {
       await finishEditing();

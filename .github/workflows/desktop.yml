@@ -1,12 +1,12 @@
-name: Desktop 1.5.4 validation
+name: Desktop 1.5.5 validation
 on:
   workflow_dispatch:
   push:
-    branches: ['codex/calix154-build']
+    branches: ['codex/calix155-build']
 permissions:
   contents: read
 concurrency:
-  group: calix-154-build
+  group: calix-155-build
   cancel-in-progress: true
 jobs:
   windows:
@@ -82,6 +82,16 @@ jobs:
           $result = Get-Content $report -Raw | ConvertFrom-Json
           if (-not $result.passed -or -not $result.sameProfile -or $result.viewport.width -le 0 -or $result.viewport.height -le 0) { throw 'Invalid WebView2 check result.' }
           Get-Content $report -Raw
+      - name: Check native photos and alarm media
+        run: |
+          $report = Join-Path $env:RUNNER_TEMP 'calix155-media.json'
+          $exe = (Resolve-Path desktop/src-tauri/target/release/calix-desktop.exe).Path
+          $process = Start-Process -FilePath $exe -ArgumentList @('--reminder-check',$report) -WindowStyle Hidden -PassThru
+          if (-not $process.WaitForExit(90000)) { $process.Kill(); throw 'Media check timed out.' }
+          if ($process.ExitCode -ne 0) { if (Test-Path -LiteralPath $report) { Get-Content -LiteralPath $report }; throw 'Media check failed.' }
+          $result = Get-Content -Raw -LiteralPath $report | ConvertFrom-Json
+          if (-not $result.passed -or -not $result.imageDecoded -or $result.sounds.Count -ne 11) { throw 'Profile image or alarm decode failed.' }
+          Write-Output 'Native profile photo and 11 alarm tracks decoded.'
       - name: Retain Rust build cache
         if: always()
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
@@ -96,13 +106,13 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $target = Join-Path $env:RUNNER_TEMP 'calix1421-installed'
           if (Test-Path -LiteralPath $target) { throw 'Install directory must be new.' }
-          $setup = (Resolve-Path desktop/.build/packages/Calix-1.5.4-Setup-x64.exe).Path
+          $setup = (Resolve-Path desktop/.build/packages/Calix-1.5.5-Setup-x64.exe).Path
           $process = Start-Process -FilePath $setup -ArgumentList @('/S',"/D=$target") -WindowStyle Hidden -PassThru
           if (-not $process.WaitForExit(180000)) { $process.Kill(); throw 'Installer timed out.' }
           if ($process.ExitCode -ne 0) { throw 'Installer failed.' }
           $portable = Join-Path $env:RUNNER_TEMP 'calix1421-portable'
-          Expand-Archive -LiteralPath desktop/.build/packages/Calix-1.5.4-Windows-x64.zip -DestinationPath $portable
-          $expected = Join-Path $portable 'Calix 1.5.4'
+          Expand-Archive -LiteralPath desktop/.build/packages/Calix-1.5.5-Windows-x64.zip -DestinationPath $portable
+          $expected = Join-Path $portable 'Calix 1.5.5'
           foreach ($name in @('calix-engine.exe','_internal')) {
             if (-not (Test-Path -LiteralPath (Join-Path $target $name))) { throw "Missing installed $name" }
           }
@@ -148,13 +158,13 @@ jobs:
           $engine.StandardInput.Close()
           if ($engine.ExitCode -ne 0) { throw $stderr.Result }
           $reply = $stdout.Result -split "`n" | Where-Object { $_.Trim() } | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object id -eq 1
-          if ($reply.result.version -ne '1.5.4') { throw 'Installed engine bootstrap failed.' }
+          if ($reply.result.version -ne '1.5.5') { throw 'Installed engine bootstrap failed.' }
           Write-Output 'Installer, embedded runtime hashes and installed engine startup verified.'
           if (-not $uiMatches) { throw 'Inspect UI binary difference before publication.' }
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: Calix-1.5.4-development-Windows-x64
+          name: Calix-1.5.5-development-Windows-x64
           path: desktop/.build/packages/*
           compression-level: 0
           retention-days: 7

@@ -90,7 +90,7 @@ class EngineAPI:
         events = self.store.events()
         year = datetime.now(KST).year
         return dict(
-            version="1.5.4",
+            version="1.5.5",
             events=[asdict(e) for e in events],
             courses=[asdict(c) for c in self.store.courses()],
             types=self.store.event_types(),
@@ -113,6 +113,7 @@ class EngineAPI:
                     k: self.settings.get(k, d)
                     for k, d in [
                         ("theme", "pink"),
+                        ("reminders", {}),
                         ("glass", True),
                         ("font_mode", "pretendard"),
                         ("nickname", ""),
@@ -429,6 +430,13 @@ class EngineAPI:
             if self.vault:
                 self.vault.lock()
             return True
+        if method == "reminders.save":
+            from learning_calendar.reminders import validate
+
+            settings = validate(p)
+            self.settings["reminders"] = settings
+            write_settings(self.settings_path, self.settings)
+            return settings
         if method == "preferences.save":
             theme = p.get("theme", self.settings.get("theme", "pink"))
             glass = p.get("glass", self.settings.get("glass", True))

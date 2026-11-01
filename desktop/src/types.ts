@@ -52,7 +52,36 @@ export type Journal = {
   body: string;
   html: string;
 };
+export type ReminderSettings = {
+  enabled: boolean;
+  startup: boolean;
+  sync: boolean;
+  urgent: boolean;
+  urgent_minutes: number;
+  general: boolean;
+  general_days: number;
+  assignments: boolean;
+  videos: boolean;
+  sound: boolean;
+  track: string;
+  volume: number;
+};
+export type ReminderPayload = {
+  title: string;
+  message: string;
+  urgent: boolean;
+  theme: Preferences["theme"];
+  glass: boolean;
+  sound: string;
+  volume: number;
+  total: number;
+  events: Pick<
+    EventItem,
+    "key" | "title" | "course_name" | "kind" | "due_at"
+  >[];
+};
 export type Preferences = {
+  reminders: ReminderSettings;
   theme: "pink" | "sky" | "mint" | "purple" | "dark";
   glass: boolean;
   font_mode: string;

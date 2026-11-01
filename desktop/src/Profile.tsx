@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { Modal, useCalix } from "./App";
+import { readAvatar } from "./avatar";
 const themes = [
   ["pink", "핑크", "#d09bb7"],
   ["sky", "스카이블루", "#9bb8db"],
@@ -177,48 +178,23 @@ export function ProfileSettings() {
   const choosePhoto = async (file?: File) => {
     if (!file) return;
     const generation = ++photoRevision.current;
-    if (
-      file.size > 5 * 1024 * 1024 ||
-      !["image/png", "image/jpeg", "image/webp"].includes(file.type)
-    ) {
-      notify("5MB 이하의 PNG, JPG, WebP 사진을 선택하세요.");
-      return;
-    }
     setPhotoLoading(true);
-    const url = URL.createObjectURL(file);
-    const image = new Image();
     try {
-      image.src = url;
-      await image.decode();
-      if (image.naturalWidth * image.naturalHeight > 25000000)
-        throw Error("사진 크기가 너무 큽니다.");
-      const canvas = document.createElement("canvas");
-      canvas.width = canvas.height = 256;
-      const context = canvas.getContext("2d");
-      if (!context) throw Error("사진을 불러오지 못했습니다.");
-      const side = Math.min(image.naturalWidth, image.naturalHeight);
-      context.drawImage(
-        image,
-        (image.naturalWidth - side) / 2,
-        (image.naturalHeight - side) / 2,
-        side,
-        side,
-        0,
-        0,
-        256,
-        256,
-      );
-      if (generation === photoRevision.current)
-        setAvatar(canvas.toDataURL("image/png"));
+      const value = await readAvatar(file);
+      if (generation === photoRevision.current) setAvatar(value);
     } catch (error) {
-      if (generation === photoRevision.current) notify(String(error));
+      if (generation === photoRevision.current)
+        notify(
+          error instanceof Error
+            ? error.message
+            : "사진을 불러오지 못했습니다.",
+        );
     } finally {
-      image.src = "";
-      URL.revokeObjectURL(url);
       if (generation === photoRevision.current) setPhotoLoading(false);
     }
   };
   const save = async () => {
+    if (photoLoading || saving) return;
     setSaving(true);
     try {
       await mutate("profile.save", { nickname, greeting, avatar });
@@ -275,7 +251,7 @@ export function ProfileSettings() {
           <input
             ref={photoInput}
             type="file"
-            accept="image/png,image/jpeg,image/webp"
+            accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
             aria-label="프로필 사진 선택"
             hidden
             onChange={(event) => {

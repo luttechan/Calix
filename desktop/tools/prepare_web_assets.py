@@ -2,6 +2,8 @@
 
 from pathlib import Path
 import shutil
+import json
+import re
 from fontTools.ttLib import TTFont
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -31,6 +33,18 @@ def main():
         ("asset/style/Pretendard-OFL.txt", "fonts/Pretendard-OFL.txt"),
     ]:
         shutil.copy2(ROOT / source, output / target)
+    alarm = output / "alarm"
+    alarm.mkdir(exist_ok=True)
+    tracks = []
+    for source in (ROOT / "asset/alarm").glob("*.mp3"):
+        if re.fullmatch(r"(?:[1-9]|10|crit)\.mp3", source.name):
+            shutil.copy2(source, alarm / source.name)
+            if source.stem != "crit":
+                tracks.append(int(source.stem))
+    (alarm / "catalog.json").write_text(
+        json.dumps(dict(tracks=sorted(tracks), critical=(alarm / "crit.mp3").exists())),
+        encoding="utf-8",
+    )
     print("Local web fonts and assets ready")
 
 

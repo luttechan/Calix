@@ -15,6 +15,7 @@ import { InlineCell } from "./InlineCell";
 import { isTauri, invoke } from "@tauri-apps/api/core";
 import { UpdateDialog } from "./UpdateDialog";
 import { ProfileSettings } from "./Profile";
+import { ReminderSettingsPanel } from "./Reminders";
 import { dateKey, dueText, localInput, status, weekdays } from "./dates";
 import type { Task, Preferences } from "./types";
 const taskCollator = new Intl.Collator("ko", { numeric: true });
@@ -585,6 +586,7 @@ export function SettingsPage() {
         </div>
       </div>
       <ProfileSettings />
+      <ReminderSettingsPanel />
       <section className="glass settings-panel">
         <div className="settings-heading">
           <Palette size={20} />
