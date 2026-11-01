@@ -1,0 +1,57 @@
+name: Publish Calix 1.4.21
+on:
+  push:
+    branches: ['codex/calix1421-publish']
+    paths: ['.github/workflows/publish1421.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: publish-calix-1421
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE: 27fbb94ea82b2ff08d3376f4a1a5ead4b62cf9dc
+      BUILD: 20ab8200de5e73a183a5b0e2a7f53656d839f1d3
+    steps:
+      - name: Verify source and validated build
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api repos/luttechan/Calix/git/ref/heads/main --jq .object.sha)" = "$SOURCE"
+          test "$(gh api repos/luttechan/Calix/git/commits/$SOURCE --jq .tree.sha)" = "$(gh api repos/luttechan/Calix/git/commits/$BUILD --jq .tree.sha)"
+          gh api repos/luttechan/Calix/actions/runs/41242163960 > run.json
+          jq -e --arg sha "$BUILD" '.conclusion == "success" and .head_sha == $sha and .head_repository.full_name == "luttechan/Calix"' run.json
+          gh api repos/luttechan/Calix/actions/artifacts/13058252297 > artifact.json
+          jq -e --arg sha "$BUILD" '.expired == false and .workflow_run.head_sha == $sha and .digest == "sha256:3d12772b9f579bcc49d59360efd08af28f4fba446299f9974633a2ecc55494f3"' artifact.json
+      - name: Download and verify packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download 41242163960 --repo luttechan/Calix --name Calix-1.4.21-development-Windows-x64 --dir packages
+          cd packages
+          test "$(find . -maxdepth 1 -type f | wc -l)" -eq 3
+          echo '95a60de54fca20fd16f6e739932c219daa9a053aab8144e07c41336e4bbd10ae  Calix-1.4.21-Setup-x64.exe' | sha256sum --check --strict
+          echo '11d5d72d41f85da30af354a9fd3dd6b4c0e4649dd82f5d4fa4a422ca37b9bfc0  Calix-1.4.21-Windows-x64.zip' | sha256sum --check --strict
+          sha256sum --check --strict SHA256SUMS.txt
+      - name: Publish release
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > notes.md <<'NOTES'
+          - 로그인과 일정 수집을 동일한 WebView2 세션으로 통합
+          - 영상 목록 누락 및 빈 목록 처리 개선
+          - 재시작, 선택형 수집 로그 추가
+          - 배포 용량 축소
+          NOTES
+          gh release create v1.4.21 --repo luttechan/Calix --target "$SOURCE" --title 'Calix 1.4.21' --notes-file notes.md --draft packages/Calix-1.4.21-Setup-x64.exe packages/Calix-1.4.21-Windows-x64.zip packages/SHA256SUMS.txt
+          gh release view v1.4.21 --repo luttechan/Calix --json assets > published.json
+          jq -e '.assets | length == 3' published.json
+          gh release edit v1.4.21 --repo luttechan/Calix --draft=false --latest
