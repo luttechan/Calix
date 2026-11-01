@@ -15,7 +15,7 @@ from learning_calendar.updates import (
     MAX_INSTALLER,
 )
 
-VERSION = "1.5.0"
+VERSION = "1.5.1"
 
 
 class UpdateService(QObject):

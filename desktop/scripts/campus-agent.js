@@ -3,6 +3,16 @@
   const key = Symbol.for("calix.campus.reader");
   if (window[key]) return;
   const state = { jobs: {}, courses: {}, debug: false, logs: [] };
+  const parseCampusJSON = (text) => {
+    if (typeof text !== "string" || text.length > 16000000)
+      throw Error("RESPONSE_TOO_LARGE");
+    const json = text.trimStart().replace(/^while\s*\(\s*1\s*\)\s*;/, "");
+    try {
+      return JSON.parse(json);
+    } catch {
+      throw Error("INVALID_JSON");
+    }
+  };
   const log = (message) => {
     if (state.debug) {
       state.logs.push(message);
@@ -87,7 +97,8 @@
         if (row)
           response
             .clone()
-            .json()
+            .text()
+            .then(parseCampusJSON)
             .then(
               (data) => finish(row, match, response.ok, data),
               () => finish(row, match, false),
@@ -114,7 +125,7 @@
             this.status >= 200 && this.status < 300,
             this.responseType === "json"
               ? this.response
-              : JSON.parse(this.responseText),
+              : parseCampusJSON(this.responseText),
           );
         } catch {
           finish(this.__calixReadRow, match, false);
@@ -157,7 +168,7 @@
         throw Error("HTTP_" + response.status);
       const text = await response.text();
       if (text.length > 16000000) throw Error("RESPONSE_TOO_LARGE");
-      return { response, value: JSON.parse(text) };
+      return { response, value: parseCampusJSON(text) };
     } finally {
       clearTimeout(timer);
     }

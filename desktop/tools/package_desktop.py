@@ -19,16 +19,16 @@ def main():
     setup = release / "bundle/nsis" / f"{config['productName']}_{version}_x64-setup.exe"
     assert setup.is_file(), f"Current installer missing: {setup.name}"
     print(json.dumps(dict(selected_installer=setup.name,available_installers=sorted(p.name for p in setup.parent.glob("*setup.exe")))))
-    setup_output = output / "Calix-1.5.0-Setup-x64.exe"
+    setup_output = output / f"Calix-{version}-Setup-x64.exe"
     shutil.copy2(setup, setup_output)
-    archive = output / "Calix-1.5.0-Windows-x64.zip"
+    archive = output / f"Calix-{version}-Windows-x64.zip"
     with zipfile.ZipFile(
         archive, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=5
     ) as z:
-        z.write(exe, "Calix 1.5.0/Calix.exe")
+        z.write(exe, f"Calix {version}/Calix.exe")
         z.write(
             desktop / "src-tauri/binaries/calix-engine-x86_64-pc-windows-msvc.exe",
-            "Calix 1.5.0/calix-engine.exe",
+            f"Calix {version}/calix-engine.exe",
         )
         internal = desktop / "src-tauri/engine/_internal"
         assert not any(path.name.lower() == "qtwebengineprocess.exe" for path in internal.rglob("*.exe")), "Legacy Qt video browser is still bundled"
@@ -36,14 +36,14 @@ def main():
             if path.is_file():
                 z.write(
                     path,
-                    "Calix 1.5.0/_internal/" + path.relative_to(internal).as_posix(),
+                    f"Calix {version}/_internal/" + path.relative_to(internal).as_posix(),
                 )
-        z.write(ROOT / "LICENSE", "Calix 1.5.0/LICENSE")
+        z.write(ROOT / "LICENSE", f"Calix {version}/LICENSE")
         z.write(
-            ROOT / "asset/style/Pretendard-OFL.txt", "Calix 1.5.0/Pretendard-OFL.txt"
+            ROOT / "asset/style/Pretendard-OFL.txt", f"Calix {version}/Pretendard-OFL.txt"
         )
         z.writestr(
-            "Calix 1.5.0/run.bat",
+            f"Calix {version}/run.bat",
             '@echo off\r\nstart "" /D "%~dp0" "%~dp0Calix.exe"\r\n',
         )
     hashes = []
