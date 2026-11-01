@@ -221,6 +221,7 @@ const navigation: [Page, string, typeof Home][] = [
   ["diary", "일기장", BookOpen],
 ];
 export function App() {
+  const developerClicks = useRef({ count: 0, time: 0 });
   const [data, setData] = useState<Snapshot | null>(null),
     [error, setError] = useState(""),
     [page, setPage] = useState<Page>("home"),
@@ -517,7 +518,22 @@ export function App() {
         >
           <img src="/assets/icons/calix.svg" alt="" />
           <span>Calix</span>
-          <small>{data?.version}</small>
+          <small
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              const now = Date.now();
+              const last = developerClicks.current;
+              const count = now - last.time < 1500 ? last.count + 1 : 1;
+              developerClicks.current = { count, time: now };
+              if (count >= 5) {
+                developerClicks.current.count = 0;
+                window.dispatchEvent(new Event("calix:developer-console"));
+              }
+            }}
+          >
+            {data?.version}
+          </small>
         </a>
         <div className="nav-label">워크스페이스</div>
         <nav>
