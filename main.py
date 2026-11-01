@@ -16,6 +16,25 @@ ROOT = Path(__file__).resolve().parent
 DESKTOP = ROOT / "desktop"
 
 
+def project_python():
+    candidate = ROOT / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    if candidate.is_file() and candidate.resolve() != Path(sys.executable).resolve():
+        return str(candidate)
+    return None
+
+
+def check_build_python():
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "tools/check_runtime_security.py")],
+        capture_output=True, text=True, check=False,
+    )
+    if result.returncode:
+        raise RuntimeError(
+            "빌드에는 Python 3.14.10과 최신 OpenSSL이 필요합니다. "
+            "Python 업데이트 후 .venv를 갱신하세요.\n" + result.stdout.strip()
+        )
+
+
 def configure_tool_paths():
     """Find installed tools even when the parent app has a stale Windows PATH."""
     if os.name != "nt":
@@ -186,8 +205,12 @@ def main():
             )
         )
         return 0
+    selected = project_python()
+    if selected:
+        return subprocess.call([selected, str(ROOT / "main.py"), *sys.argv[1:]], cwd=ROOT)
     if args.preview or args.smoke_test:
         return preview(args.data_dir, not args.no_browser, args.smoke_test)
+    check_build_python()
     command = native_command()
     prepare()
     # Build from current sources so Python edits are reflected in the sidecar.

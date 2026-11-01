@@ -81,10 +81,14 @@ Windows 10 / 11, 64비트. 설치 파일 또는 ZIP 제공.
 Python 3.14.10, Node.js 24, pnpm 11, Rust, Windows C++ 빌드 도구가 필요합니다.
 
 ```text
+pymanager install --update 3.14.10
+pymanager exec -V:3.14.10 -m venv --upgrade .venv
+.venv\Scripts\python -m pip install --only-binary=:all: -r requirements-build.txt brotli==1.2.1
 npm install -g pnpm@11.25.0
-python -m pip install --only-binary=:all: -r requirements-build.txt brotli==1.2.1
 python main.py
 ```
+
+`main.py`는 프로젝트의 `.venv`를 우선 사용합니다.
 
 React 화면 미리보기:
 
