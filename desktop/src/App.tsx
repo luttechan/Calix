@@ -31,6 +31,7 @@ import {
   LogOut,
   Sun,
   Power,
+  UserRound,
 } from "lucide-react";
 import { getVersion } from "@tauri-apps/api/app";
 import { matchesEventFilter, type EventFilter } from "./eventFilters";
@@ -69,6 +70,7 @@ type ContextValue = {
   requestInstall: () => void;
   requestRestart: () => void;
   resetView: () => void;
+  openCredits: () => void;
 };
 const Context = createContext<ContextValue | null>(null);
 export function useCalix() {
@@ -507,6 +509,7 @@ export function App() {
               setInstall(true);
               setExit(true);
             },
+            openCredits: () => setCredits(true),
             resetView: () => {
               draft.current = null;
               leave.current = null;
@@ -580,16 +583,23 @@ export function App() {
             <span>설정</span>
           </button>
           <button
-            className="creator"
-            onClick={() => setCredits(true)}
-            title="크레딧"
+            className="creator user-profile"
+            onClick={() => void navigate("settings")}
+            title="내 프로필"
+            aria-label="내 프로필"
           >
-            <img src="/assets/profile-avatar.png" alt="" />
+            {data?.preferences.avatar ? (
+              <img src={data.preferences.avatar} alt="" />
+            ) : (
+              <span className="user-avatar">
+                <UserRound size={20} />
+              </span>
+            )}
             <span>
-              <strong>Lutté Laurent</strong>
-              <small>Calix</small>
+              <strong>{data?.preferences.nickname || "사용자"}</strong>
+              <small>내 프로필</small>
             </span>
-            <ArrowUpRight size={15} />
+            <Settings size={15} />
           </button>
         </div>
       </aside>

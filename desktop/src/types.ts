@@ -57,6 +57,7 @@ export type Preferences = {
   font_mode: string;
   catholic: boolean;
   birthday: boolean;
+  avatar: string;
   nickname: string;
   greeting: string;
   onboarding_complete: boolean;

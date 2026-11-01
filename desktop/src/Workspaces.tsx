@@ -541,7 +541,8 @@ function BatchImport({ onClose }: { onClose: () => void }) {
 }
 export { TimetablePage } from "./Timetable";
 export function SettingsPage() {
-  const { data, mutate, notify, requestInstall, requestRestart } = useCalix(),
+  const { data, mutate, notify, requestInstall, requestRestart, openCredits } =
+      useCalix(),
     [type, setType] = useState(false),
     [holiday, setHoliday] = useState(false),
     [special, setSpecial] = useState(false),
@@ -667,13 +668,15 @@ export function SettingsPage() {
           ["updates", "업데이트 확인"],
           ["backup", "개인 자료 백업"],
           ["restore", "백업 복원"],
+          ["credits", "앱 정보"],
         ].map(([mode, label]) => (
           <button
             key={mode}
             className="settings-link"
             disabled={fileBusy}
             onClick={() => {
-              if (mode === "updates") setUpdates(true);
+              if (mode === "credits") openCredits();
+              else if (mode === "updates") setUpdates(true);
               else void requestFile(mode);
             }}
           >

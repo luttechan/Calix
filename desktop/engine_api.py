@@ -113,6 +113,7 @@ class EngineAPI:
                         ("glass", True),
                         ("font_mode", "pretendard"),
                         ("nickname", ""),
+                        ("avatar", ""),
                         ("greeting", "{닉네임}님, 오셨군요!"),
                         ("onboarding_complete", False),
                     ]
@@ -203,8 +204,12 @@ class EngineAPI:
                 "dark",
             ):
                 raise ValueError("닉네임과 테마를 확인하세요.")
+            from learning_calendar.avatar import validate_avatar
+
+            avatar = validate_avatar(p.get("avatar", self.settings.get("avatar", "")))
             settings = dict(
                 self.settings,
+                avatar=avatar,
                 nickname=nickname.strip(),
                 greeting=greeting.strip(),
                 theme=theme,

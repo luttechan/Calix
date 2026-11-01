@@ -153,6 +153,16 @@ export function Onboarding() {
   );
 }
 export function ProfileSettings() {
+  const photoInput = useRef<HTMLInputElement>(null);
+  const photoRevision = useRef(0);
+  const [avatar, setAvatar] = useState("");
+  const [photoLoading, setPhotoLoading] = useState(false);
+  useEffect(
+    () => () => {
+      photoRevision.current++;
+    },
+    [],
+  );
   const { data, mutate, notify, leave, draft, resetView } = useCalix(),
     [nickname, setNickname] = useState(data.preferences.nickname),
     [greeting, setGreeting] = useState(data.preferences.greeting),
@@ -160,10 +170,58 @@ export function ProfileSettings() {
     [reset, setReset] = useState(false),
     [confirmed, setConfirmed] = useState(false),
     [resetting, setResetting] = useState(false);
+  useEffect(
+    () => setAvatar(data.preferences.avatar || ""),
+    [data.preferences.avatar],
+  );
+  const choosePhoto = async (file?: File) => {
+    if (!file) return;
+    const generation = ++photoRevision.current;
+    if (
+      file.size > 5 * 1024 * 1024 ||
+      !["image/png", "image/jpeg", "image/webp"].includes(file.type)
+    ) {
+      notify("5MB 이하의 PNG, JPG, WebP 사진을 선택하세요.");
+      return;
+    }
+    setPhotoLoading(true);
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    try {
+      image.src = url;
+      await image.decode();
+      if (image.naturalWidth * image.naturalHeight > 25000000)
+        throw Error("사진 크기가 너무 큽니다.");
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 256;
+      const context = canvas.getContext("2d");
+      if (!context) throw Error("사진을 불러오지 못했습니다.");
+      const side = Math.min(image.naturalWidth, image.naturalHeight);
+      context.drawImage(
+        image,
+        (image.naturalWidth - side) / 2,
+        (image.naturalHeight - side) / 2,
+        side,
+        side,
+        0,
+        0,
+        256,
+        256,
+      );
+      if (generation === photoRevision.current)
+        setAvatar(canvas.toDataURL("image/png"));
+    } catch (error) {
+      if (generation === photoRevision.current) notify(String(error));
+    } finally {
+      image.src = "";
+      URL.revokeObjectURL(url);
+      if (generation === photoRevision.current) setPhotoLoading(false);
+    }
+  };
   const save = async () => {
     setSaving(true);
     try {
-      await mutate("profile.save", { nickname, greeting });
+      await mutate("profile.save", { nickname, greeting, avatar });
       notify("저장됨");
     } catch {
     } finally {
@@ -187,6 +245,45 @@ export function ProfileSettings() {
     <>
       <section className="glass settings-panel profile-settings">
         <h2>내 Calix</h2>
+        <div className="profile-photo-editor">
+          <span className="profile-photo-preview">
+            {avatar ? (
+              <img src={avatar} alt="내 프로필 사진" />
+            ) : (
+              <UserRound size={30} />
+            )}
+          </span>
+          <div>
+            <button
+              type="button"
+              disabled={photoLoading}
+              onClick={() => photoInput.current?.click()}
+            >
+              {photoLoading ? "불러오는 중" : "사진 선택"}
+            </button>
+            {avatar && (
+              <button
+                type="button"
+                className="quiet"
+                disabled={photoLoading}
+                onClick={() => setAvatar("")}
+              >
+                사진 삭제
+              </button>
+            )}
+          </div>
+          <input
+            ref={photoInput}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            aria-label="프로필 사진 선택"
+            hidden
+            onChange={(event) => {
+              void choosePhoto(event.target.files?.[0]);
+              event.target.value = "";
+            }}
+          />
+        </div>
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -223,7 +320,9 @@ export function ProfileSettings() {
             <span />
             <button
               className="primary"
-              disabled={saving || !nickname.trim() || !greeting.trim()}
+              disabled={
+                saving || photoLoading || !nickname.trim() || !greeting.trim()
+              }
             >
               저장
             </button>
