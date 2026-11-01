@@ -164,13 +164,10 @@ export function ProfileSettings() {
     },
     [],
   );
-  const { data, mutate, notify, leave, draft, resetView } = useCalix(),
+  const { data, mutate, notify } = useCalix(),
     [nickname, setNickname] = useState(data.preferences.nickname),
     [greeting, setGreeting] = useState(data.preferences.greeting),
-    [saving, setSaving] = useState(false),
-    [reset, setReset] = useState(false),
-    [confirmed, setConfirmed] = useState(false),
-    [resetting, setResetting] = useState(false);
+    [saving, setSaving] = useState(false);
   useEffect(
     () => setAvatar(data.preferences.avatar || ""),
     [data.preferences.avatar],
@@ -202,19 +199,6 @@ export function ProfileSettings() {
     } catch {
     } finally {
       setSaving(false);
-    }
-  };
-  const erase = async () => {
-    setResetting(true);
-    try {
-      if (isTauri()) await invoke("auth_logout");
-      await mutate("data.reset", { confirmation: "초기화" });
-      resetView();
-      setReset(false);
-    } catch (error) {
-      notify(String(error));
-    } finally {
-      setResetting(false);
     }
   };
   return (
@@ -305,6 +289,30 @@ export function ProfileSettings() {
           </div>
         </form>
       </section>
+    </>
+  );
+}
+
+export function ResetSettings() {
+  const { mutate, resetView, notify } = useCalix();
+  const [reset, setReset] = useState(false),
+    [confirmed, setConfirmed] = useState(false),
+    [resetting, setResetting] = useState(false);
+  const erase = async () => {
+    setResetting(true);
+    try {
+      if (isTauri()) await invoke("auth_logout");
+      await mutate("data.reset", { confirmation: "초기화" });
+      resetView();
+      setReset(false);
+    } catch (error) {
+      notify(String(error));
+    } finally {
+      setResetting(false);
+    }
+  };
+  return (
+    <>
       <section className="glass settings-panel reset-panel">
         <div>
           <h2>DB 초기화</h2>

@@ -16,10 +16,35 @@ ROOT = Path(__file__).resolve().parent
 DESKTOP = ROOT / "desktop"
 
 
+def configure_tool_paths():
+    """Find installed tools even when the parent app has a stale Windows PATH."""
+    if os.name != "nt":
+        return
+    import winreg
+
+    paths = []
+    if os.environ.get("CALIX_NODE"):
+        paths.append(str(Path(os.environ["CALIX_NODE"]).resolve().parent))
+    paths.append(str(Path(os.environ.get("CARGO_HOME") or Path.home() / ".cargo") / "bin"))
+    for hive, key in (
+        (winreg.HKEY_CURRENT_USER, r"Environment"),
+        (winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"),
+    ):
+        try:
+            with winreg.OpenKey(hive, key) as handle:
+                value, _ = winreg.QueryValueEx(handle, "Path")
+            paths.extend(os.path.expandvars(value).split(os.pathsep))
+        except OSError:
+            pass
+    paths.extend(os.environ.get("PATH", "").split(os.pathsep))
+    os.environ["PATH"] = os.pathsep.join(dict.fromkeys(p for p in paths if p))
+
+
 def native_command():
+    configure_tool_paths()
     if not shutil.which("cargo"):
         raise RuntimeError(
-            "Tauri 소스 실행에는 Rust와 Windows C++ 빌드 도구가 필요합니다. React 화면만 편집하려면 python main.py --preview를 사용하세요."
+            "cargo.exe를 찾지 못했습니다. Rust 설치 경로를 CARGO_HOME 또는 PATH로 지정하세요."
         )
     if not shutil.which("pnpm"):
         raise RuntimeError("Node.js 24와 pnpm 11을 설치하세요.")
@@ -104,7 +129,7 @@ def preview(data_dir=None, open_browser=True, smoke_report=None):
         if smoke_report:
             assert "/src/main.tsx" in document
             version = rpc("bootstrap")["result"]["version"]
-            assert version == "1.5.5"
+            assert version == "1.5.6"
             Path(smoke_report).write_text(
                 json.dumps(
                     dict(ui="React", version=version, legacyQt=False, sourceEntry=True)
@@ -132,6 +157,7 @@ def preview(data_dir=None, open_browser=True, smoke_report=None):
 
 
 def main():
+    configure_tool_paths()
     parser = argparse.ArgumentParser(description="Calix React/Tauri source launcher")
     parser.add_argument(
         "--preview", action="store_true", help="React source preview without Rust"

@@ -2727,17 +2727,6 @@ label textarea {
 .session-event-row small {display:block; margin-top:4px; font-size:11px;}
 .session-event-row.completed {opacity:.48;}
 @media(max-width:800px){.session-event-lists{grid-template-columns:1fr;}}
-.reminder-options {border:0;padding:16px 0 0;margin:0;min-width:0;}
-.reminder-options:disabled {opacity:.45;}
-.reminder-checks {display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;}
-.reminder-rule,.reminder-sound {padding:18px 0;border-top:1px solid var(--line);}
-.reminder-time-inputs {display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px;}
-.reminder-time-inputs select {width:170px;margin:0;}
-.reminder-time-inputs label {display:flex;align-items:center;gap:8px;margin:0;}
-.reminder-time-inputs input {width:110px;margin:0;}
-.reminder-rule>small {display:block;margin-top:8px;color:var(--muted);}
-.reminder-sound .form-grid {margin-top:14px;}
-.reminder-sound-test {display:flex;align-items:center;gap:12px;justify-content:space-between;}
 body.reminder-surface {margin:0;min-width:0;width:100vw;background:var(--bg);height:100vh;overflow:hidden;}
 .reminder-surface #root {height:100%;}
 .reminder-card {display:flex;flex-direction:column;height:100%;overflow:hidden;background:linear-gradient(135deg,var(--surface),var(--accent-soft));border:1px solid var(--line);border-radius:20px;padding:20px;box-sizing:border-box;}
@@ -2760,3 +2749,54 @@ body.reminder-surface {margin:0;min-width:0;width:100vw;background:var(--bg);hei
 .reminder-card>footer {display:flex;align-items:center;gap:8px;padding-top:18px;}
 .reminder-card>footer>span {flex:1;}
 .reminder-card>footer button {font-size:12px;}
+.settings-categories{display:flex;gap:6px;max-width:830px;margin:0 0 22px;padding:5px;background:var(--surface);border:1px solid var(--line);border-radius:14px}
+.settings-categories [role=tab]{flex:1;min-width:0;justify-content:center;padding:11px 10px;border:0;background:transparent;white-space:nowrap;font-size:13px;border-radius:10px}
+.settings-categories [aria-selected=true],.alarm-tabs [aria-selected=true]{background:var(--accent-soft);color:var(--accent);font-weight:600}
+[role=tabpanel][hidden]{display:none!important}
+.reminder-settings{padding:0;overflow:clip}
+.alarm-panel-heading{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:24px 26px 18px}
+.alarm-panel-heading h2{margin:0;font-size:19px}
+.alarm-panel-heading p{font-size:12px;color:var(--muted);margin:7px 0 0}
+.reminder-settings .alarm-enable,.reminder-settings .alarm-choice{display:flex;flex-direction:row;align-items:center;gap:10px;margin:0;font-size:13px;line-height:1.5;cursor:pointer}
+.reminder-settings input[type=checkbox]{flex:0 0 18px;width:18px;height:18px;margin:0;padding:0}
+.alarm-enable{white-space:nowrap}
+.alarm-tabs{display:flex;gap:6px;padding:0 26px 16px;border-bottom:1px solid var(--line)}
+.alarm-tabs button{border:0;background:transparent;padding:9px 16px;font-size:13px}
+.alarm-fields{border:0;padding:0 26px;margin:0;min-width:0}
+.alarm-fields:disabled{opacity:.5}
+.alarm-group{padding:20px 0;border-bottom:1px solid var(--line)}
+.alarm-group:last-child{border-bottom:0}
+.alarm-group h3{font-size:13px;font-weight:600;margin:0 0 12px}
+.alarm-choice-grid,.alarm-deadline-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.reminder-settings .alarm-choice-grid .alarm-choice{padding:12px 14px;border:1px solid var(--line);border-radius:11px;background:var(--surface)}
+.alarm-deadline{min-width:0;padding:16px;border:1px solid var(--line);border-radius:13px;background:var(--surface)}
+.reminder-settings .alarm-rule-title{margin-bottom:14px}
+.alarm-rule-title strong{font-size:13px}
+.alarm-deadline select,.alarm-number input{width:100%;min-width:0;min-height:42px;font-size:14px;box-sizing:border-box}
+.alarm-deadline small{display:block;color:var(--muted);font-size:11px;margin-top:10px}
+.alarm-number{display:flex;align-items:center;gap:10px;margin-top:10px}
+.alarm-number span{white-space:nowrap;font-size:13px;color:var(--muted)}
+.alarm-sound-header{display:flex;align-items:center;justify-content:space-between}
+.alarm-sound-header h3{margin:0}
+.alarm-track-row{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:20px 0;border-bottom:1px solid var(--line)}
+.alarm-track-row>div{flex:1;min-width:0;display:grid;gap:10px}
+.alarm-track-row strong{font-size:13px;font-weight:600}
+.alarm-track-row select{max-width:260px;min-height:42px}
+.alarm-track-row button{flex:none;min-height:42px}
+.alarm-file{font-size:13px;color:var(--muted)}
+.reminder-settings .alarm-volume{display:grid;grid-template-columns:1fr auto;gap:16px;margin:0;padding:22px 0;font-size:13px}
+.alarm-volume output{font-variant-numeric:tabular-nums;color:var(--muted)}
+.reminder-settings .alarm-volume input{grid-column:1/-1;width:100%;padding:0;margin:0;height:22px;border:0;background:transparent;accent-color:var(--accent);box-shadow:none}
+.alarm-save{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 26px;border-top:1px solid var(--line);background:var(--surface)}
+.alarm-save>span{font-size:12px;color:var(--muted)}
+@media(max-width:950px){.settings-categories [role=tab]{padding:10px 7px;font-size:12px}.alarm-panel-heading,.alarm-fields,.alarm-save{padding-left:20px;padding-right:20px}.alarm-tabs{padding-left:20px;padding-right:20px}}
+@media(max-width:620px){.alarm-choice-grid,.alarm-deadline-grid{grid-template-columns:1fr}.settings-categories{flex-wrap:wrap}.settings-categories [role=tab]{flex:1 0 28%}}
+
+.workspace main:has(>.settings-categories){display:flex;flex-direction:column;overflow:hidden;}
+.workspace main:has(>.settings-categories)>.page-heading,.settings-categories{flex-shrink:0;}
+.workspace main:has(>.settings-categories)>[role=tabpanel]:not([hidden]){flex:1;min-height:0;overflow:auto;max-width:830px;}
+.workspace main>#settings-pane-alarms:not([hidden]){display:flex;overflow:hidden;}
+#settings-pane-alarms>.reminder-settings{display:flex;flex-direction:column;width:100%;height:100%;margin:0;min-height:0;box-sizing:border-box;}
+.reminder-settings>.alarm-panel-heading,.reminder-settings>.alarm-tabs,.alarm-save{flex-shrink:0;}
+.reminder-settings>form{display:flex;flex-direction:column;flex:1;min-height:0;}
+.reminder-settings .alarm-fields{flex:1;min-height:0;overflow:auto;}

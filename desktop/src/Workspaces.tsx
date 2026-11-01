@@ -14,7 +14,7 @@ import { rpc } from "./bridge";
 import { InlineCell } from "./InlineCell";
 import { isTauri, invoke } from "@tauri-apps/api/core";
 import { UpdateDialog } from "./UpdateDialog";
-import { ProfileSettings } from "./Profile";
+import { ProfileSettings, ResetSettings } from "./Profile";
 import { ReminderSettingsPanel } from "./Reminders";
 import { dateKey, dueText, localInput, status, weekdays } from "./dates";
 import type { Task, Preferences } from "./types";
@@ -550,6 +550,18 @@ export function SettingsPage() {
     [updates, setUpdates] = useState(false),
     [restore, setRestore] = useState<string | null>(null),
     [fileBusy, setFileBusy] = useState(false);
+  const categories = [
+    ["profile", "내 프로필"],
+    ["appearance", "화면"],
+    ["alarms", "알림과 소리"],
+    ["calendar", "일정"],
+    ["app", "앱 관리"],
+  ] as const;
+  const [category, setCategory] = useState<string>("profile");
+  const selectCategory = (id: string) => {
+    setCategory(id);
+    document.querySelector(".workspace main")?.scrollTo({ top: 0 });
+  };
   const requestFile = async (mode: string) => {
     if (!isTauri()) {
       notify("파일 선택은 Windows 앱에서 진행합니다.");
@@ -585,129 +597,206 @@ export function SettingsPage() {
           <h1>설정</h1>
         </div>
       </div>
-      <ProfileSettings />
-      <ReminderSettingsPanel />
-      <section className="glass settings-panel">
-        <div className="settings-heading">
-          <Palette size={20} />
-          <h2>화면</h2>
-        </div>
-        <div className="theme-picker">
-          {themes.map(([id, name, color]) => (
-            <button
-              key={id}
-              className={data.preferences.theme === id ? "selected" : ""}
-              onClick={() =>
-                void mutate("preferences.save", { theme: id }).catch(() => {})
+      <div
+        className="settings-categories"
+        role="tablist"
+        aria-label="설정 카테고리"
+      >
+        {categories.map(([id, label], index) => (
+          <button
+            key={id}
+            id={`settings-tab-${id}`}
+            role="tab"
+            aria-selected={category === id}
+            aria-controls={`settings-pane-${id}`}
+            tabIndex={category === id ? 0 : -1}
+            onClick={() => selectCategory(id)}
+            onKeyDown={(event) => {
+              const step =
+                event.key === "ArrowRight"
+                  ? 1
+                  : event.key === "ArrowLeft"
+                    ? -1
+                    : 0;
+              if (step || event.key === "Home" || event.key === "End") {
+                event.preventDefault();
+                const next =
+                  event.key === "Home"
+                    ? 0
+                    : event.key === "End"
+                      ? categories.length - 1
+                      : (index + step + categories.length) % categories.length;
+                selectCategory(categories[next][0]);
+                document
+                  .getElementById(`settings-tab-${categories[next][0]}`)
+                  ?.focus();
               }
-            >
-              <span style={{ background: color }}>
-                {data.preferences.theme === id && <Check size={20} />}
-              </span>
-              {name}
-            </button>
-          ))}
-        </div>
-        <div className="setting-row">
-          <div>
-            <strong>글래스</strong>
-            <small>배경 블러와 반투명 패널</small>
-          </div>
-          <button
-            className={`switch ${data.preferences.glass ? "on" : ""}`}
-            role="switch"
-            aria-checked={data.preferences.glass}
-            aria-label="글래스"
-            onClick={() =>
-              void mutate("preferences.save", {
-                glass: !data.preferences.glass,
-              }).catch(() => {})
-            }
-          >
-            <i />
-          </button>
-        </div>
-        <div className="setting-row">
-          <strong>글꼴</strong>
-          <select
-            aria-label="글꼴"
-            value={data.preferences.font_mode}
-            onChange={(e) =>
-              void mutate("preferences.save", {
-                font_mode: e.target.value,
-              }).catch(() => {})
-            }
-          >
-            <option value="pretendard">Pretendard</option>
-            <option value="windows">Windows 기본</option>
-          </select>
-        </div>
-      </section>
-      <section className="glass settings-panel">
-        <div className="settings-heading">
-          <CalendarDays size={20} />
-          <h2>일정</h2>
-        </div>
-        <button className="settings-link" onClick={() => setType(true)}>
-          사용자 유형
-          <ArrowUpRight size={17} />
-        </button>
-        <button className="settings-link" onClick={() => setHoliday(true)}>
-          공휴일 등록
-          <ArrowUpRight size={17} />
-        </button>
-        <button className="settings-link" onClick={() => setSpecial(true)}>
-          특수 일정 등록
-          <ArrowUpRight size={17} />
-        </button>
-      </section>
-      <section className="glass settings-panel">
-        <div className="settings-heading">
-          <Download size={20} />
-          <h2>앱 관리</h2>
-        </div>
-        {[
-          ["updates", "업데이트 확인"],
-          ["backup", "개인 자료 백업"],
-          ["restore", "백업 복원"],
-          ["credits", "앱 정보"],
-        ].map(([mode, label]) => (
-          <button
-            key={mode}
-            className="settings-link"
-            disabled={fileBusy}
-            onClick={() => {
-              if (mode === "credits") openCredits();
-              else if (mode === "updates") setUpdates(true);
-              else void requestFile(mode);
             }}
           >
             {label}
-            <ArrowUpRight size={17} />
           </button>
         ))}
-        <button
-          className="settings-link"
-          onClick={() =>
-            void rpc("app.open", { page: "guide" }).catch((e) =>
-              notify(e.message),
-            )
-          }
-        >
-          사용 설명서
-          <ArrowUpRight size={17} />
-        </button>
-      </section>
-      <button
-        className="settings-link"
-        onClick={() => {
-          if (isTauri()) requestRestart();
-          else notify("재시작은 Windows 앱에서 진행합니다.");
-        }}
+      </div>
+      <div
+        role="tabpanel"
+        id="settings-pane-profile"
+        aria-labelledby="settings-tab-profile"
+        hidden={category !== "profile"}
       >
-        재시작
-        <ArrowUpRight size={17} />
-      </button>
+        <ProfileSettings />
+      </div>
+      <div
+        role="tabpanel"
+        id="settings-pane-alarms"
+        aria-labelledby="settings-tab-alarms"
+        hidden={category !== "alarms"}
+      >
+        <ReminderSettingsPanel active={category === "alarms"} />
+      </div>
+      <div
+        role="tabpanel"
+        id="settings-pane-appearance"
+        aria-labelledby="settings-tab-appearance"
+        hidden={category !== "appearance"}
+      >
+        <section className="glass settings-panel">
+          <div className="settings-heading">
+            <Palette size={20} />
+            <h2>화면</h2>
+          </div>
+          <div className="theme-picker">
+            {themes.map(([id, name, color]) => (
+              <button
+                key={id}
+                className={data.preferences.theme === id ? "selected" : ""}
+                onClick={() =>
+                  void mutate("preferences.save", { theme: id }).catch(() => {})
+                }
+              >
+                <span style={{ background: color }}>
+                  {data.preferences.theme === id && <Check size={20} />}
+                </span>
+                {name}
+              </button>
+            ))}
+          </div>
+          <div className="setting-row">
+            <div>
+              <strong>글래스</strong>
+              <small>배경 블러와 반투명 패널</small>
+            </div>
+            <button
+              className={`switch ${data.preferences.glass ? "on" : ""}`}
+              role="switch"
+              aria-checked={data.preferences.glass}
+              aria-label="글래스"
+              onClick={() =>
+                void mutate("preferences.save", {
+                  glass: !data.preferences.glass,
+                }).catch(() => {})
+              }
+            >
+              <i />
+            </button>
+          </div>
+          <div className="setting-row">
+            <strong>글꼴</strong>
+            <select
+              aria-label="글꼴"
+              value={data.preferences.font_mode}
+              onChange={(e) =>
+                void mutate("preferences.save", {
+                  font_mode: e.target.value,
+                }).catch(() => {})
+              }
+            >
+              <option value="pretendard">Pretendard</option>
+              <option value="windows">Windows 기본</option>
+            </select>
+          </div>
+        </section>
+      </div>
+      <div
+        role="tabpanel"
+        id="settings-pane-calendar"
+        aria-labelledby="settings-tab-calendar"
+        hidden={category !== "calendar"}
+      >
+        <section className="glass settings-panel">
+          <div className="settings-heading">
+            <CalendarDays size={20} />
+            <h2>일정</h2>
+          </div>
+          <button className="settings-link" onClick={() => setType(true)}>
+            사용자 유형
+            <ArrowUpRight size={17} />
+          </button>
+          <button className="settings-link" onClick={() => setHoliday(true)}>
+            공휴일 등록
+            <ArrowUpRight size={17} />
+          </button>
+          <button className="settings-link" onClick={() => setSpecial(true)}>
+            특수 일정 등록
+            <ArrowUpRight size={17} />
+          </button>
+        </section>
+      </div>
+      <div
+        role="tabpanel"
+        id="settings-pane-app"
+        aria-labelledby="settings-tab-app"
+        hidden={category !== "app"}
+      >
+        <section className="glass settings-panel">
+          <div className="settings-heading">
+            <Download size={20} />
+            <h2>앱 관리</h2>
+          </div>
+          {[
+            ["updates", "업데이트 확인"],
+            ["backup", "개인 자료 백업"],
+            ["restore", "백업 복원"],
+            ["credits", "앱 정보"],
+          ].map(([mode, label]) => (
+            <button
+              key={mode}
+              className="settings-link"
+              disabled={fileBusy}
+              onClick={() => {
+                if (mode === "credits") openCredits();
+                else if (mode === "updates") setUpdates(true);
+                else void requestFile(mode);
+              }}
+            >
+              {label}
+              <ArrowUpRight size={17} />
+            </button>
+          ))}
+          <button
+            className="settings-link"
+            onClick={() =>
+              void rpc("app.open", { page: "guide" }).catch((e) =>
+                notify(e.message),
+              )
+            }
+          >
+            사용 설명서
+            <ArrowUpRight size={17} />
+          </button>
+
+          <button
+            className="settings-link"
+            onClick={() => {
+              if (isTauri()) requestRestart();
+              else notify("재시작은 Windows 앱에서 진행합니다.");
+            }}
+          >
+            재시작
+            <ArrowUpRight size={17} />
+          </button>
+        </section>
+        <ResetSettings />
+      </div>
       {type && (
         <Modal title="사용자 유형" onClose={() => setType(false)}>
           <div className="type-list">
