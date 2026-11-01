@@ -1,0 +1,54 @@
+name: Publish Calix 1.5.2
+on:
+  push:
+    branches: ['codex/calix152-publish']
+    paths: ['.github/workflows/publish152.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: publish-calix-152
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE: 2ef14613fdc1936e5d9760ae45b9e310021e7c3c
+      BUILD: 2ef14613fdc1936e5d9760ae45b9e310021e7c3c
+    steps:
+      - name: Verify source and validated build
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api repos/luttechan/Calix/git/ref/heads/main --jq .object.sha)" = "$SOURCE"
+          test "$(gh api repos/luttechan/Calix/git/commits/$SOURCE --jq .tree.sha)" = "$(gh api repos/luttechan/Calix/git/commits/$BUILD --jq .tree.sha)"
+          gh api repos/luttechan/Calix/actions/runs/41293168529 > run.json
+          jq -e --arg sha "$BUILD" '.conclusion == "success" and .head_sha == $sha and .head_repository.full_name == "luttechan/Calix"' run.json
+          gh api repos/luttechan/Calix/actions/artifacts/13078636984 > artifact.json
+          jq -e --arg sha "$BUILD" '.expired == false and .workflow_run.head_sha == $sha and .digest == "sha256:33b397c226d15e26a010cfefa8e71f10a41f098606e87ef4d4684e6492c90183"' artifact.json
+      - name: Download and verify packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download 41293168529 --repo luttechan/Calix --name Calix-1.5.2-development-Windows-x64 --dir packages
+          cd packages
+          test "$(find . -maxdepth 1 -type f | wc -l)" -eq 3
+          echo 'c958ad424c913d917210907058156c14ca48f8b667a1c74362bf99a80b812736  Calix-1.5.2-Setup-x64.exe' | sha256sum --check --strict
+          echo 'acd53d15ee86fd0ca5c51d8dc10729b325657c88b9e4856f33ab5469fa56c37f  Calix-1.5.2-Windows-x64.zip' | sha256sum --check --strict
+          sha256sum --check --strict SHA256SUMS.txt
+      - name: Publish release
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > notes.md <<'NOTES'
+          비대면 수업 영역을 한 줄로 줄이고 시간표 공간을 넓혔습니다.
+          NOTES
+          gh release create v1.5.2 --repo luttechan/Calix --target "$SOURCE" --title 'Calix 1.5.2' --notes-file notes.md --draft packages/Calix-1.5.2-Setup-x64.exe packages/Calix-1.5.2-Windows-x64.zip packages/SHA256SUMS.txt
+          gh release view v1.5.2 --repo luttechan/Calix --json assets > published.json
+          jq -e '.assets | length == 3' published.json
+          gh release edit v1.5.2 --repo luttechan/Calix --draft=false --latest
