@@ -32,6 +32,7 @@ import {
   Sun,
   Power,
   UserRound,
+  Square,
 } from "lucide-react";
 import { getVersion } from "@tauri-apps/api/app";
 import { matchesEventFilter, type EventFilter } from "./eventFilters";
@@ -637,18 +638,18 @@ export function App() {
             </div>
             <button
               className="icon-button"
-              title={busy ? "동기화 중" : "동기화"}
-              aria-label="동기화"
-              disabled={busy}
+              title={busy ? "동기화 중단" : "동기화"}
+              aria-label={busy ? "동기화 중단" : "동기화"}
               onClick={() => {
-                setBusy(true);
-                rpc("sync").catch((e) => {
-                  setBusy(false);
+                const cancelling = busy;
+                if (!cancelling) setBusy(true);
+                rpc(cancelling ? "sync.cancel" : "sync").catch((e) => {
+                  if (!cancelling) setBusy(false);
                   notify(e.message);
                 });
               }}
             >
-              <RefreshCw size={18} className={busy ? "spin" : ""} />
+              {busy ? <Square size={16} /> : <RefreshCw size={18} />}
             </button>
             <button
               className="quiet"

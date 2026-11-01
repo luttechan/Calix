@@ -25,7 +25,7 @@ for name in ('PySide6','PySide6_Essentials','PySide6_Addons','PySide6_WebEngine'
             if path.is_file():license_data.append((str(path),f'licenses/{name}'))
 a = Analysis(
     [str(root/'desktop/engine_main.py')], pathex=[str(root),str(root/'desktop')],
-    binaries=[], datas=asset_data + collect_data_files('tzdata') + runtime_data + license_data,
+    binaries=[], datas=[(str(root/'learning_calendar/media_types.json'),'learning_calendar')] + asset_data + collect_data_files('tzdata') + runtime_data + license_data,
     hiddenimports=[],
     hookspath=[str(root/'tools/pyinstaller_hooks')], hooksconfig={}, runtime_hooks=[], excludes=['PySide6.QtTest'], noarchive=False,
 )

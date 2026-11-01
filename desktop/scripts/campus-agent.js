@@ -2,6 +2,11 @@
   if (location.origin !== "https://canvas.bufs.ac.kr") return;
   const key = Symbol.for("calix.campus.reader");
   if (window[key]) return;
+  const mediaRules = __CALIX_MEDIA_RULES__;
+  const videoTypes = new Set(mediaRules.video);
+  const nonVideoTypes = new Set(mediaRules.non_video);
+  const videoSubtypes = new Set(mediaRules.video_subtypes);
+  const controllers = new Set();
   const state = { jobs: {}, courses: {}, debug: false, logs: [] };
   const parseCampusJSON = (text) => {
     if (typeof text !== "string" || text.length > 16000000)
@@ -18,6 +23,11 @@
       state.logs.push(message);
       if (state.logs.length > 100) state.logs.shift();
     }
+  };
+  state.cancel = () => {
+    for (const controller of controllers) controller.abort();
+    controllers.clear();
+    state.jobs = {};
   };
   window[key] = state;
   const identify = (url) => {
@@ -43,6 +53,8 @@
       failed: false,
       hasVideo: false,
       videoCount: 0,
+      unsupported: false,
+      mediaByItem: Object.create(null),
     });
     row.pending++;
     return { row, done: false };
@@ -56,6 +68,11 @@
       row.failed = true;
       return;
     }
+    const list = Array.isArray(payload) ? payload : payload[match[2]];
+    if (!Array.isArray(list)) {
+      row.failed = true;
+      return;
+    }
     row[match[2]] = true;
     let remaining = 100000,
       videoCount = 0;
@@ -63,21 +80,56 @@
       if (!value || typeof value !== "object" || depth > 16 || --remaining < 0)
         return;
       if (value.published === false) return;
+      if (
+        value.content_type === "attendance_item" &&
+        (!value.content_data || typeof value.content_data !== "object")
+      )
+        row.unsupported = true;
       if (value.content_data && typeof value.content_data === "object") {
         const data = value.content_data,
           media = data.item_content_data || {};
-        if (
-          ["movie", "mp4", "zoom"].includes(
-            media.content_type || data.item_content_type,
-          )
-        )
+        const kind =
+          media.content_type || data.item_content_type || value.content_type;
+        const timed =
+          (media.progress_support === true ||
+            media.progress_support === "true") &&
+          Number.isFinite(Number(media.duration)) &&
+          Number(media.duration) > 0;
+        const video =
+          videoTypes.has(kind) ||
+          (kind === "embed" && videoSubtypes.has(media.content_subtype)) ||
+          timed;
+        const nonVideo =
+          nonVideoTypes.has(kind) || nonVideoTypes.has(value.content_type);
+        const id = String(value.module_item_id || "");
+        if (video) {
           videoCount++;
+          row.hasVideo = true;
+          if (/^\d{1,20}$/.test(id))
+            row.mediaByItem[id] = {
+              video: true,
+              kind: videoTypes.has(kind) ? kind : "movie",
+              source_type: String(kind || "timed_media").slice(0, 64),
+            };
+        } else if (nonVideo) {
+          if (/^\d{1,20}$/.test(id)) row.mediaByItem[id] = { video: false };
+        } else if (
+          value.content_type === "attendance_item" ||
+          data.item_content_type === "commons" ||
+          data.use_attendance === true
+        ) {
+          row.unsupported = true;
+          log(
+            "Unsupported learning content type: " +
+              String(kind || "missing").slice(0, 64),
+          );
+        }
       }
       if (
         Object.entries(value).some(
           ([k, v]) =>
             /^(content_type|item_content_type|kind)$/.test(k) &&
-            ["movie", "mp4", "zoom"].includes(v),
+            videoTypes.has(v),
         )
       )
         row.hasVideo = true;
@@ -149,6 +201,7 @@
   const jsonRequest = async (url) => {
     log(`HTTP 시작 GET ${new URL(url, location.origin).pathname}`);
     const controller = new AbortController();
+    controllers.add(controller);
     const timer = setTimeout(() => controller.abort(), 20000);
     try {
       const response = await fetchOriginal(url, {
@@ -171,6 +224,7 @@
       return { response, value: parseCampusJSON(text) };
     } finally {
       clearTimeout(timer);
+      controllers.delete(controller);
     }
   };
   const list = async (path, params = {}) => {

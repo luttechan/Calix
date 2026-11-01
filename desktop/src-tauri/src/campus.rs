@@ -3,6 +3,7 @@ use std::{collections::HashSet, sync::{Mutex, atomic::{AtomicBool, AtomicU64, Or
 use tauri::{AppHandle, Emitter, Manager, Webview, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 pub const ARGS: &str = "--disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows --autoplay-policy=user-gesture-required";
+const MEDIA_RULES: &str = include_str!("../../../learning_calendar/media_types.json");
 const AGENT: &str = include_str!("../../scripts/campus-agent.js");
 const SNAPSHOT: &str = include_str!("../../scripts/campus-snapshot.js");
 
@@ -29,7 +30,7 @@ fn worker(app: &AppHandle) -> Result<WebviewWindow, String> {
     WebviewWindowBuilder::new(app, "campus-worker", WebviewUrl::External("https://canvas.bufs.ac.kr/".parse().unwrap()))
         .title("Calix 동기화").inner_size(1280.0, 900.0).visible(false).focused(false).skip_taskbar(true)
         .data_directory(directory(app)?).additional_browser_args(ARGS)
-        .initialization_script_for_all_frames(AGENT)
+        .initialization_script_for_all_frames(AGENT.replace("__CALIX_MEDIA_RULES__", MEDIA_RULES))
         .on_navigation(crate::auth::campus)
         .on_new_window(|_, _| tauri::webview::NewWindowResponse::Deny)
         .build().map_err(|e| format!("수집 브라우저를 열지 못했습니다. ({e})"))
@@ -115,10 +116,9 @@ pub async fn campus_identity(app: AppHandle, webview: Webview) -> Result<Value, 
 pub fn campus_debug(app: AppHandle, webview: Webview, enabled: bool) -> Result<(), String> {
     crate::auth::trusted(&webview, &["main"])?;
     app.state::<CampusState>().debug.store(enabled, Ordering::SeqCst);
-    if !enabled {
-        if let Some(view)=app.get_webview_window("campus-worker") {
-            let _=view.eval("(()=>{const walk=(w,n=0)=>{if(n>6)return;try{const s=w[Symbol.for('calix.campus.reader')];if(s){s.debug=false;s.logs=[];}for(const f of w.document.querySelectorAll('iframe'))if(f.contentWindow)walk(f.contentWindow,n+1);}catch{}};walk(window);})()");
-        }
+    if let Some(view)=app.get_webview_window("campus-worker") {
+        let script=format!("(()=>{{const walk=(w,n=0)=>{{if(n>6)return;try{{const s=w[Symbol.for('calix.campus.reader')];if(s){{s.debug={enabled};if(!s.debug)s.logs=[];}}for(const f of w.document.querySelectorAll('iframe'))if(f.contentWindow)walk(f.contentWindow,n+1);}}catch{{}}}};walk(window);}})()");
+        let _=view.eval(script);
     }
     Ok(())
 }
@@ -127,6 +127,10 @@ pub fn campus_debug(app: AppHandle, webview: Webview, enabled: bool) -> Result<(
 pub fn campus_cancel(app: AppHandle, webview: Webview) -> Result<(), String> {
     crate::auth::trusted(&webview, &["main"])?;
     app.state::<CampusState>().epoch.fetch_add(1, Ordering::SeqCst);
+    if let Some(view)=app.get_webview_window("campus-worker") {
+        let _=view.eval("(()=>{const walk=(w,n=0)=>{if(n>6)return;try{w[Symbol.for('calix.campus.reader')]?.cancel();for(const f of w.document.querySelectorAll('iframe'))if(f.contentWindow)walk(f.contentWindow,n+1);}catch{}};walk(window);})()");
+        let _=view.hide();
+    }
     Ok(())
 }
 
@@ -149,9 +153,12 @@ async fn course_snapshot(app: &AppHandle, view: &WebviewWindow, owner: &str, cou
         current(app, epoch)?;
         if Instant::now() > deadline { return Err("COURSE_CONTENT_TIMEOUT".into()); }
         if view.url().ok().and_then(|u|u.host_str().map(str::to_owned)).is_some_and(|host|host!="canvas.bufs.ac.kr") { return Err("AUTH_REQUIRED".into()); }
-        let script = format!(r#"(()=>{{try{{const snapshot=JSON.parse({SNAPSHOT});let network=null,viewport={{width:innerWidth,height:innerHeight,hidden:document.hidden}};const scan=(d,n=0)=>{{if(n>6)return;const root=d.querySelector('#root[data-canvas_course_id]');if(root&&root.getAttribute('data-canvas_course_id')==={course_id}){{const w=d.defaultView;if(w[Symbol.for('calix.campus.reader')])w[Symbol.for('calix.campus.reader')].debug={debug};network=w[Symbol.for('calix.campus.reader')]?.courses[{course_id}]||null;viewport={{width:w.innerWidth,height:w.innerHeight,hidden:d.hidden}};}}for(const f of d.querySelectorAll('iframe')){{try{{if(f.contentDocument)scan(f.contentDocument,n+1)}}catch{{}}}}}};scan(document);return {{snapshot,network,viewport}};}}catch{{return {{error:'SNAPSHOT_FAILED'}};}}}})()"#, course_id=json!(course.to_string()),debug=app.state::<CampusState>().debug.load(Ordering::SeqCst));
+        let script = format!(r#"(()=>{{try{{const snapshot=JSON.parse({SNAPSHOT});let network=null,logs=[],viewport={{width:innerWidth,height:innerHeight,hidden:document.hidden}};const scan=(d,n=0)=>{{if(n>6)return;const root=d.querySelector('#root[data-canvas_course_id]');if(root&&root.getAttribute('data-canvas_course_id')==={course_id}){{const w=d.defaultView;if(w[Symbol.for('calix.campus.reader')])w[Symbol.for('calix.campus.reader')].debug={debug};network=w[Symbol.for('calix.campus.reader')]?.courses[{course_id}]||null;if({debug})logs.push(...(w[Symbol.for('calix.campus.reader')]?.logs.splice(0)||[]));viewport={{width:w.innerWidth,height:w.innerHeight,hidden:d.hidden}};}}for(const f of d.querySelectorAll('iframe')){{try{{if(f.contentDocument)scan(f.contentDocument,n+1)}}catch{{}}}}}};scan(document);return {{snapshot,network,viewport,logs}};}}catch{{return {{error:'SNAPSHOT_FAILED'}};}}}})()"#, course_id=json!(course.to_string()),debug=app.state::<CampusState>().debug.load(Ordering::SeqCst));
         let value = evaluate(view, script).await?;
         if value.get("error").is_some() { return Err("SNAPSHOT_FAILED".into()); }
+        if app.state::<CampusState>().debug.load(Ordering::SeqCst) {
+            if let Some(logs)=value["logs"].as_array() { for log in logs { if let Some(message)=log.as_str() { let _=app.emit_to("main","campus:diagnostic",json!({"message":message})); } } }
+        }
         let snap = &value["snapshot"];
         if value["viewport"]["width"].as_u64().unwrap_or(0) == 0 || value["viewport"]["height"].as_u64().unwrap_or(0) == 0 || (!shown && value["viewport"]["hidden"]==true && started.elapsed()>=Duration::from_secs(3)) {
             if !shown { view.show().map_err(|_| "COLLECTION_VIEWPORT_ZERO")?; shown = true; }
@@ -168,6 +175,8 @@ async fn course_snapshot(app: &AppHandle, view: &WebviewWindow, owner: &str, cou
             let network = &value["network"];
             let items = snap["items"].as_array().ok_or("INVALID_VIDEO_LIST")?;
             let loaded = network["modules"] == true && network["lessons"] == true && network["pending"].as_u64() == Some(0) && network["failed"] != true;
+            if network["failed"] == true && network["pending"].as_u64() == Some(0) { return Err("COURSE_RESPONSE_FAILED".into()); }
+            if loaded && (network["unsupported"] == true || snap["unsupported_items"].as_u64().unwrap_or(0) > 0) { return Err("UNSUPPORTED_LEARNING_CONTENT".into()); }
             let allowed_empty = !items.is_empty() || network["hasVideo"] == false;
             let complete_count = items.len() as u64 >= network["videoCount"].as_u64().unwrap_or(0);
             if loaded && allowed_empty && complete_count {

@@ -99,6 +99,7 @@ def main():
             self.collector = None
             self.restore_token = None
             self.pending_sync = False
+            self.restart_sync = False
             self.logged_in = False
             self.closing = False
             self.closed = False
@@ -117,7 +118,9 @@ def main():
         def publish_busy(self):
             if self.closing:
                 return
-            busy = bool(self.task or self.collector or self.pending_sync)
+            busy = bool(
+                self.task or self.collector or self.pending_sync or self.restart_sync
+            )
             if busy != self.reported_busy:
                 self.reported_busy = busy
                 self.notify("sync-state", busy=busy)
@@ -148,10 +151,6 @@ def main():
                 ) and (self.task or self.collector):
                     raise ValueError("동기화가 끝난 뒤 로그인 상태를 변경하세요.")
                 if method == "diagnostics.enable":
-                    if params.get("enabled") is True and (
-                        self.task or self.collector or self.pending_sync
-                    ):
-                        raise ValueError("로그 수집을 먼저 켠 뒤 동기화하세요.")
                     result = diagnostics.set_enabled(params.get("enabled"))
 
                 elif method == "diagnostics.record":
@@ -165,10 +164,20 @@ def main():
                 elif method == "engine.state":
                     result = dict(
                         loggedIn=self.logged_in,
-                        busy=bool(self.task or self.collector or self.pending_sync),
+                        busy=bool(
+                            self.task
+                            or self.collector
+                            or self.pending_sync
+                            or self.restart_sync
+                        ),
                     )
                 elif method == "browser.restore.begin":
-                    if self.task or self.collector or self.pending_sync:
+                    if (
+                        self.task
+                        or self.collector
+                        or self.pending_sync
+                        or self.restart_sync
+                    ):
                         raise ValueError("진행 중인 작업을 마친 뒤 확인하세요.")
                     self.restore_token = secrets.token_hex(16)
                     result = self.restore_token
@@ -221,6 +230,22 @@ def main():
                 elif method == "login":
                     self.notify("auth-required")
                     result = True
+                elif method == "sync.cancel":
+                    self.stop_sync()
+                    result = True
+                elif method == "sync.force":
+                    self.stop_sync(restart=True)
+                    result = True
+                elif method == "sync.request":
+                    busy = bool(
+                        self.task
+                        or self.collector
+                        or self.pending_sync
+                        or self.restart_sync
+                    )
+                    if not busy:
+                        self.sync()
+                    result = dict(alreadyRunning=busy)
                 elif method == "sync":
                     self.sync()
                     result = True
@@ -335,7 +360,7 @@ def main():
 
         def sync(self):
             diagnostics.add("동기화 요청")
-            if self.task or self.collector or self.pending_sync:
+            if self.task or self.collector or self.pending_sync or self.restart_sync:
                 raise ValueError("동기화 중입니다.")
             if not self.logged_in:
                 self.pending_sync = True
@@ -343,6 +368,30 @@ def main():
                     self.notify("auth-required")
                 return
             self.start_collector()
+
+        def stop_sync(self, restart=False):
+            self.restart_sync = restart
+            self.restore_token = None
+            self.pending_sync = False
+            if self.collector:
+                run = self.collector
+                self.collector = None
+                self.collection_timer.stop()
+                self.notify("browser-cancel", runId=run)
+            if self.task:
+                self.task.cancel()
+            self.notify(
+                "sync-progress",
+                message=(
+                    "Force Synchronizing: aborting active run; collector restart queued."
+                    if restart
+                    else "동기화를 중단했습니다."
+                ),
+            )
+            if restart and not self.task:
+                self.restart_sync = False
+                self.sync()
+            self.publish_busy()
 
         def start_collector(self):
             self.collector = secrets.token_hex(16)
@@ -422,6 +471,9 @@ def main():
             task, self.task = self.task, None
             if task:
                 task.deleteLater()
+            if self.restart_sync and not self.closing:
+                self.restart_sync = False
+                self.sync()
             self.publish_busy()
             if self.closing:
                 self.finish_shutdown()
@@ -430,6 +482,7 @@ def main():
             if self.closing:
                 return
             self.closing = True
+            self.restart_sync = False
             self.restore_token = None
             if self.input:
                 self.input.stop()

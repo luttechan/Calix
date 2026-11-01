@@ -27,13 +27,18 @@ export function subscribe(
 }
 let browserEvents: Promise<unknown> | null = null;
 let diagnosticEvents: Promise<unknown> | null = null;
+let browserBarrier: Promise<unknown> = Promise.resolve();
 function browserMessage(message: Record<string, unknown>) {
   if (message.event === "browser-collect") {
     const runId = String(message.runId);
     const peer = generation;
-    void invoke("campus_collect", { runId })
+    void browserBarrier
+      .then(() => {
+        if (stopping || generation !== peer) return undefined;
+        return invoke("campus_collect", { runId });
+      })
       .then((payload) => {
-        if (stopping || generation !== peer) return;
+        if (stopping || generation !== peer || payload === undefined) return;
         return rpc("browser.complete", { runId, payload });
       })
       .catch((error) => {
@@ -49,7 +54,9 @@ function browserMessage(message: Record<string, unknown>) {
       });
   }
   if (message.event === "browser-cancel")
-    void invoke("campus_cancel").catch(() => {});
+    browserBarrier = browserBarrier
+      .then(() => invoke("campus_cancel"))
+      .catch(() => {});
 }
 function failAll(message: string) {
   for (const request of pending.values()) {

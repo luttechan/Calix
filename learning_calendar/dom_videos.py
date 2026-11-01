@@ -4,8 +4,10 @@ from datetime import datetime
 from urllib.parse import urlsplit
 from .models import Course,Event,KST
 from .parsers import CollectedEvents,safe_url,record_event
+from .media_types import MEDIA_RULES_JSON, VIDEO_KINDS
 
 SNAPSHOT_SCRIPT=r'''JSON.stringify((()=>{
+ const rules=__CALIX_MEDIA_RULES__;
  const allowed=d=>{try{const u=new URL(d.URL);return u.protocol==='https:'&&u.hostname==='canvas.bufs.ac.kr'&&(!u.port||u.port==='443');}catch(e){return false;}};
  const docs=[];const walk=(d,depth)=>{if(depth>6||!allowed(d))return;docs.push(d);for(const f of d.querySelectorAll('iframe')){try{if(f.contentDocument)walk(f.contentDocument,depth+1);}catch(e){}}};walk(document,0);
  for(const d of docs){
@@ -17,13 +19,17 @@ SNAPSHOT_SCRIPT=r'''JSON.stringify((()=>{
   const expected=builder.querySelectorAll('.xnmb-link-container .xnmb-link').length;
   if(!weeks.length||weeks.length<expected)return {state:'loading'};
   const text=(el,selector)=>{const n=el.querySelector(selector);return n?n.textContent.trim():'';};
-  const rows=[];
-  for(const meta of builder.querySelectorAll('.xnmb-module_item-meta_data-wrapper')){
-   const item=meta.closest('.xnmb-module_item-wrapper');if(!item)continue;
+  const rows=[];let unsupported=0;
+  const observed=d.defaultView[Symbol.for('calix.campus.reader')]?.courses[root.getAttribute('data-canvas_course_id')]?.mediaByItem||{};
+  for(const item of builder.querySelectorAll('.xnmb-module_item-wrapper')){
+   const meta=item.querySelector('.xnmb-module_item-meta_data-wrapper')||item;
    const icon=item.querySelector('.xnmb-module_item-icon');
-   const kind=icon?['movie','mp4','zoom','file','pdf','assignment'].find(k=>icon.classList.contains(k)):null;
-   if(!['movie','mp4','zoom'].includes(kind))continue;
    const a=meta.querySelector('a.xnmb-module_item-left-title.link');
+   const id=a?(a.getAttribute('href')||'').match(/\/modules\/items\/(\d+)(?:[?#]|$)/)?.[1]:null;
+   const api=id?observed[id]:null;
+   if(api?.video===false)continue;
+   const kind=api?.video?api.kind:icon?rules.video.find(k=>icon.classList.contains(k)):null;
+   if(!kind){if((a||icon)&&(!icon||!rules.non_video.some(k=>icon.classList.contains(k))))unsupported++;continue;}
    const done=item.querySelector('.xnmb-module_item-completed');
    const attendance=meta.querySelector('.xnmb-module_item-meta_data-attendance_status');
    rows.push({title:a?a.textContent.trim():'',url:a?a.getAttribute('href'):'',kind,
@@ -34,11 +40,11 @@ SNAPSHOT_SCRIPT=r'''JSON.stringify((()=>{
     completed:done?(done.classList.contains('completed')?true:done.classList.contains('incomplete')?false:null):null,
     attendance:attendance?['attendance','late','excused','absent','none'].find(k=>attendance.classList.contains(k))||'':''});
   }
-  return {state:'ready',course_id:root.getAttribute('data-canvas_course_id'),owner:root.getAttribute('data-user_id')||'',name:root.getAttribute('data-course_name')||'',term:root.getAttribute('data-term')||'',weeks:weeks.length,expected,items:rows};
+  return {state:'ready',course_id:root.getAttribute('data-canvas_course_id'),owner:root.getAttribute('data-user_id')||'',name:root.getAttribute('data-course_name')||'',term:root.getAttribute('data-term')||'',weeks:weeks.length,expected,unsupported_items:unsupported,items:rows};
  }
  for(const d of docs){for(const a of d.querySelectorAll('a[href]')){if(/주차학습|학습콘텐츠|강의콘텐츠|LearningX/i.test(a.textContent)){const u=new URL(a.getAttribute('href'),d.URL);if(u.protocol==='https:'&&u.hostname==='canvas.bufs.ac.kr'&&(!u.port||u.port==='443')&&/\/external_tools\//.test(u.pathname))return {state:'navigate',url:u.href};}}}
  return {state:'loading'};
-})())'''
+})())'''.replace('__CALIX_MEDIA_RULES__',MEDIA_RULES_JSON)
 
 
 def screen_date(value,year):
@@ -60,6 +66,8 @@ def parse_screen(course,snapshot):
     term=snapshot.get('term','');year=re.search(r'\b(20\d{2})(?:년|학년도)',term) if isinstance(term,str) else None
     if not year and isinstance(snapshot.get('name'),str):year=re.search(r'\b(20\d{2})\b',snapshot['name'])
     if not year:raise ValueError('강의 연도를 확인하지 못했습니다.')
+    unsupported=snapshot.get('unsupported_items',0)
+    if type(unsupported) is not int or unsupported!=0:raise ValueError('지원하지 않는 학습자료 형식이 있습니다. 기존 영상을 유지합니다.')
     items=snapshot.get('items')
     if not isinstance(items,list) or len(items)>10000:raise ValueError('영상 목록 형식이 올바르지 않습니다.')
     weeks=snapshot.get('weeks');expected=snapshot.get('expected')
@@ -68,7 +76,7 @@ def parse_screen(course,snapshot):
     events={};blocked=set();complete=True
     for row in items:
         try:
-            if not isinstance(row,dict) or row.get('kind') not in ('movie','mp4','zoom'):raise ValueError('영상 형식 오류')
+            if not isinstance(row,dict) or row.get('kind') not in VIDEO_KINDS:raise ValueError('영상 형식 오류')
             url=safe_url(row.get('url'));match=re.fullmatch(rf'/courses/{course.id}/modules/items/(\d+)',urlsplit(url).path)
             title=row.get('title');week=row.get('week','')
             if not match or not isinstance(title,str) or not title.strip() or len(title)>1000 or not isinstance(week,str):raise ValueError('영상 정보 오류')

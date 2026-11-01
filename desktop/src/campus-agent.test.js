@@ -5,8 +5,18 @@ import { expect, test, vi } from "vitest";
 const script = readFileSync(
   new URL("../scripts/campus-agent.js", import.meta.url),
   "utf8",
+).replace(
+  "__CALIX_MEDIA_RULES__",
+  readFileSync(
+    new URL("../../learning_calendar/media_types.json", import.meta.url),
+    "utf8",
+  ),
 );
-function browser(prefix = "while(1);", invalid = null) {
+function browser(
+  prefix = "while(1);",
+  invalid = null,
+  media = { content_type: "movie" },
+) {
   class XHR {
     callbacks = [];
     open() {}
@@ -43,7 +53,18 @@ function browser(prefix = "while(1);", invalid = null) {
     else
       value = {
         modules: [
-          { content_data: { item_content_data: { content_type: "movie" } } },
+          {
+            module_items: [
+              {
+                module_item_id: 11,
+                content_type: "attendance_item",
+                content_data: {
+                  item_content_type: "commons",
+                  item_content_data: media,
+                },
+              },
+            ],
+          },
         ],
       };
     return new Response(
@@ -72,7 +93,7 @@ function browser(prefix = "while(1);", invalid = null) {
     await vi.waitFor(() => expect(state.jobs[id].status).not.toBe("pending"));
     return state.jobs[id];
   };
-  return { window, context, state, job, XHR };
+  return { window, context, state, job, XHR, fetch };
 }
 
 test.each(["", "while(1);", "\uFEFF \nwhile ( 1 ) ;\n"])(
@@ -119,3 +140,101 @@ test.each([
     expect(context.executed).toBeUndefined();
   },
 );
+
+const compatibleTypes = [
+  "movie",
+  "ssz",
+  "syncthink",
+  "estage",
+  "xenoglobal",
+  "oncast",
+  "screenlecture",
+  "lecturecam",
+  "readystream",
+  "webstudio",
+  "everlec",
+  "movie360",
+  "mp4",
+  "zoom",
+  "audio",
+  "youtube",
+  "remix",
+  "metaverse_conference",
+  "video_conference",
+  "external_youtube",
+  "external_video",
+];
+test.each(compatibleTypes)(
+  "학교 플레이어 영상 유형 %s를 인식한다",
+  async (content_type) => {
+    const { window, state } = browser("while(1);", null, { content_type });
+    await window.fetch("/learningx/api/v1/courses/1/modules");
+    await vi.waitFor(() => expect(state.courses[1].pending).toBe(0));
+    expect(state.courses[1]).toMatchObject({
+      hasVideo: true,
+      videoCount: 1,
+      unsupported: false,
+    });
+    expect(state.courses[1].mediaByItem[11]).toMatchObject({
+      video: true,
+      kind: content_type,
+    });
+  },
+);
+test("새로운 재생형 자료는 진도 지원과 재생 시간으로 인식한다", async () => {
+  const { window, state } = browser("", null, {
+    content_type: "future_player",
+    progress_support: true,
+    duration: 123.5,
+  });
+  await window.fetch("/learningx/api/v1/courses/1/modules");
+  await vi.waitFor(() => expect(state.courses[1].pending).toBe(0));
+  expect(state.courses[1]).toMatchObject({
+    hasVideo: true,
+    videoCount: 1,
+    unsupported: false,
+  });
+  expect(state.courses[1].mediaByItem[11]).toMatchObject({
+    video: true,
+    kind: "movie",
+    source_type: "future_player",
+  });
+});
+test("판별 불가능한 자료를 영상 없는 과목으로 확정하지 않는다", async () => {
+  const { window, state } = browser("", null, {
+    content_type: "unknown_learning_content",
+  });
+  await window.fetch("/learningx/api/v1/courses/1/modules");
+  await vi.waitFor(() => expect(state.courses[1].pending).toBe(0));
+  expect(state.courses[1].unsupported).toBe(true);
+});
+test("일반 파일은 영상이나 미지원 영상으로 오인하지 않는다", async () => {
+  const { window, state } = browser("", null, { content_type: "pdf" });
+  await window.fetch("/learningx/api/v1/courses/1/modules");
+  await vi.waitFor(() => expect(state.courses[1].pending).toBe(0));
+  expect(state.courses[1]).toMatchObject({
+    hasVideo: false,
+    videoCount: 0,
+    unsupported: false,
+  });
+});
+test("중단 시 진행 중인 API 요청을 취소하고 늦은 완료를 폐기한다", async () => {
+  const { state, fetch } = browser();
+  fetch.mockImplementation(
+    (_url, options) =>
+      new Promise((_resolve, reject) =>
+        options.signal.addEventListener(
+          "abort",
+          () => reject(Error("ABORTED")),
+          { once: true },
+        ),
+      ),
+  );
+  state.start("cancelled", "identity", null);
+  await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
+  const signal = fetch.mock.calls[0][1].signal;
+  state.cancel();
+  expect(signal.aborted).toBe(true);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(Object.keys(state.jobs)).toHaveLength(0);
+});

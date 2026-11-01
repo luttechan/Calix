@@ -5,6 +5,24 @@ use tauri::tray::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState}
 mod auth;
 mod campus;
 
+#[derive(Default)]
+pub struct DeveloperState(pub std::sync::atomic::AtomicBool);
+
+pub fn focus_developer(app: &tauri::AppHandle) {
+    if app.state::<DeveloperState>().0.load(std::sync::atomic::Ordering::SeqCst) {
+        if let Some(window)=app.get_webview_window("main") { let _=window.set_always_on_top(true);let _=window.unminimize();let _=window.show();let _=window.set_focus(); }
+    }
+}
+#[tauri::command]
+fn developer_console(app: tauri::AppHandle, webview: tauri::Webview, open: bool) -> Result<(),String> {
+    auth::trusted(&webview,&["main"])?;
+    app.state::<DeveloperState>().0.store(open,std::sync::atomic::Ordering::SeqCst);
+    if let Some(window)=app.get_webview_window("main") { window.set_always_on_top(open).map_err(|_|"콘솔 창 우선순위를 적용하지 못했습니다.")?; }
+    if let Some(window)=app.get_webview_window("login") { let _=window.set_always_on_top(!open); }
+    focus_developer(&app);
+    Ok(())
+}
+
 #[tauri::command]
 fn quit_app(app: tauri::AppHandle, webview: tauri::Webview) -> Result<(), String> { auth::trusted(&webview, &["main"])?;app.exit(0);Ok(()) }
 #[tauri::command]
@@ -15,7 +33,7 @@ fn restart_app(app: tauri::AppHandle, webview: tauri::Webview) -> Result<(), Str
 #[tauri::command]
 fn app_ready(app: tauri::AppHandle, webview: tauri::Webview) -> Result<(), String> {
     auth::trusted(&webview, &["main"])?;
-    if let Some(window) = app.get_webview_window("main") { let _ = window.set_always_on_top(false); }
+    if let Some(window) = app.get_webview_window("main") { let _ = window.set_always_on_top(app.state::<DeveloperState>().0.load(std::sync::atomic::Ordering::SeqCst)); }
     Ok(())
 }
 
@@ -33,10 +51,11 @@ fn main() {
     let check_mode = check.is_some();
     let builder = tauri::Builder::default()
         .manage(campus::CampusState::default())
+        .manage(DeveloperState::default())
         .manage(auth::AuthGate(std::sync::Mutex::new(())))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![campus::campus_identity, campus::campus_collect, campus::campus_cancel, campus::campus_debug, quit_app, restart_app, app_ready, auth::auth_open, auth::auth_mount, auth::auth_complete, auth::auth_status, auth::auth_reload, auth::auth_logout, auth::backup_file])
+        .invoke_handler(tauri::generate_handler![developer_console, campus::campus_identity, campus::campus_collect, campus::campus_cancel, campus::campus_debug, quit_app, restart_app, app_ready, auth::auth_open, auth::auth_mount, auth::auth_complete, auth::auth_status, auth::auth_reload, auth::auth_logout, auth::backup_file])
         .setup(move |app| {
             if let Some(path) = check.clone() {
                 let handle=app.handle().clone();

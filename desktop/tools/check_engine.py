@@ -49,10 +49,14 @@ def check(exe):
         "engine_webview",
         "engine_diagnostics",
         "learning_calendar.dom_videos",
+        "learning_calendar.media_types",
         "learning_calendar.worker",
         "learning_calendar.sync",
     ):
         assert required in modules, required
+    assert (
+        exe.parent / "_internal/learning_calendar/media_types.json"
+    ).read_bytes() == (ROOT / "learning_calendar/media_types.json").read_bytes()
     assert signature(marshal.loads(archive.extract("engine_main"))) == signature(
         compile((ROOT / "desktop/engine_main.py").read_bytes(), "engine_main", "exec")
     )
@@ -75,7 +79,7 @@ def check(exe):
         responses = [json.loads(line) for line in completed.stdout.splitlines()]
         assert (
             next(r for r in responses if r.get("id") == 1)["result"]["version"]
-            == "1.5.2"
+            == "1.5.3"
         )
         assert (
             next(r for r in responses if r.get("id") == 2)["result"]["initialized"]

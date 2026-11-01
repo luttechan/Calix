@@ -30,6 +30,7 @@ pub async fn auth_open(app: AppHandle, webview: Webview, theme: Option<String>, 
         window.show().map_err(|_| "로그인 창을 표시하지 못했습니다.")?;
         window.set_focus().map_err(|_| "로그인 창을 표시하지 못했습니다.")?;
         let _ = app.emit_to("login", "auth:theme", json!({"theme":theme,"font":font}));
+        crate::focus_developer(&app);
         return Ok(());
     }
     let theme = theme.filter(|t| ["pink","sky","mint","purple","dark"].contains(&t.as_str())).unwrap_or("pink".into());
@@ -37,8 +38,9 @@ pub async fn auth_open(app: AppHandle, webview: Webview, theme: Option<String>, 
     let page = format!("login.html?theme={theme}&font={font}");
     WebviewWindowBuilder::new(&app, "login", WebviewUrl::App(page.into()))
         .title("Calix 로그인").inner_size(1040.0, 780.0).min_inner_size(820.0, 600.0)
-        .decorations(false).always_on_top(true).center().build()
+        .decorations(false).always_on_top(!app.state::<crate::DeveloperState>().0.load(std::sync::atomic::Ordering::SeqCst)).center().build()
         .map_err(|error| format!("로그인 창을 열지 못했습니다. ({error})"))?;
+    crate::focus_developer(&app);
     Ok(())
 }
 
@@ -56,6 +58,7 @@ pub async fn auth_mount(app: AppHandle, webview: Webview, bounds: Bounds) -> Res
     if let Some(child) = app.get_webview("school-login") {
         child.set_bounds(rect).map_err(|_| "로그인 화면 크기를 적용하지 못했습니다.")?;
         child.show().map_err(|_| "로그인 화면을 표시하지 못했습니다.")?;
+        crate::focus_developer(&app);
         return Ok(());
     }
     let window = app.get_window("login").ok_or("로그인 창이 닫혔습니다.")?;
@@ -79,6 +82,7 @@ pub async fn auth_mount(app: AppHandle, webview: Webview, bounds: Bounds) -> Res
         });
     window.add_child(builder, LogicalPosition::new(bounds.x,bounds.y), LogicalSize::new(bounds.width,bounds.height))
         .map_err(|error| format!("학교 로그인 화면을 열지 못했습니다. ({error})"))?;
+    crate::focus_developer(&app);
     Ok(())
 }
 

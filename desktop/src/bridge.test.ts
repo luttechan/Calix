@@ -188,3 +188,35 @@ test("a stale browser result cannot restart a failed backend", async () => {
   expect(mock.commands.length).toBe(1);
   expect(command.writes.length).toBe(1);
 });
+
+test("forced collection waits for native cancellation to finish", async () => {
+  const { command } = await boot();
+  let cancelled: () => void = () => {};
+  mock.invoke.mockImplementation((name: string) =>
+    name === "campus_cancel"
+      ? new Promise<void>((resolve) => {
+          cancelled = resolve;
+        })
+      : Promise.resolve(undefined),
+  );
+  command.handlers.stdout(
+    JSON.stringify({ event: "browser-cancel", runId: "a".repeat(32) }),
+  );
+  command.handlers.stdout(
+    JSON.stringify({ event: "browser-collect", runId: "b".repeat(32) }),
+  );
+  await vi.waitFor(() =>
+    expect(mock.invoke).toHaveBeenCalledWith("campus_cancel"),
+  );
+  expect(mock.invoke).not.toHaveBeenCalledWith(
+    "campus_collect",
+    expect.anything(),
+  );
+  cancelled();
+  await vi.waitFor(() =>
+    expect(mock.invoke).toHaveBeenCalledWith("campus_collect", {
+      runId: "b".repeat(32),
+    }),
+  );
+  command.handlers.close();
+});
