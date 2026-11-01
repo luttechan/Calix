@@ -2491,65 +2491,88 @@ label textarea {
   position: sticky;
   bottom: 0;
   z-index: 3;
-  margin-top: 14px;
-  padding: 16px 18px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  margin-top: 12px;
+  padding: 10px 14px;
   background: var(--surface);
-  box-shadow: 0 -8px 28px #25152e12;
+  box-shadow: 0 -5px 20px #25152e10;
 }
 .online-courses > header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  gap: 9px;
+  white-space: nowrap;
+  font-size: 12px;
 }
 .online-courses > header > span {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 7px;
 }
 .online-courses > header small {
   color: var(--muted);
+  font-size: 10px;
 }
 .online-course-list {
   display: flex;
-  gap: 10px;
-  overflow: auto;
-  padding-bottom: 3px;
-  max-height: 155px;
+  min-width: 0;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
 }
 .online-course {
-  flex: 0 0 235px;
-  min-width: 0;
-  text-align: left;
   display: flex;
-  flex-direction: column;
-  gap: 7px;
-  padding: 12px 14px;
+  flex: 0 0 350px;
+  min-width: 0;
+  align-items: center;
+  text-align: left;
+  gap: 10px;
+  height: 44px;
+  padding: 7px 11px;
   border: 1px solid color-mix(in srgb, var(--course-color) 35%, var(--line));
-  border-left: 4px solid var(--course-color);
-  border-radius: 13px;
+  border-left: 3px solid var(--course-color);
+  border-radius: 11px;
   background: color-mix(in srgb, var(--course-color) 8%, var(--surface));
 }
 .online-course-title {
   display: flex;
+  flex: 1;
+  min-width: 0;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  width: 100%;
+}
+.online-course-title svg {
+  display: none;
 }
 .online-course-title strong {
-  white-space: normal;
-  overflow-wrap: anywhere;
-  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.4;
+  font-size: 12px;
 }
-.online-course small {
+.online-course > small {
+  flex: 0 1 60px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--muted);
+  font-size: 11px;
 }
 .online-course .session-work {
   display: flex;
-  gap: 7px;
-  flex-wrap: wrap;
-  font-size: 11px;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  gap: 5px;
+  white-space: nowrap;
+  font-size: 10px;
+  margin: 0;
+  align-self: center;
+  align-items: center;
 }
 .online-toggle {
   display: flex !important;
@@ -2616,10 +2639,7 @@ label textarea {
 }
 
 .timetable-panel.with-online {
-  max-height: max(180px, calc(100dvh - 450px));
-}
-.online-course {
-  align-items: stretch;
+  max-height: max(180px, calc(100dvh - 330px));
 }
 .online-course .session-work {
   justify-content: flex-start;

@@ -29,7 +29,7 @@ export function TimetablePage() {
   const { panel, unit, height } = useTimetableScale(
     start,
     end,
-    online.length ? 210 : 0,
+    online.length ? 95 : 0,
   );
   const workloads = useMemo(() => {
     const counts = new Map<number, { assignment: number; movie: number }>();
@@ -211,7 +211,9 @@ export function TimetablePage() {
                   <strong>{name(s)}</strong>
                   <ArrowUpRight size={15} />
                 </span>
-                {s.professor && <small>{s.professor}</small>}
+                {s.professor && (
+                  <small title={s.professor}>{s.professor}</small>
+                )}
                 {work(s)}
               </button>
             ))}
