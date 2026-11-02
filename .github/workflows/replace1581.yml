@@ -1,0 +1,67 @@
+name: Replace Calix 1.5.81
+on:
+  push:
+    branches: ['codex/calix1581-replace']
+    paths: ['.github/workflows/replace1581.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: replace-calix-1581
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE: de350be7912929bb70b104586b78dd7849e275a2
+      BUILD: de350be7912929bb70b104586b78dd7849e275a2
+    steps:
+      - name: Verify source and validated build
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api repos/luttechan/Calix/git/ref/heads/main --jq .object.sha)" = "$SOURCE"
+          test "$(gh api repos/luttechan/Calix/git/commits/$SOURCE --jq .tree.sha)" = "$(gh api repos/luttechan/Calix/git/commits/$BUILD --jq .tree.sha)"
+          gh api repos/luttechan/Calix/actions/runs/41409510451 > run.json
+          jq -e --arg sha "$BUILD" '.conclusion == "success" and .head_sha == $sha and .head_repository.full_name == "luttechan/Calix"' run.json
+          gh api repos/luttechan/Calix/actions/artifacts/13125670850 > artifact.json
+          jq -e --arg sha "$BUILD" '.expired == false and .workflow_run.head_sha == $sha and .digest == "sha256:2b94a0a52923283eb3cf4b3217e79a237391c364c24e1f171ab63d85903fe2e2"' artifact.json
+      - name: Download and verify packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download 41409510451 --repo luttechan/Calix --name Calix-1.5.81-development-Windows-x64 --dir packages
+          cd packages
+          test "$(find . -maxdepth 1 -type f | wc -l)" -eq 3
+          echo '5c5bb9dc1db2d971d35d7afa42794705280e7a0b30bd6cc5c32853ce05b3fe60  Calix-1.5.81-Setup-x64.exe' | sha256sum --check --strict
+          echo '1fb416ed7c0a8e43df18d6ed6c16142d1134a2ebb5e03aac4c07c173d808a1a1  Calix-1.5.81-Windows-x64.zip' | sha256sum --check --strict
+          sha256sum --check --strict SHA256SUMS.txt
+      - name: Replace existing release
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api repos/luttechan/Calix/releases/tags/v1.5.81 > previous.json
+          jq -e '.id == 431176497 and (.assets | length == 3)' previous.json
+          previous=$(gh api repos/luttechan/Calix/git/ref/tags/v1.5.81 --jq .object.sha)
+          test "$previous" = e059a08c0316a6511057ccf5891f98335cf1759c || test "$previous" = "$SOURCE"
+          cat > notes.md <<'NOTES'
+          - Dev 도구 활성화 전 접근·실행 차단
+          - 활성화 위험 경고 및 해제 시 콘솔·로그 중단
+          - DB 무결성 검사, 동기화 캐시 초기화, DB 최적화
+          - Canvas 모듈 수집과 시작 업데이트 알림
+          - Lutein Studio 크레딧과 실행 파일 정보
+          NOTES
+          gh release edit v1.5.81 --repo luttechan/Calix --draft=true
+          gh api -X PATCH repos/luttechan/Calix/git/refs/tags/v1.5.81 -f sha="$SOURCE" -F force=true
+          gh release upload v1.5.81 --repo luttechan/Calix --clobber packages/Calix-1.5.81-Setup-x64.exe packages/Calix-1.5.81-Windows-x64.zip packages/SHA256SUMS.txt
+          gh api repos/luttechan/Calix/releases/431176497 > published.json
+          jq -e '.assets | length == 3' published.json
+          jq -e 'any(.assets[]; .name == "Calix-1.5.81-Setup-x64.exe" and .digest == "sha256:5c5bb9dc1db2d971d35d7afa42794705280e7a0b30bd6cc5c32853ce05b3fe60")' published.json
+          jq -e 'any(.assets[]; .name == "Calix-1.5.81-Windows-x64.zip" and .digest == "sha256:1fb416ed7c0a8e43df18d6ed6c16142d1134a2ebb5e03aac4c07c173d808a1a1")' published.json
+          test "$(gh api repos/luttechan/Calix/git/ref/tags/v1.5.81 --jq .object.sha)" = "$SOURCE"
+          gh release edit v1.5.81 --repo luttechan/Calix --target "$SOURCE" --title 'Calix 1.5.81' --notes-file notes.md --draft=false --latest
