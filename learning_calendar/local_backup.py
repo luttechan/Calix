@@ -35,7 +35,8 @@ def write_backup(path, store, folder):
 
     payload = dict(
         format="Calix personal backup",
-        version=5,
+        version=6,
+        focus_sessions=_rows(store.db, "SELECT id,day,seconds FROM focus_sessions"),
         schedule=schedule,
         checklist=backup_state(store),
         journals=[],
@@ -149,8 +150,21 @@ def read_backup(path, owner=""):
             value = json.loads(archive.read(files[0]))
         if value.get("format") != "Calix personal backup" or value.get(
             "version"
-        ) not in (1, 2, 3, 4, 5):
+        ) not in (1, 2, 3, 4, 5, 6):
             raise ValueError("지원하지 않는 백업입니다.")
+        focus_ids = set()
+        for row in _list(value.get("focus_sessions", []), 100000):
+            identifier = _string(row.get("id"), 64, False)
+            if (
+                re.fullmatch(r"[a-f0-9]{32}(?:\d{4}-\d{2}-\d{2})?", identifier) is None
+                or identifier in focus_ids
+            ):
+                raise ValueError("집중 기록을 확인하세요.")
+            focus_ids.add(identifier)
+            day = _string(row.get("day"), 10, False)
+            if date.fromisoformat(day).isoformat() != day:
+                raise ValueError("집중 기록의 날짜를 확인하세요.")
+            _integer(row.get("seconds"), 0, 86400)
         if value["version"] >= 4 or "checklist" in value:
             from .checklist_store import validate_state
 
@@ -403,6 +417,15 @@ def restore_backup(value, store, folder):
                             ("canvas_user_id", schedule["owner"]),
                         )
                     db.execute("DELETE FROM events WHERE manual=1")
+                    if "focus_sessions" in value:
+                        db.execute("DELETE FROM focus_sessions")
+                        db.executemany(
+                            "INSERT INTO focus_sessions(id,day,seconds) VALUES(?,?,?)",
+                            [
+                                (r["id"], r["day"], r["seconds"])
+                                for r in value["focus_sessions"]
+                            ],
+                        )
                     db.execute("DELETE FROM event_types")
                     db.execute("DELETE FROM timetable")
                     for row in schedule["courses"]:

@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { Check, RefreshCw, TriangleAlert, X } from "lucide-react";
-import { subscribe } from "./bridge";
+import { playSyncCue } from "./syncCue";
+import { rpc, subscribe } from "./bridge";
 import { syncNoticeState, type SyncNoticeState } from "./syncNoticeState";
 
 export const SyncNotice = memo(function SyncNotice({
@@ -14,45 +15,40 @@ export const SyncNotice = memo(function SyncNotice({
     [visible, setVisible] = useState(false),
     [leaving, setLeaving] = useState(false);
   const [details, setDetails] = useState(false);
-  const reminderSoundAt = useRef(0);
+  const cue = useRef<(() => void) | null>(null);
   const latest = useRef<SyncNoticeState | null>(null),
     soundOptions = useRef({ sound, volume });
-  const audio = useRef<HTMLAudioElement | null>(null),
-    timer = useRef<ReturnType<typeof setTimeout> | null>(null),
-    exitTimer = useRef<ReturnType<typeof setTimeout> | null>(null),
-    soundTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null),
+    exitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   soundOptions.current = { sound, volume };
-  const release = () => {
-    if (soundTimer.current) clearTimeout(soundTimer.current);
-    if (audio.current) {
-      const old = audio.current;
-      audio.current = null;
-      old.onended = null;
-      old.onerror = null;
-      old.pause();
-      old.removeAttribute("src");
-      old.load();
-    }
-  };
   const dismiss = () => {
     if (timer.current) clearTimeout(timer.current);
     setLeaving(true);
     exitTimer.current = setTimeout(() => {
       setVisible(false);
-      release();
     }, 180);
   };
   useEffect(
     () =>
       subscribe((event) => {
-        if (event.event === "reminder") {
-          const payload = event.payload as
-            { sound?: string; volume?: number } | undefined;
-          if (payload?.sound && Number(payload.volume) > 0) {
-            reminderSoundAt.current = Date.now();
-            release();
-          }
-          return;
+        if (
+          event.event === "sync-started" ||
+          (event.event === "authentication" && event.loggedIn === false)
+        ) {
+          cue.current?.();
+          cue.current = null;
+        }
+        if (event.event === "sync-complete") {
+          cue.current?.();
+          const token = event.reminderToken;
+          cue.current = playSyncCue(
+            soundOptions.current.sound,
+            soundOptions.current.volume,
+            () => {
+              if (typeof token === "string")
+                void rpc("reminders.sync-ready", { token }).catch(() => {});
+            },
+          );
         }
         const previous = latest.current,
           next = syncNoticeState(previous, event);
@@ -64,7 +60,6 @@ export const SyncNotice = memo(function SyncNotice({
           setDetails(false);
           setLeaving(false);
           setVisible(true);
-          release();
         } else if (!previous) {
           setVisible(true);
           setLeaving(false);
@@ -78,37 +73,15 @@ export const SyncNotice = memo(function SyncNotice({
             dismiss,
             next.phase === "error" || next.phase === "warning" ? 10000 : 6000,
           );
-          release();
-          if (
-            next.phase !== "cancelled" &&
-            soundOptions.current.sound &&
-            Date.now() - reminderSoundAt.current > 3000
-          ) {
-            const player = new Audio("/assets/sound/notify.mp3");
-            audio.current = player;
-            player.volume = Math.min(
-              1,
-              Math.max(0, soundOptions.current.volume),
-            );
-            player.onended = release;
-            player.onerror = release;
-            void player.play().catch(() => {
-              if (audio.current === player) release();
-            });
-            soundTimer.current = setTimeout(release, 15000);
-          }
         }
       }),
     [],
   );
-  useEffect(() => {
-    if (!sound) release();
-  }, [sound]);
   useEffect(
     () => () => {
       if (timer.current) clearTimeout(timer.current);
       if (exitTimer.current) clearTimeout(exitTimer.current);
-      release();
+      cue.current?.();
     },
     [],
   );

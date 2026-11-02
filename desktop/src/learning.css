@@ -1,0 +1,380 @@
+.learning-page {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 4px 0 28px;
+  min-width: 0;
+}
+.learning-page h1 {
+  font-size: 30px;
+  letter-spacing: -0.045em;
+  margin: 4px 0;
+}
+.learning-page h2 {
+  font-size: 20px;
+  letter-spacing: -0.035em;
+}
+.learning-toolbar {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) repeat(3, minmax(90px, auto));
+  gap: 12px;
+  padding: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.learning-toolbar select {
+  width: auto;
+  min-width: 0;
+}
+.learning-toolbar .search {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin: 0;
+  gap: 8px;
+}
+.learning-toolbar .search input {
+  min-width: 0;
+  width: 100%;
+  margin: 0;
+}
+.study-metrics progress {
+  appearance: none;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--line);
+}
+.study-metrics progress::-webkit-progress-bar {
+  background: var(--line);
+  border-radius: 6px;
+}
+.study-metrics progress::-webkit-progress-value {
+  background: var(--accent);
+  border-radius: 6px;
+}
+.study-metrics progress::-moz-progress-bar {
+  background: var(--accent);
+  border-radius: 6px;
+}
+.learning-toolbar .search {
+  flex: 1;
+  min-width: 160px;
+}
+.attendance-summary,
+.study-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+.attendance-summary > div,
+.study-metrics > article {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 22px;
+  border-radius: 22px;
+}
+.attendance-summary strong,
+.study-metrics strong {
+  font-size: 34px;
+  letter-spacing: -0.045em;
+  font-variant-numeric: tabular-nums;
+}
+.study-metrics strong small {
+  font-size: 15px;
+  margin-left: 6px;
+  font-weight: 500;
+}
+.study-metrics progress {
+  width: 100%;
+  height: 6px;
+  accent-color: var(--accent);
+  border: 0;
+}
+.study-metrics small {
+  opacity: 0.65;
+}
+.attendance-table {
+  overflow: auto;
+  border-radius: 22px;
+}
+.attendance-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.attendance-table th {
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.6;
+  padding: 16px 20px;
+  white-space: nowrap;
+}
+.attendance-table td {
+  padding: 16px 20px;
+  border-top: 1px solid color-mix(in srgb, currentColor 8%, transparent);
+  line-height: 1.55;
+}
+.attendance-table small {
+  display: block;
+  font-size: 11px;
+  opacity: 0.6;
+  margin-top: 5px;
+}
+.attendance-status {
+  display: inline-block;
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 9px;
+  white-space: nowrap;
+  background: color-mix(in srgb, currentColor 7%, transparent);
+}
+.attendance-status.attendance,
+.attendance-status.excused {
+  color: #238866;
+  background: #36af8617;
+}
+.attendance-status.late,
+.attendance-warning {
+  color: #bb7c27;
+}
+.attendance-status.late {
+  background: #c58c2918;
+}
+.attendance-status.absent {
+  color: #dc5266;
+  background: #dc526615;
+}
+.study-columns {
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) minmax(280px, 1.2fr);
+  gap: 20px;
+}
+.focus-card,
+.focus-history {
+  padding: 28px;
+  border-radius: 26px;
+}
+.focus-card {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 15px;
+}
+.focus-brand {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+}
+.focus-brand img {
+  width: 22px;
+  height: 22px;
+}
+.tomato {
+  width: 120px;
+  height: 112px;
+  filter: drop-shadow(0 10px 20px #ee526527);
+}
+.focus-card > .tomato {
+  width: 150px;
+  height: 140px;
+}
+.focus-card h2 {
+  margin: 0;
+}
+.focus-options {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+}
+.focus-options label {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  font-size: 12px;
+  gap: 7px;
+  opacity: 0.8;
+}
+.focus-options input {
+  width: 100%;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.focus-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.focus-card .muted,
+.focus-history .muted {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.week-range {
+  font-size: 13px;
+  margin: 0 12px;
+}
+.focus-bars {
+  height: 240px;
+  display: flex;
+  gap: 14px;
+  align-items: stretch;
+  margin: 34px 0;
+}
+.focus-bars > div {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+}
+.focus-bars small {
+  font-size: 11px;
+  opacity: 0.6;
+}
+.focus-bar-track {
+  flex: 1;
+  width: 100%;
+  max-width: 38px;
+  border-radius: 12px;
+  background: color-mix(in srgb, currentColor 4%, transparent);
+  display: flex;
+  align-items: end;
+  overflow: hidden;
+}
+.focus-bar-track span {
+  width: 100%;
+  min-height: 2px;
+  border-radius: 12px;
+  background: linear-gradient(0deg, var(--accent), #edb8c7);
+  transition: height 0.3s ease;
+}
+.focus-dock {
+  position: fixed;
+  right: 28px;
+  bottom: 48px;
+  z-index: 55;
+  width: 272px;
+  border-radius: 24px;
+  padding: 20px;
+  box-shadow: 0 18px 60px #0003;
+  backdrop-filter: blur(30px);
+  isolation: isolate;
+  background: var(--surface, #fbf6fa);
+}
+.focus-dock .focus-collapse {
+  position: absolute;
+  right: 9px;
+  top: 9px;
+}
+.dock-clock {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 16px 0;
+}
+.dock-clock .tomato {
+  width: 58px;
+  height: 54px;
+}
+.dock-clock strong {
+  font-size: 36px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.05em;
+}
+.focus-dock .primary {
+  padding: 9px 14px;
+  font-size: 13px;
+}
+.focus-dock.collapsed {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 15px;
+}
+.focus-dock.collapsed .focus-collapse {
+  inset: 4px;
+}
+.submission-feedback {
+  padding: 18px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  margin: 14px 0;
+}
+.submission-feedback h3 {
+  font-size: 14px;
+  margin: 0 0 12px;
+}
+.submission-feedback blockquote {
+  margin: 12px 0 0;
+  padding: 12px 15px;
+  border-left: 3px solid var(--accent);
+  background: color-mix(in srgb, currentColor 3%, transparent);
+  border-radius: 0 10px 10px 0;
+}
+.submission-feedback blockquote p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.submission-feedback blockquote footer {
+  font-size: 11px;
+  opacity: 0.65;
+}
+.testing-credit strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+.testing-credit p {
+  line-height: 1.7;
+  margin: 10px 0 20px;
+}
+@media (max-width: 1000px) {
+  .study-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .attendance-summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .attendance-summary > div {
+    padding: 16px;
+  }
+  .learning-toolbar {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .learning-toolbar .search {
+    grid-column: 1/-1;
+  }
+  .learning-toolbar select {
+    width: 100%;
+  }
+  .study-columns {
+    grid-template-columns: 1fr;
+  }
+  .focus-dock {
+    right: 18px;
+    bottom: 42px;
+  }
+  .attendance-table td {
+    padding: 14px 12px;
+  }
+  .week-range {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .focus-bar-track span {
+    transition: none;
+  }
+}

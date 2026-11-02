@@ -44,7 +44,7 @@ def test_modules_and_assignments_retrieve_all_pages_and_submission_state(monkeyp
             mid=2 if 'page=2' in path else 1
             return response({'modules':[{'module_id':mid,'module_items':[{'completed':mid==2,'content_data':{'item_id':mid,'title':str(mid),'item_content_data':{'content_type':'movie'}}}]}]},None if mid==2 else '?page=2')
         aid=2 if 'page=2' in path else 1
-        return response([{'id':aid,'name':str(aid),'submission':{'workflow_state':'submitted' if aid==2 else 'unsubmitted'}}],None if aid==2 else '?page=2')
+        return response([{'id':aid,'name':str(aid),'submission':{'workflow_state':'submitted' if aid==2 else 'unsubmitted','submission_comments':[]}}],None if aid==2 else '?page=2')
     monkeypatch.setattr(client,'_get',get)
     batches,notes=client._fetch_course(Course(1,'과목'),lambda *_:None)
     assert not notes and len(batches[(1,'movie')])==len(batches[(1,'assignment')])==2

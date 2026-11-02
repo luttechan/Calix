@@ -15,6 +15,16 @@ export type EventItem = {
   completion_verified: boolean;
   week: string;
   source_title: string;
+  lms_data?: {
+    attendance_status?: string;
+    feedback_available?: boolean;
+    rubric?: { title: string; text: string }[];
+    status?: string;
+    late?: boolean;
+    grade?: string;
+    submitted_at?: string;
+    comments?: { text: string; author: string; created_at: string | null }[];
+  };
 };
 export type Course = { id: number; name: string };
 export type Session = {
@@ -114,6 +124,8 @@ export type Snapshot = {
   journals: Summary[];
 };
 export type Page =
+  | "attendance"
+  | "study"
   | "home"
   | "calendar"
   | "assignments"

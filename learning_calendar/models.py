@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import math
 from functools import lru_cache
 from datetime import datetime, timezone
@@ -49,6 +49,7 @@ class Event:
     completion_verified: bool = True
     start_at: str | None = None
     lock_at: str | None = None
+    lms_data: dict = field(default_factory=dict)
 
     @property
     def due(self) -> datetime | None:

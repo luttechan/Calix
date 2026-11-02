@@ -1,12 +1,13 @@
 """Read the rendered LearningX screen, without issuing video API requests."""
+
 import re
 from datetime import datetime
 from urllib.parse import urlsplit
-from .models import Course,Event,KST
-from .parsers import CollectedEvents,safe_url,record_event
+from .models import Course, Event, KST
+from .parsers import CollectedEvents, safe_url, record_event
 from .media_types import MEDIA_RULES_JSON, VIDEO_KINDS
 
-SNAPSHOT_SCRIPT=r'''JSON.stringify((()=>{
+SNAPSHOT_SCRIPT = r"""JSON.stringify((()=>{
  const rules=__CALIX_MEDIA_RULES__;
  const allowed=d=>{try{const u=new URL(d.URL);return u.protocol==='https:'&&u.hostname==='canvas.bufs.ac.kr'&&(!u.port||u.port==='443');}catch(e){return false;}};
  const docs=[];const walk=(d,depth)=>{if(depth>6||!allowed(d))return;docs.push(d);for(const f of d.querySelectorAll('iframe')){try{if(f.contentDocument)walk(f.contentDocument,depth+1);}catch(e){}}};walk(document,0);
@@ -44,47 +45,112 @@ SNAPSHOT_SCRIPT=r'''JSON.stringify((()=>{
  }
  for(const d of docs){for(const a of d.querySelectorAll('a[href]')){if(/주차학습|학습콘텐츠|강의콘텐츠|LearningX/i.test(a.textContent)){const u=new URL(a.getAttribute('href'),d.URL);if(u.protocol==='https:'&&u.hostname==='canvas.bufs.ac.kr'&&(!u.port||u.port==='443')&&/\/external_tools\//.test(u.pathname))return {state:'navigate',url:u.href};}}}
  return {state:'loading'};
-})())'''.replace('__CALIX_MEDIA_RULES__',MEDIA_RULES_JSON)
+})())""".replace("__CALIX_MEDIA_RULES__", MEDIA_RULES_JSON)
 
 
-def screen_date(value,year):
-    if value is None or value=='':return None
-    if not isinstance(value,str):raise ValueError('날짜 형식 오류')
-    value=' '.join(value.replace('\xa0',' ').split())
-    match=re.search(r'(?:(\d{4})년\s*)?(\d{1,2})월\s*(\d{1,2})일\s*(오전|오후)?\s*(\d{1,2}):(\d{2})',value)
-    if not match:raise ValueError('화면 날짜를 확인하지 못했습니다.')
-    y,month,day,period,hour,minute=match.groups();hour=int(hour)
+def screen_date(value, year):
+    if value is None or value == "":
+        return None
+    if not isinstance(value, str):
+        raise ValueError("날짜 형식 오류")
+    value = " ".join(value.replace("\xa0", " ").split())
+    match = re.search(
+        r"(?:(\d{4})년\s*)?(\d{1,2})월\s*(\d{1,2})일\s*(오전|오후)?\s*(\d{1,2}):(\d{2})",
+        value,
+    )
+    if not match:
+        raise ValueError("화면 날짜를 확인하지 못했습니다.")
+    y, month, day, period, hour, minute = match.groups()
+    hour = int(hour)
     if period:
-        if not 0<=hour<=12:raise ValueError('시간 형식 오류')
-        hour=hour%12+(12 if period=='오후' else 0)
-    return datetime(int(y or year),int(month),int(day),hour,int(minute),tzinfo=KST).isoformat()
+        if not 0 <= hour <= 12:
+            raise ValueError("시간 형식 오류")
+        hour = hour % 12 + (12 if period == "오후" else 0)
+    return datetime(
+        int(y or year), int(month), int(day), hour, int(minute), tzinfo=KST
+    ).isoformat()
 
 
-def parse_screen(course,snapshot):
-    if not isinstance(snapshot,dict) or snapshot.get('state')!='ready':raise ValueError('주차학습 화면이 준비되지 않았습니다.')
-    if str(snapshot.get('course_id'))!=str(course.id):raise ValueError('주차학습 과목이 일치하지 않습니다.')
-    term=snapshot.get('term','');year=re.search(r'\b(20\d{2})(?:년|학년도)',term) if isinstance(term,str) else None
-    if not year and isinstance(snapshot.get('name'),str):year=re.search(r'\b(20\d{2})\b',snapshot['name'])
-    if not year:raise ValueError('강의 연도를 확인하지 못했습니다.')
-    unsupported=snapshot.get('unsupported_items',0)
-    if type(unsupported) is not int or unsupported!=0:raise ValueError('지원하지 않는 학습자료 형식이 있습니다. 기존 영상을 유지합니다.')
-    items=snapshot.get('items')
-    if not isinstance(items,list) or len(items)>10000:raise ValueError('영상 목록 형식이 올바르지 않습니다.')
-    weeks=snapshot.get('weeks');expected=snapshot.get('expected')
-    if type(weeks) is not int or type(expected) is not int or not 0<weeks<=1000 or not 0<=expected<=weeks:
-        raise ValueError('전체 주차학습을 확인하지 못했습니다.')
-    events={};blocked=set();complete=True
+def parse_screen(course, snapshot):
+    if not isinstance(snapshot, dict) or snapshot.get("state") != "ready":
+        raise ValueError("주차학습 화면이 준비되지 않았습니다.")
+    if str(snapshot.get("course_id")) != str(course.id):
+        raise ValueError("주차학습 과목이 일치하지 않습니다.")
+    term = snapshot.get("term", "")
+    year = (
+        re.search(r"\b(20\d{2})(?:년|학년도)", term) if isinstance(term, str) else None
+    )
+    if not year and isinstance(snapshot.get("name"), str):
+        year = re.search(r"\b(20\d{2})\b", snapshot["name"])
+    if not year:
+        raise ValueError("강의 연도를 확인하지 못했습니다.")
+    unsupported = snapshot.get("unsupported_items", 0)
+    if type(unsupported) is not int or unsupported != 0:
+        raise ValueError(
+            "지원하지 않는 학습자료 형식이 있습니다. 기존 영상을 유지합니다."
+        )
+    items = snapshot.get("items")
+    if not isinstance(items, list) or len(items) > 10000:
+        raise ValueError("영상 목록 형식이 올바르지 않습니다.")
+    weeks = snapshot.get("weeks")
+    expected = snapshot.get("expected")
+    if (
+        type(weeks) is not int
+        or type(expected) is not int
+        or not 0 < weeks <= 1000
+        or not 0 <= expected <= weeks
+    ):
+        raise ValueError("전체 주차학습을 확인하지 못했습니다.")
+    events = {}
+    blocked = set()
+    complete = True
     for row in items:
         try:
-            if not isinstance(row,dict) or row.get('kind') not in VIDEO_KINDS:raise ValueError('영상 형식 오류')
-            url=safe_url(row.get('url'));match=re.fullmatch(rf'/courses/{course.id}/modules/items/(\d+)',urlsplit(url).path)
-            title=row.get('title');week=row.get('week','')
-            if not match or not isinstance(title,str) or not title.strip() or len(title)>1000 or not isinstance(week,str):raise ValueError('영상 정보 오류')
-            due=screen_date(row.get('due'),int(year[1]));start=screen_date(row.get('start'),int(year[1]));lock=screen_date(row.get('lock'),int(year[1]))
-            done=row.get('completed');attendance=row.get('attendance')
-            if done is not True and done is not False:done=True if attendance in ('attendance','late','excused') else False if attendance in ('absent','none') else None
-            key=f'movie:{course.id}:{match[1]}'
-            event=Event(key,course.id,course.name,'movie',title.strip(),due,done is True,url=url,week=week,completion_verified=done is not None,start_at=start,lock_at=lock)
-            if not record_event(events,blocked,event):complete=False
-        except (ValueError,TypeError,OverflowError):complete=False
-    return CollectedEvents(events.values(),complete=complete)
+            if not isinstance(row, dict) or row.get("kind") not in VIDEO_KINDS:
+                raise ValueError("영상 형식 오류")
+            url = safe_url(row.get("url"))
+            match = re.fullmatch(
+                rf"/courses/{course.id}/modules/items/(\d+)", urlsplit(url).path
+            )
+            title = row.get("title")
+            week = row.get("week", "")
+            if (
+                not match
+                or not isinstance(title, str)
+                or not title.strip()
+                or len(title) > 1000
+                or not isinstance(week, str)
+            ):
+                raise ValueError("영상 정보 오류")
+            due = screen_date(row.get("due"), int(year[1]))
+            start = screen_date(row.get("start"), int(year[1]))
+            lock = screen_date(row.get("lock"), int(year[1]))
+            done = row.get("completed")
+            attendance = row.get("attendance")
+            if done is not True and done is not False:
+                done = (
+                    True
+                    if attendance in ("attendance", "late", "excused")
+                    else False if attendance in ("absent", "none") else None
+                )
+            key = f"movie:{course.id}:{match[1]}"
+            event = Event(
+                key,
+                course.id,
+                course.name,
+                "movie",
+                title.strip(),
+                due,
+                done is True,
+                url=url,
+                week=week,
+                completion_verified=done is not None,
+                start_at=start,
+                lock_at=lock,
+                lms_data={"attendance_status": attendance} if attendance else {},
+            )
+            if not record_event(events, blocked, event):
+                complete = False
+        except (ValueError, TypeError, OverflowError):
+            complete = False
+    return CollectedEvents(events.values(), complete=complete)
