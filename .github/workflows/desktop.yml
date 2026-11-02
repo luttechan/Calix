@@ -172,6 +172,8 @@ jobs:
           Write-Output 'Installer, embedded runtime hashes and installed engine startup verified.'
           if (-not $uiMatches) { throw 'Inspect UI binary difference before publication.' }
 
+      - name: Check legacy and in-app reinstallation
+        run: python desktop/tools/check_update_install.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: Calix-1.5.81-development-Windows-x64

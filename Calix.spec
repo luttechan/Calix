@@ -16,7 +16,7 @@ product = 'calix-engine'
 tls_policy = Path(ssl.__file__).with_name('codex-rejected-cas.pem')
 runtime_data = [(str(tls_policy), '.')] if tls_policy.is_file() else []
 asset_data=[(str(root/path),str(Path(path).parent)) for path in RUNTIME_ASSETS if path.startswith('asset/calendar/')]
-license_data=[]
+license_data=[(str(root/'desktop/installer/LICENSE-MIT.txt'),'licenses/Tauri-Installer')]
 for name in ('PySide6','PySide6_Essentials','PySide6_Addons','PySide6_WebEngine','shiboken6','requests','cryptography','keyring'):
     package=distribution(name)
     for item in package.files or ():

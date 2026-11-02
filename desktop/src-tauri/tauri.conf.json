@@ -53,7 +53,8 @@
           "Korean"
         ],
         "displayLanguageSelector": false,
-        "installMode": "currentUser"
+        "installMode": "currentUser",
+        "template": "../installer/installer.nsi"
       }
     },
     "copyright": "Copyright 2026 JINYEONG OH, Lutein Studio"
