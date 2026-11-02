@@ -5,7 +5,7 @@ const script = readFileSync(
   new URL("../scripts/canvas-modules.js", import.meta.url),
   "utf8",
 );
-function browser(routes) {
+function browser(routes, debug = false) {
   const fetch = vi.fn(async (input, options) => {
     const url = new URL(input);
     expect(url.origin).toBe("https://canvas.bufs.ac.kr");
@@ -21,6 +21,8 @@ function browser(routes) {
     });
   });
   const window = {};
+  const diagnostics = { debug, logs: [] };
+  window[Symbol.for("calix.campus.reader")] = diagnostics;
   runInNewContext(script, {
     window,
     fetch,
@@ -31,7 +33,11 @@ function browser(routes) {
     clearTimeout,
     Date,
   });
-  return { reader: window[Symbol.for("calix.canvas.modules")], fetch };
+  return {
+    reader: window[Symbol.for("calix.canvas.modules")],
+    fetch,
+    diagnostics,
+  };
 }
 const base = "/api/v1/courses/2";
 const file = (id = 3) => ({
@@ -42,6 +48,24 @@ const file = (id = 3) => ({
   completion_requirement: { type: "must_view", completed: true },
 });
 afterEach(() => vi.useRealTimers());
+test("native module HTTP diagnostics are opt-in and exclude query strings", async () => {
+  const quiet = browser({});
+  await quiet.reader.collect(2);
+  expect(quiet.diagnostics.logs).toEqual([]);
+  const traced = browser({}, true);
+  await traced.reader.collect(2);
+  expect(traced.diagnostics.logs).toContain(
+    "HTTP START GET /api/v1/courses/2/modules",
+  );
+  expect(traced.diagnostics.logs).toContain(
+    "HTTP RESPONSE 200 GET /api/v1/courses/2/modules",
+  );
+  expect(
+    traced.diagnostics.logs.some(
+      (value) => value.includes("?") || value.includes("include[]"),
+    ),
+  ).toBe(false);
+});
 test("native Canvas modules use inline items and reuse repeated file metadata", async () => {
   const { reader, fetch } = browser({
     [base + "/tabs"]: [],

@@ -154,7 +154,7 @@
     };
     walk(payload);
     row.videoCount = Math.max(row.videoCount || 0, videoCount);
-    log(`LearningX ${match[1]} ${match[2]} 완료`);
+    log(`LearningX ${match[1]} ${match[2]} COMPLETE`);
     if (remaining < 0) row.failed = true;
   };
   const fetchOriginal = window.fetch.bind(window);
@@ -235,7 +235,7 @@
     }
   };
   const jsonRequest = async (url, headers = undefined) => {
-    log(`HTTP 시작 GET ${new URL(url, location.origin).pathname}`);
+    log(`HTTP START GET ${new URL(url, location.origin).pathname}`);
     const controller = new AbortController();
     controllers.add(controller);
     const timer = setTimeout(() => controller.abort(), 20000);
@@ -248,7 +248,7 @@
         signal: controller.signal,
       });
       log(
-        `HTTP 응답 ${response.status} GET ${new URL(url, location.origin).pathname}`,
+        `HTTP RESPONSE ${response.status} GET ${new URL(url, location.origin).pathname}`,
       );
       if (response.status === 401 || response.status === 403)
         throw Error("AUTH_REQUIRED");

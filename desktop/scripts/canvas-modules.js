@@ -12,7 +12,17 @@
     },
   };
   window[key] = reader;
-  const positive = (v) => (typeof v === "number" || (typeof v === "string" && /^[1-9]\d*$/.test(v))) && Number.isSafeInteger(Number(v)) && Number(v) > 0;
+  const log = (message) => {
+    const state = window[Symbol.for("calix.campus.reader")];
+    if (!state?.debug) return;
+    state.logs.push(message);
+    if (state.logs.length > 100) state.logs.splice(0, state.logs.length - 100);
+  };
+  const positive = (v) =>
+    (typeof v === "number" ||
+      (typeof v === "string" && /^[1-9]\d*$/.test(v))) &&
+    Number.isSafeInteger(Number(v)) &&
+    Number(v) > 0;
   const learningx = (v) =>
     /LearningX|주차학습|학습콘텐츠|강의콘텐츠|온라인강의|\/learningx\//i.test(
       String(v || ""),
@@ -64,12 +74,14 @@
         Math.max(1, Math.min(max, deadline - Date.now())),
       );
       try {
+        log(`HTTP START GET ${url.pathname}`);
         const response = await fetch(url, {
           credentials: "include",
           cache: "no-cache",
           redirect: "error",
           signal: c.signal,
         });
+        log(`HTTP RESPONSE ${response.status} GET ${url.pathname}`);
         if (response.status === 401) throw Error("AUTH_REQUIRED");
         if (!response.ok) throw Error("HTTP_" + response.status);
         if (!/json/i.test(response.headers.get("content-type") || ""))
@@ -82,6 +94,9 @@
         check();
         return { value, response };
       } catch (error) {
+        log(
+          `HTTP FAILED GET ${url.pathname} ${error.name === "AbortError" ? "ABORTED" : /^[A-Z_0-9]+$/.test(error.message || "") ? error.message : error.name}`,
+        );
         if (error.name === "AbortError")
           throw Error(generation !== epoch ? "CANCELLED" : "MODULE_TIMEOUT");
         throw error;
