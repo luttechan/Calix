@@ -52,7 +52,7 @@ def test_separate_submission_endpoint_supplies_missing_completion(monkeypatch):
 
 def test_fully_detailed_flat_endpoint_keeps_single_request(monkeypatch):
     data=fixture();assignments=data['groups'][3]['assignments']
-    for a,s in zip(assignments,data['submissions']):a['submission']=s
+    for a,s in zip(assignments,data['submissions']):a['submission']=dict(s,submission_comments=[])
     client=CampusClient([]);calls=[]
     def pages(path,*args,**kwargs):calls.append(path);return assignments
     monkeypatch.setattr(client,'_paginated',pages)

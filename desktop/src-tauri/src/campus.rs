@@ -303,6 +303,12 @@ pub async fn campus_collect(app: AppHandle, webview: Webview, run_id: String, ca
             }
         }
 
+        match bounded_request(&app,&view,"attendance",Some(id),epoch,course_deadline.saturating_duration_since(Instant::now()).min(Duration::from_secs(6))).await {
+            Ok(Value::Object(values))=>responses.extend(values),
+            Err(error) if error=="CANCELLED"=>return Err(error),
+            _=>(),
+        }
+
     }
     let _=app.emit_to("main","campus:progress",json!({"runId":run_id,"message":"변경 사항 저장 중","current":courses.len(),"total":courses.len()}));
     let final_identity = bounded_request(&app,&view,"owner",None,epoch,Duration::from_secs(8)).await?;

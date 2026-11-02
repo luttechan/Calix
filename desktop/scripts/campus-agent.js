@@ -234,11 +234,11 @@
       throw error;
     }
   };
-  const jsonRequest = async (url, headers = undefined) => {
+  const jsonRequest = async (url, headers = undefined, timeoutMs = 20000) => {
     log(`HTTP START GET ${new URL(url, location.origin).pathname}`);
     const controller = new AbortController();
     controllers.add(controller);
-    const timer = setTimeout(() => controller.abort(), 20000);
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetchOriginal(url, {
         credentials: "include",
@@ -300,14 +300,98 @@
     Object.fromEntries(
       keys.filter((k) => Object.hasOwn(value, k)).map((k) => [k, value[k]]),
     );
+  const attendanceProjection = (path, value) => {
+    if (path === "lessons") {
+      if (!Array.isArray(value)) throw Error("INVALID_ATTENDANCE");
+      return value.slice(0, 200).map((w) => ({
+        ...pick(w, ["week_position", "unlock_at", "due_at"]),
+        lessons: Array.isArray(w.lessons)
+          ? w.lessons
+              .slice(0, 200)
+              .map((l) =>
+                pick(l, [
+                  "lesson_position",
+                  "attendance_calc_type",
+                  "class_date",
+                  "makeup_date",
+                  "display_class_date",
+                ]),
+              )
+          : null,
+      }));
+    }
+    if (path === "lessons/attendances") {
+      if (!Array.isArray(value)) throw Error("INVALID_ATTENDANCE");
+      return value
+        .slice(0, 40000)
+        .map((s) =>
+          pick(s, ["week_position", "lesson_position", "attendance_status"]),
+        );
+    }
+    if (path === "attendance_items") {
+      if (!Array.isArray(value?.attendance_items))
+        throw Error("INVALID_ATTENDANCE");
+      return {
+        attendance_items: value.attendance_items.slice(0, 10000).map((i) => ({
+          ...pick(i, [
+            "item_id",
+            "published",
+            "use_attendance",
+            "week_position",
+            "lesson_position",
+            "title",
+            "unlock_at",
+            "due_at",
+            "item_content_type",
+          ]),
+          item_content_data: pick(i.item_content_data || {}, ["content_type"]),
+        })),
+      };
+    }
+    if (
+      !value?.attendance_summaries ||
+      typeof value.attendance_summaries !== "object" ||
+      Array.isArray(value.attendance_summaries)
+    )
+      throw Error("INVALID_ATTENDANCE");
+    return {
+      attendance_summaries: Object.fromEntries(
+        Object.entries(value.attendance_summaries)
+          .slice(0, 10000)
+          .map(([k, v]) => [k, pick(v, ["item_id", "attendance_status"])]),
+      ),
+    };
+  };
   const submission = (s) =>
     s && typeof s === "object"
-      ? pick(s, [
-          "assignment_id",
-          "workflow_state",
-          "submitted_at",
-          "cached_due_date",
-        ])
+      ? {
+          ...pick(s, [
+            "assignment_id",
+            "workflow_state",
+            "submitted_at",
+            "cached_due_date",
+            "late",
+            "missing",
+            "late_policy_status",
+            "grade",
+            "graded_at",
+            "rubric_assessment",
+            "submission_comments",
+          ]),
+          feedback_available: Array.isArray(s.submission_comments),
+          submission_comments: Array.isArray(s.submission_comments)
+            ? s.submission_comments
+                .filter((c) => c && typeof c === "object")
+                .slice(0, 20)
+                .map((c) => ({
+                  ...pick(c, ["author_name", "created_at"]),
+                  comment:
+                    typeof c.comment === "string"
+                      ? c.comment.slice(0, 4000)
+                      : "",
+                }))
+            : [],
+        }
       : s;
   const assignment = (a) => {
     if (!a || typeof a !== "object") return a;
@@ -320,6 +404,10 @@
       "is_quiz_assignment",
       "submission_types",
     ]);
+    if (Array.isArray(a.rubric))
+      row.rubric = a.rubric
+        .slice(0, 100)
+        .map((r) => pick(r, ["id", "description"]));
     if (a.submission) row.submission = submission(a.submission);
     return row;
   };
@@ -333,6 +421,55 @@
           .map((k) => [k, stable(value[k], depth + 1)]),
       );
     return value;
+  };
+  state.attendance = async (course, depth = 0) => {
+    if (depth > 6) throw Error("FRAME_DEPTH");
+    if (!learningAuthorization && typeof document !== "undefined") {
+      for (const frame of document.querySelectorAll("iframe")) {
+        try {
+          const peer = frame.contentWindow?.[key];
+          if (peer && peer !== state && peer.attendance)
+            return await peer.attendance(course, depth + 1);
+        } catch {}
+      }
+    }
+    const base = `/learningx/api/v1/courses/${course}`;
+    const responses = {};
+    await Promise.all(
+      [
+        "lessons",
+        "lessons/attendances",
+        "attendance_items",
+        "attendance_items/summary",
+      ].map(async (path) => {
+        const url = base + "/" + path;
+        try {
+          const token =
+            learningAuthorization ||
+            (typeof document !== "undefined"
+              ? document.cookie.match(/(?:^|;\s*)xn_api_token=([^;]*)/)?.[1]
+              : undefined);
+          const headers = token
+            ? {
+                Authorization: /^Bearer /i.test(token)
+                  ? token
+                  : "Bearer " + decodeURIComponent(token),
+              }
+            : undefined;
+          const query =
+            path === "attendance_items"
+              ? "?include_detail=true"
+              : path === "attendance_items/summary"
+                ? "?only_use_attendance=true"
+                : "";
+          const { value } = await jsonRequest(url + query, headers, 4500);
+          responses[url] = { data: attendanceProjection(path, value) };
+        } catch (error) {
+          responses[url] = { error: String(error.message).slice(0, 80) };
+        }
+      }),
+    );
+    return responses;
   };
   state.videoManifest = async (course, refresh, depth = 0) => {
     if (depth > 6) return { cacheable: false };
@@ -379,7 +516,7 @@
       }
       if (!data?.modules || !data?.lessons) return { cacheable: false };
       const text = JSON.stringify({
-        schema: 1,
+        schema: 2,
         rules: mediaRules,
         data: stable(data),
       });
@@ -478,6 +615,12 @@
         return { owner, courses: [...unique.values()] };
       }
       if (
+        operation === "attendance" &&
+        Number.isSafeInteger(course) &&
+        course > 0
+      )
+        return state.attendance(course);
+      if (
         operation === "assignments" &&
         Number.isSafeInteger(course) &&
         course > 0
@@ -487,7 +630,7 @@
         let rows = null;
         try {
           rows = await list(base + "/assignments", {
-            "exclude_response_fields[]": ["description", "rubric"],
+            "exclude_response_fields[]": ["description"],
             "include[]": ["submission"],
             override_assignment_dates: "true",
             per_page: 100,
@@ -498,7 +641,7 @@
         }
         if (!rows?.length) {
           const groups = await list(base + "/assignment_groups", {
-            "exclude_response_fields[]": ["description", "rubric"],
+            "exclude_response_fields[]": ["description"],
             "include[]": ["assignments", "discussion_topic"],
             override_assignment_dates: "true",
             per_page: 100,
@@ -555,14 +698,26 @@
               a?.published !== false &&
               a?.is_quiz_assignment !== true &&
               !(a?.submission_types || []).includes("online_quiz") &&
-              !states.includes(a?.submission?.workflow_state),
+              (!states.includes(a?.submission?.workflow_state) ||
+                ["submitted", "graded", "pending_review"].includes(
+                  a?.submission?.workflow_state,
+                )),
           )
         ) {
-          responses[base + "/students/submissions"] = {
-            data: (
-              await list(base + "/students/submissions", { per_page: 100 })
-            ).map(submission),
-          };
+          try {
+            responses[base + "/students/submissions"] = {
+              data: (
+                await list(base + "/students/submissions", {
+                  per_page: 100,
+                  "include[]": ["submission_comments", "rubric_assessment"],
+                })
+              ).map(submission),
+            };
+          } catch (error) {
+            responses[base + "/students/submissions"] = {
+              error: String(error.message).slice(0, 80),
+            };
+          }
         }
         return responses;
       }

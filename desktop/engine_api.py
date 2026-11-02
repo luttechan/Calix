@@ -30,9 +30,13 @@ class EngineAPI:
         self.checklist.freeze_imports(self.store.events())
         self.diary = DiaryStore(self.folder / "journals.db")
         self.vault = None
+        from learning_calendar.focus import FocusClock
+
+        self.focus = FocusClock(lambda: self.store)
         self.holidays = HolidayCalendar(self.folder / "holidays.db")
 
     def close(self):
+        self.focus.close()
         if self.vault:
             self.vault.close()
         self.diary.close()
@@ -52,8 +56,15 @@ class EngineAPI:
         except Exception:
             candidate.close()
             raise
+        changed_account = self.store.path.resolve() != candidate.path.resolve()
+        if changed_account:
+            self.focus.close()
         self.store.close()
         self.store, self.checklist, self.settings = candidate, checklist, settings
+        if changed_account:
+            from learning_calendar.focus import FocusClock
+
+            self.focus = FocusClock(lambda: self.store)
 
     def activate_account(self, owner):
         if (
@@ -90,7 +101,7 @@ class EngineAPI:
         events = self.store.events()
         year = datetime.now(KST).year
         return dict(
-            version="1.5.81",
+            version="1.5.9",
             events=[asdict(e) for e in events],
             courses=[asdict(c) for c in self.store.courses()],
             types=self.store.event_types(),
@@ -181,6 +192,16 @@ class EngineAPI:
     def dispatch(self, method, p):
         if not isinstance(method, str) or not isinstance(p, dict):
             raise ValueError("요청을 확인하세요.")
+        if method == "attendance.read":
+            from learning_calendar.attendance import read
+
+            return read(self.store)
+        if method == "focus.state":
+            return self.focus.state()
+        if method == "focus.command":
+            return self.focus.command(p)
+        if method == "focus.totals":
+            return self.focus.totals()
         if method == "bootstrap":
             return self.bootstrap()
         if method in ("profile.save", "onboarding.finish"):
@@ -246,6 +267,7 @@ class EngineAPI:
             if self.vault:
                 self.vault.close()
                 self.vault = None
+            self.focus.tick()
             if method == "backup.export":
                 write_backup(path, self.store, self.folder)
             else:
@@ -254,7 +276,11 @@ class EngineAPI:
                     "recovery-" + datetime.now().strftime("%Y%m%d-%H%M%S-%f") + ".calix"
                 )
                 write_backup(recovery, self.store, self.folder)
+                self.focus.close()
                 restore_backup(value, self.store, self.folder)
+                from learning_calendar.focus import FocusClock
+
+                self.focus = FocusClock(lambda: self.store)
                 self.holidays.reload()
             return True
         if method == "event.save":

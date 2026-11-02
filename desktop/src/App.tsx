@@ -39,6 +39,8 @@ import { matchesEventFilter, type EventFilter } from "./eventFilters";
 import { groupByCourse } from "./eventGroups";
 import { isTauri, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { AttendancePage } from "./Attendance";
+import { StudyPage, FocusDock } from "./Study";
 import { SyncNotice } from "./SyncNotice";
 import { UpdateDialog } from "./UpdateDialog";
 import { WindowControls } from "./WindowControls";
@@ -227,6 +229,8 @@ const navigation: [Page, string, typeof Home][] = [
   ["assignments", "과제", FileText],
   ["videos", "영상", Video],
   ["timetable", "시간표", LayoutGrid],
+  ["attendance", "출결", CheckSquare],
+  ["study", "학습", BookOpen],
   ["checklist", "체크리스트", CheckSquare],
   ["diary", "일기장", BookOpen],
 ];
@@ -896,6 +900,8 @@ export function App() {
                 <CachedChecklist />
               </div>
               {page === "timetable" && <TimetablePage />}
+              {page === "attendance" && <AttendancePage />}
+              {page === "study" && <StudyPage />}
               <div hidden={page !== "diary"}>
                 <CachedDiary active={page === "diary"} />
               </div>
@@ -913,6 +919,7 @@ export function App() {
                   onClose={() => setAddDate(null)}
                 />
               )}
+              <FocusDock />
             </Context.Provider>
           )}
         </main>
@@ -971,7 +978,14 @@ export function App() {
             <img src="/assets/profile-avatar.png" alt="" />
             <span>Lutté Laurent</span>
           </div>
-          <p className="testing-credit">Tested by the BUFS community.</p>
+          <div className="testing-credit">
+            <span className="eyebrow">COMMUNITY CONTRIBUTORS</span>
+            <p>
+              With testing and recommendations from members of
+              <br />
+              <strong>Global Association in BUFS</strong>
+            </p>
+          </div>
           <div className="credit-links">
             <a
               href="https://github.com/luttechan/Calix"
@@ -1474,6 +1488,36 @@ function EventDetails({
               dueText(event.due_at)
             )}
           </div>
+          {event.kind === "assignment" && event.completed && event.lms_data && (
+            <section className="submission-feedback">
+              <h3>{status(event)}</h3>
+              {event.lms_data.grade && (
+                <p>
+                  평가 <strong>{event.lms_data.grade}</strong>
+                </p>
+              )}
+              {event.lms_data.feedback_available === false && (
+                <p className="muted">
+                  코멘트를 확인하지 못했습니다. 다시 동기화하세요.
+                </p>
+              )}
+              {event.lms_data.rubric?.map((r, i) => (
+                <blockquote key={`rubric-${i}`}>
+                  <strong>{r.title}</strong>
+                  <p>{r.text}</p>
+                </blockquote>
+              ))}
+              {event.lms_data.comments?.map((c, i) => (
+                <blockquote key={i}>
+                  <p>{c.text}</p>
+                  <footer>
+                    {c.author || "작성자 미표시"}
+                    {c.created_at ? ` / ${dueText(c.created_at)}` : ""}
+                  </footer>
+                </blockquote>
+              ))}
+            </section>
+          )}
           <label>
             유형
             <select

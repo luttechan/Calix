@@ -1,5 +1,6 @@
 from __future__ import annotations
 import sqlite3
+import json
 from contextlib import nullcontext
 from pathlib import Path
 from datetime import datetime, timezone
@@ -9,6 +10,7 @@ from .models import Course, Event
 
 SCHEMA = """
 PRAGMA foreign_keys=ON;
+CREATE TABLE IF NOT EXISTS focus_sessions (id TEXT PRIMARY KEY, day TEXT NOT NULL, seconds INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS courses (id INTEGER PRIMARY KEY, name TEXT NOT NULL, alias TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS events (
   key TEXT PRIMARY KEY, course_id INTEGER NOT NULL, kind TEXT NOT NULL,
@@ -75,6 +77,7 @@ class Store:
             ("type_id", "INTEGER"),
             ("series_id", "TEXT NOT NULL DEFAULT ''"),
             ("completion_verified", "INTEGER NOT NULL DEFAULT 1"),
+            ("lms_data", "TEXT NOT NULL DEFAULT '{}'"),
             ("start_at", "TEXT"),
             ("lock_at", "TEXT"),
         ):
@@ -137,6 +140,7 @@ class Store:
                 source_title=r["title"],
                 start_at=r["start_at"],
                 lock_at=r["lock_at"],
+                lms_data=json.loads(r["lms_data"]),
             )
             for r in rows
         ]
@@ -694,6 +698,7 @@ class Store:
                         old["completion_verified"],
                         old["start_at"],
                         old["lock_at"],
+                        old["lms_data"],
                     ) != (
                         e.due_at,
                         int(e.completed),
@@ -702,6 +707,7 @@ class Store:
                         int(e.completion_verified),
                         e.start_at,
                         e.lock_at,
+                        json.dumps(e.lms_data, ensure_ascii=False, sort_keys=True),
                     ):
                         ctype = "updated"
                         description = f"일정 변경: {e.title}"
@@ -716,10 +722,10 @@ class Store:
                     ):
                         continue
                     self.db.execute(
-                        """INSERT INTO events(key,course_id,kind,title,due_at,completed,url,week,active,updated_at,completion_verified,start_at,lock_at)
-                         VALUES(?,?,?,?,?,?,?,?,1,?,?,?,?) ON CONFLICT(key) DO UPDATE SET
+                        """INSERT INTO events(key,course_id,kind,title,due_at,completed,url,week,active,updated_at,completion_verified,start_at,lock_at,lms_data)
+                         VALUES(?,?,?,?,?,?,?,?,1,?,?,?,?,?) ON CONFLICT(key) DO UPDATE SET
                          course_id=excluded.course_id,kind=excluded.kind,title=excluded.title,due_at=excluded.due_at,
-                         completed=excluded.completed,url=excluded.url,week=excluded.week,active=1,updated_at=excluded.updated_at,completion_verified=excluded.completion_verified,start_at=excluded.start_at,lock_at=excluded.lock_at""",
+                         completed=excluded.completed,url=excluded.url,week=excluded.week,active=1,updated_at=excluded.updated_at,completion_verified=excluded.completion_verified,start_at=excluded.start_at,lock_at=excluded.lock_at,lms_data=excluded.lms_data""",
                         (
                             e.key,
                             e.course_id,
@@ -733,6 +739,7 @@ class Store:
                             int(e.completion_verified),
                             e.start_at,
                             e.lock_at,
+                            json.dumps(e.lms_data, ensure_ascii=False, sort_keys=True),
                         ),
                     )
                     if description:

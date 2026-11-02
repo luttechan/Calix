@@ -111,6 +111,7 @@ def main():
             self.input = None
             self.reported_busy = None
             self.reminders_ready = False
+            self.sync_reminder_token = None
             self.reminder_timer = QTimer(self)
             self.reminder_timer.setInterval(30000)
             self.reminder_timer.timeout.connect(lambda: self.check_reminders("timer"))
@@ -296,6 +297,7 @@ def main():
                     self.restore_token = None
                     result = True
                 elif method == "session.logout":
+                    self.sync_reminder_token = None
                     self.restore_token = None
                     (folder / "canvas_session.dpapi").unlink(missing_ok=True)
                     self.logged_in = False
@@ -312,6 +314,14 @@ def main():
                     result = True
                 elif method == "sync.cancel":
                     self.stop_sync()
+                    result = True
+                elif method == "reminders.sync-ready":
+                    if (
+                        params.get("token") == self.sync_reminder_token
+                        and self.sync_reminder_token
+                    ):
+                        self.sync_reminder_token = None
+                        self.check_reminders("sync")
                     result = True
                 elif method == "reminders.ready":
                     if not self.reminders_ready:
@@ -393,6 +403,7 @@ def main():
                     self.shutdown()
                     result = True
                 elif method == "data.reset":
+                    self.sync_reminder_token = None
                     if self.task or self.collector:
                         raise ValueError("진행 중인 작업을 마친 뒤 초기화하세요.")
                     self.restore_token = None
@@ -464,6 +475,7 @@ def main():
             return True
 
         def sync(self):
+            self.sync_reminder_token = None
             diagnostics.add("Synchronization requested")
             if self.task or self.collector or self.pending_sync or self.restart_sync:
                 raise ValueError("동기화 중입니다.")
@@ -573,7 +585,13 @@ def main():
             return True
 
         def check_reminders(self, trigger):
-            if self.closing or not self.reminders_ready:
+            if (
+                self.closing
+                or not self.reminders_ready
+                or self.sync_reminder_token
+                or self.task
+                or self.collector
+            ):
                 return
             from learning_calendar.reminders import check
 
@@ -587,9 +605,18 @@ def main():
         def synced(self, result):
             api.switch_store(result["path"])
             self.notify("data-changed")
-            self.check_reminders("sync")
+            token = secrets.token_hex(16)
+            self.sync_reminder_token = token
+
+            def fallback():
+                if self.sync_reminder_token == token:
+                    self.sync_reminder_token = None
+                    self.check_reminders("sync")
+
+            QTimer.singleShot(20000, fallback)
             self.notify(
                 "sync-complete",
+                reminderToken=token,
                 message=result.get("sync_summary") or "동기화 완료",
                 stats=result.get("stats", {}),
                 warnings=result.get("warnings", []),

@@ -44,6 +44,16 @@ export function dueText(value: string | null) {
 export function status(event: EventItem, now = Date.now()): string {
   if (!event.completion_verified && !event.manual)
     return event.kind === "movie" ? "시청 미확인" : "제출 미확인";
+  if (event.kind === "movie" && event.lms_data?.attendance_status === "late")
+    return "지각 시청";
+  if (event.kind === "assignment" && event.lms_data?.status) {
+    const state = event.lms_data.status;
+    if (state === "graded")
+      return event.lms_data.late ? "채점 완료 (지각 제출)" : "채점 완료";
+    if (state === "late") return "지각 제출";
+    if (state === "submitted") return "제출 완료";
+    if (state === "missing") return "미제출";
+  }
   if (event.completed) return event.kind === "movie" ? "시청 완료" : "완료";
   if (!event.due_at) return "기한 없음";
   const diff = new Date(event.due_at).getTime() - now;

@@ -105,6 +105,137 @@ function browser(
   return { window, context, state, job, XHR, fetch };
 }
 
+test("attendance requests join all four read-only endpoints and strip private metadata", async () => {
+  const { fetch, job } = browser();
+  fetch.mockImplementation(async (input) => {
+    const path = new URL(input, "https://canvas.bufs.ac.kr").pathname;
+    const value = path.endsWith("/lessons")
+      ? [
+          {
+            week_position: 1,
+            lessons: [
+              {
+                lesson_position: 1,
+                class_date: "2026-11-03",
+                student_name: "PRIVATE",
+              },
+            ],
+          },
+        ]
+      : path.endsWith("/lessons/attendances")
+        ? [
+            {
+              week_position: 1,
+              lesson_position: 1,
+              attendance_status: "attendance",
+              student_name: "PRIVATE",
+            },
+          ]
+        : path.endsWith("/summary")
+          ? {
+              attendance_summaries: {
+                11: {
+                  item_id: 11,
+                  attendance_status: "late",
+                  student_name: "PRIVATE",
+                },
+              },
+            }
+          : {
+              attendance_items: [
+                {
+                  item_id: 11,
+                  title: "Video",
+                  use_attendance: true,
+                  item_content_data: {
+                    content_type: "movie",
+                    view_url: "PRIVATE",
+                  },
+                },
+              ],
+            };
+    return new Response("while(1);" + JSON.stringify(value), {
+      headers: { "content-type": "application/json" },
+    });
+  });
+  const result = await job("attendance", 1);
+  expect(result.status).toBe("ready");
+  expect(Object.keys(result.value)).toHaveLength(4);
+  expect(JSON.stringify(result.value)).not.toContain("PRIVATE");
+  expect(
+    fetch.mock.calls.every(([, options]) => options.credentials === "include"),
+  ).toBe(true);
+});
+
+test("one attendance endpoint failure preserves the successful responses", async () => {
+  const { fetch, job } = browser();
+  fetch.mockImplementation(async (input) => {
+    const path = new URL(input, "https://canvas.bufs.ac.kr").pathname;
+    return path.endsWith("/summary")
+      ? new Response("", { status: 404 })
+      : new Response(
+          JSON.stringify(
+            path.endsWith("attendance_items") ? { attendance_items: [] } : [],
+          ),
+          { headers: { "content-type": "application/json" } },
+        );
+  });
+  const result = await job("attendance", 1);
+  expect(result.status).toBe("ready");
+  expect(
+    result.value["/learningx/api/v1/courses/1/attendance_items/summary"].error,
+  ).toBe("HTTP_404");
+  expect(result.value["/learningx/api/v1/courses/1/lessons"].data).toEqual([]);
+});
+
+test("submitted assignments still fetch feedback and preserve late and graded facts", async () => {
+  const { fetch, job } = browser();
+  fetch.mockImplementation(async (input) => {
+    const url = new URL(input, "https://canvas.bufs.ac.kr");
+    const value = url.pathname.endsWith("/assignments")
+      ? [
+          {
+            id: 3,
+            name: "Task",
+            submission_types: ["online_upload"],
+            submission: { workflow_state: "graded" },
+          },
+        ]
+      : [
+          {
+            assignment_id: 3,
+            workflow_state: "graded",
+            late: true,
+            grade: "A",
+            submission_comments: [
+              {
+                author_name: "Instructor",
+                comment: "Well written",
+                created_at: "2026-11-03T00:00:00Z",
+                author_email: "PRIVATE",
+              },
+            ],
+          },
+        ];
+    return new Response(JSON.stringify(value), {
+      headers: { "content-type": "application/json" },
+    });
+  });
+  const result = await job("assignments", 1);
+  const s = result.value["/api/v1/courses/1/students/submissions"].data[0];
+  expect(s.late).toBe(true);
+  expect(s.grade).toBe("A");
+  expect(s.submission_comments[0].comment).toBe("Well written");
+  expect(JSON.stringify(s)).not.toContain("PRIVATE");
+  const call = fetch.mock.calls.find(([input]) =>
+    String(input).includes("students/submissions"),
+  );
+  expect(new URL(call[0]).searchParams.getAll("include[]")).toContain(
+    "submission_comments",
+  );
+  expect(new URL(call[0]).searchParams.has("student_ids[]")).toBe(false);
+});
+
 test.each(["", "while(1);", "\uFEFF \nwhile ( 1 ) ;\n"])(
   "일반 응답과 Canvas 보호 접두사에서 계정 및 모든 과목을 읽는다 (%s)",
   async (prefix) => {
