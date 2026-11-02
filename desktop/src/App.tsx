@@ -944,15 +944,17 @@ export function App() {
           </button>
         </div>
       )}
-      {startupUpdate && data && (
-        <UpdateDialog
-          onClose={() => setStartupUpdate(false)}
-          onInstall={() => {
-            setStartupUpdate(false);
-            setInstall(true);
-            setExit(true);
-          }}
-        />
+      {startupUpdate && context && (
+        <Context.Provider value={context}>
+          <UpdateDialog
+            onClose={() => setStartupUpdate(false)}
+            onInstall={() => {
+              setStartupUpdate(false);
+              setInstall(true);
+              setExit(true);
+            }}
+          />
+        </Context.Provider>
       )}
       {credits && (
         <Modal title="Calix" onClose={() => setCredits(false)}>
