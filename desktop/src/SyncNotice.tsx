@@ -14,6 +14,7 @@ export const SyncNotice = memo(function SyncNotice({
     [visible, setVisible] = useState(false),
     [leaving, setLeaving] = useState(false);
   const [details, setDetails] = useState(false);
+  const reminderSoundAt = useRef(0);
   const latest = useRef<SyncNoticeState | null>(null),
     soundOptions = useRef({ sound, volume });
   const audio = useRef<HTMLAudioElement | null>(null),
@@ -44,6 +45,15 @@ export const SyncNotice = memo(function SyncNotice({
   useEffect(
     () =>
       subscribe((event) => {
+        if (event.event === "reminder") {
+          const payload = event.payload as
+            { sound?: string; volume?: number } | undefined;
+          if (payload?.sound && Number(payload.volume) > 0) {
+            reminderSoundAt.current = Date.now();
+            release();
+          }
+          return;
+        }
         const previous = latest.current,
           next = syncNoticeState(previous, event);
         if (next === previous) return;
@@ -69,7 +79,11 @@ export const SyncNotice = memo(function SyncNotice({
             next.phase === "error" || next.phase === "warning" ? 10000 : 6000,
           );
           release();
-          if (next.phase !== "cancelled" && soundOptions.current.sound) {
+          if (
+            next.phase !== "cancelled" &&
+            soundOptions.current.sound &&
+            Date.now() - reminderSoundAt.current > 3000
+          ) {
             const player = new Audio("/assets/sound/notify.mp3");
             audio.current = player;
             player.volume = Math.min(
