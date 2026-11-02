@@ -63,7 +63,7 @@ def main():
         b"__TAURI_BUNDLE_TYPE_VAR_UNK", b"__TAURI_BUNDLE_TYPE_VAR_NSS"
     )
     with tempfile.TemporaryDirectory(prefix="calix-reinstall-") as folder:
-        root = Path(folder)
+        root = Path(folder).resolve()
         target = root / "한글 폴더" / "Calix installed"
         old = root / "legacy.exe"
         urllib.request.urlretrieve(
@@ -99,10 +99,18 @@ def main():
             or (target / "calix-desktop.exe").read_bytes() != expected_ui
         ):
             raise RuntimeError("Legacy publisher path was not restored")
+        if digest(target / "calix-engine.exe") != digest(
+            ROOT / "desktop/.build/dist/calix-engine/calix-engine.exe"
+        ):
+            raise RuntimeError("Legacy reinstall retained an outdated engine")
+        print(
+            json.dumps(dict(legacyReinstallPassed=True, installedEngineCurrent=True)),
+            flush=True,
+        )
         # Run the exact packaged --utility install path, including the parent wait
         # and PyInstaller DLL environment, without touching a real user's registry.
         with tempfile.TemporaryDirectory(prefix="Calix-update-") as update_folder:
-            update = Path(update_folder) / "Calix-Setup.exe"
+            update = Path(update_folder).resolve() / "Calix-Setup.exe"
             update.write_bytes(setup.read_bytes())
             parent = subprocess.Popen(
                 [sys.executable, "-c", "import time;time.sleep(1)"],
@@ -126,10 +134,14 @@ def main():
             deadline = time.monotonic() + 40
             try:
                 while time.monotonic() < deadline and launched is None:
-                    for candidate in psutil.process_iter(["exe"]):
+                    for candidate in psutil.process_iter(["name"]):
                         try:
-                            value = candidate.info.get("exe")
-                            if value and Path(value) == update:
+                            if (
+                                candidate.info.get("name") or ""
+                            ).lower() != "calix-setup.exe":
+                                continue
+                            value = candidate.exe()
+                            if value and Path(value).resolve() == update:
                                 launched = candidate
                                 break
                         except (OSError, psutil.Error):
