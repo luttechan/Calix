@@ -7,6 +7,16 @@
   const nonVideoTypes = new Set(mediaRules.non_video);
   const videoSubtypes = new Set(mediaRules.video_subtypes);
   const controllers = new Set();
+  let learningAuthorization = "";
+  const captured = new Map();
+  const rememberAuthorization = (value) => {
+    if (
+      typeof value === "string" &&
+      /^Bearer /i.test(value) &&
+      value.length < 16384
+    )
+      learningAuthorization = value;
+  };
   const state = { jobs: {}, courses: {}, debug: false, logs: [] };
   const parseCampusJSON = (text) => {
     if (typeof text !== "string" || text.length > 16000000)
@@ -74,6 +84,12 @@
       return;
     }
     row[match[2]] = true;
+    if (JSON.stringify(payload).length <= 2000000) {
+      if (captured.size >= 2 && !captured.has(match[1])) captured.clear();
+      const entry = captured.get(match[1]) || {};
+      entry[match[2]] = payload;
+      captured.set(match[1], entry);
+    } else captured.delete(match[1]);
     let remaining = 100000,
       videoCount = 0;
     const walk = (value, depth = 0) => {
@@ -144,6 +160,15 @@
   window.fetch = function (...args) {
     const match = identify(args[0]),
       row = begin(match);
+    if (match && typeof Headers !== "undefined") {
+      try {
+        rememberAuthorization(
+          new Headers(args[1]?.headers || args[0]?.headers).get(
+            "Authorization",
+          ),
+        );
+      } catch {}
+    }
     return fetchOriginal(...args).then(
       (response) => {
         if (row)
@@ -188,6 +213,16 @@
     this.__calixReadMatch = match;
     return result;
   };
+  const setHeader = XMLHttpRequest.prototype.setRequestHeader;
+  if (setHeader)
+    XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
+      if (
+        this.__calixReadMatch &&
+        String(name).toLowerCase() === "authorization"
+      )
+        rememberAuthorization(value);
+      return setHeader.call(this, name, value);
+    };
   const xhrSend = XMLHttpRequest.prototype.send;
   XMLHttpRequest.prototype.send = function (...args) {
     this.__calixReadRow = begin(this.__calixReadMatch);
@@ -198,7 +233,7 @@
       throw error;
     }
   };
-  const jsonRequest = async (url) => {
+  const jsonRequest = async (url, headers = undefined) => {
     log(`HTTP 시작 GET ${new URL(url, location.origin).pathname}`);
     const controller = new AbortController();
     controllers.add(controller);
@@ -206,6 +241,8 @@
     try {
       const response = await fetchOriginal(url, {
         credentials: "include",
+        cache: "no-cache",
+        headers,
         redirect: "error",
         signal: controller.signal,
       });
@@ -285,9 +322,131 @@
     if (a.submission) row.submission = submission(a.submission);
     return row;
   };
+  const stable = (value, depth = 0) => {
+    if (depth > 32) throw Error("MANIFEST_DEPTH");
+    if (Array.isArray(value)) return value.map((v) => stable(v, depth + 1));
+    if (value && typeof value === "object")
+      return Object.fromEntries(
+        Object.keys(value)
+          .sort()
+          .map((k) => [k, stable(value[k], depth + 1)]),
+      );
+    return value;
+  };
+  state.videoManifest = async (course, refresh, depth = 0) => {
+    if (depth > 6) return { cacheable: false };
+    try {
+      let data = captured.get(String(course));
+      let authorization = learningAuthorization;
+      if (!authorization && typeof document !== "undefined") {
+        const value = document.cookie.match(
+          /(?:^|;\s*)xn_api_token=([^;]+)/,
+        )?.[1];
+        if (value) authorization = "Bearer " + decodeURIComponent(value);
+      }
+      if ((!refresh && !data) || (refresh && !authorization)) {
+        if (typeof document !== "undefined")
+          for (const frame of document.querySelectorAll("iframe")) {
+            try {
+              const peer = frame.contentWindow?.[key];
+              if (peer && peer !== state) {
+                const value = await peer.videoManifest(
+                  course,
+                  refresh,
+                  depth + 1,
+                );
+                if (value.cacheable) return value;
+              }
+            } catch {}
+          }
+        return { cacheable: false };
+      }
+      if (refresh) {
+        data = {};
+        for (const kind of ["modules", "lessons"]) {
+          const url =
+            `/learningx/api/v1/courses/${course}/${kind}` +
+            (kind === "modules" ? "?include_detail=true" : "");
+          const { response, value } = await jsonRequest(url, {
+            Authorization: authorization,
+          });
+          if (response.headers.get("link")) return { cacheable: false };
+          const rows = Array.isArray(value) ? value : value?.[kind];
+          if (!Array.isArray(rows)) return { cacheable: false };
+          data[kind] = value;
+        }
+      }
+      if (!data?.modules || !data?.lessons) return { cacheable: false };
+      const text = JSON.stringify({
+        schema: 1,
+        rules: mediaRules,
+        data: stable(data),
+      });
+      if (text.length > 2000000) return { cacheable: false };
+      // Reuse is unsafe when the API omits the student's completion status.
+      const states = {};
+      let complete = true;
+      const inspect = (value) => {
+        if (!value || typeof value !== "object") return;
+        if (value.published === false) return;
+        const data = value.content_data,
+          media = data?.item_content_data || {};
+        const kind =
+          media.content_type || data?.item_content_type || value.content_type;
+        const video =
+          videoTypes.has(kind) ||
+          (kind === "embed" && videoSubtypes.has(media.content_subtype)) ||
+          (media.progress_support === true && Number(media.duration) > 0);
+        if (data && video) {
+          const id = String(value.module_item_id || "");
+          if (
+            !/^[1-9]\d{0,19}$/.test(id) ||
+            typeof value.completed !== "boolean"
+          )
+            complete = false;
+          else states[id] = value.completed;
+        }
+        for (const child of Object.values(value))
+          if (typeof child === "object") {
+            if (Array.isArray(child)) child.forEach(inspect);
+            else inspect(child);
+          }
+      };
+      inspect(data.modules);
+      const hash = await crypto.subtle.digest(
+        "SHA-256",
+        new TextEncoder().encode(text),
+      );
+      return {
+        cacheable: true,
+        complete,
+        states,
+        digest: Array.from(new Uint8Array(hash), (n) =>
+          n.toString(16).padStart(2, "0"),
+        ).join(""),
+      };
+    } catch {
+      return { cacheable: false };
+    }
+  };
   state.start = (id, operation, course) => {
     state.jobs = { [id]: { status: "pending" } };
     (async () => {
+      if (operation === "video-probe" || operation === "video-baseline") {
+        if (!Number.isSafeInteger(course) || course <= 0)
+          throw Error("INVALID_COURSE");
+        return state.videoManifest(course, operation === "video-probe");
+      }
+      if (operation === "owner") {
+        const { value: profile } = await jsonRequest(
+          "/api/v1/users/self/profile",
+        );
+        if (typeof profile.id === "number" && !Number.isSafeInteger(profile.id))
+          throw Error("INVALID_OWNER");
+        const owner = String(profile.id);
+        if (!/^[1-9]\d{0,18}$/.test(owner)) throw Error("INVALID_OWNER");
+        return { owner };
+      }
       if (operation === "identity") {
         const { value: profile } = await jsonRequest(
           "/api/v1/users/self/profile",

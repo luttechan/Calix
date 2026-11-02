@@ -189,8 +189,35 @@ async fn course_snapshot(app: &AppHandle, view: &WebviewWindow, owner: &str, cou
     }
 }
 
+fn reuse_manifest(probe:&Value, previous:&str)->bool {
+    probe["cacheable"]==true && probe["complete"]==true && previous.len()==64 && previous.bytes().all(|b|b.is_ascii_hexdigit()) && probe["digest"].as_str()==Some(previous)
+}
+fn manifest_matches_snapshot(snapshot:&Value,baseline:&Value)->bool {
+    snapshot["items"].as_array().is_some_and(|rows|rows.iter().all(|item|item["url"].as_str().and_then(|url|url.split("/modules/items/").nth(1)).and_then(|tail|tail.split(['?','#','/']).next()).is_some_and(|id|item["completed"].is_boolean() && baseline["states"][id]==item["completed"])))
+}
+#[cfg(test)]
+mod incremental_tests {
+    use super::*;
+    #[test]
+    fn fresh_content_must_match_verified_hash() {
+        let hash="a".repeat(64);
+        assert!(reuse_manifest(&json!({"cacheable":true,"complete":true,"digest":hash}),&hash));
+        assert!(!reuse_manifest(&json!({"cacheable":true,"complete":true,"digest":"b".repeat(64)}),&hash));
+        assert!(!reuse_manifest(&json!({"cacheable":false,"complete":true,"digest":hash}),&hash));
+        assert!(!reuse_manifest(&json!({"cacheable":true,"complete":false,"digest":hash}),&hash));
+    }
+    #[test]
+    fn stale_dom_cannot_seed_a_newer_api_fingerprint() {
+        let snapshot=json!({"items":[{"url":"/courses/1/modules/items/123","completed":false}]});
+        assert!(manifest_matches_snapshot(&snapshot,&json!({"states":{"123":false}})));
+        assert!(!manifest_matches_snapshot(&snapshot,&json!({"states":{"123":true}})));
+        assert!(!manifest_matches_snapshot(&snapshot,&json!({"states":{}})));
+        assert!(!manifest_matches_snapshot(&json!({"items":[{"url":"/courses/1/modules/items/123","completed":null}]}),&json!({"states":{"123":null}})));
+    }
+}
+
 #[tauri::command]
-pub async fn campus_collect(app: AppHandle, webview: Webview, run_id: String) -> Result<Value, String> {
+pub async fn campus_collect(app: AppHandle, webview: Webview, run_id: String, cache: Option<Value>) -> Result<Value, String> {
     crate::auth::trusted(&webview, &["main"])?;
     if run_id.len() != 32 || !run_id.bytes().all(|b| b.is_ascii_hexdigit()) { return Err("INVALID_RUN".into()); }
     let state = app.state::<CampusState>();
@@ -204,13 +231,34 @@ pub async fn campus_collect(app: AppHandle, webview: Webview, run_id: String) ->
     let courses = who["courses"].as_array().ok_or("INVALID_COURSES")?;
     let mut results = Vec::new();
     let mut responses = serde_json::Map::new();
-    for course in courses {
+    let known = cache.filter(|c|c["owner"].as_str()==Some(owner)).unwrap_or(Value::Null);
+    let mut reused = 0;
+    for (index, course) in courses.iter().enumerate() {
         current(&app, epoch)?;
         let id = course["id"].as_u64().ok_or("INVALID_COURSE")?;
         progress(&app, &run_id, format!("{} / 주차학습 확인 중", course["name"].as_str().unwrap_or("수업")), false);
-        match course_snapshot(&app, &view, owner, id, epoch).await {
-            Ok(snapshot) => { progress(&app, &run_id, format!("과목 {id} 영상 {}건 확인", snapshot["items"].as_array().map_or(0, |v|v.len())), true); results.push(json!({"course_id":id,"verified":true,"empty_confirmed":snapshot["items"].as_array().is_some_and(|v|v.is_empty()),"snapshot":snapshot})); },
-            Err(error) => { if error == "CANCELLED" || error == "AUTH_REQUIRED" { return Err(error); } progress(&app, &run_id, format!("과목 {id} 영상 확인 실패: {error}"), true); results.push(json!({"course_id":id,"error":error})); },
+        let _=app.emit_to("main","campus:progress",json!({"runId":run_id,"message":format!("{} 확인 중",course["name"].as_str().unwrap_or("수업")),"current":index,"total":courses.len()}));
+        let previous=known["videos"][id.to_string()].as_str().filter(|v|v.len()==64);
+        let unchanged=if let Some(digest)=previous {
+            match request(&app,&view,"video-probe",Some(id),epoch).await {
+                Ok(probe)=>reuse_manifest(&probe,digest),
+                Err(error)=>{if error=="CANCELLED" {return Err(error);}false}
+            }
+        } else {false};
+        if unchanged {
+            reused+=1;
+            results.push(json!({"course_id":id,"unchanged":true,"fingerprint":previous}));
+            progress(&app,&run_id,format!("과목 {id} 변경 없음: 저장된 영상 유지"),true);
+        } else {
+            match course_snapshot(&app, &view, owner, id, epoch).await {
+                Ok(snapshot) => {
+                    let baseline=request(&app,&view,"video-baseline",Some(id),epoch).await.unwrap_or(Value::Null);
+                    let aligned=manifest_matches_snapshot(&snapshot,&baseline);
+                    let fingerprint=if aligned && baseline["cacheable"]==true && baseline["complete"]==true {baseline["digest"].clone()}else{Value::Null};
+                    results.push(json!({"course_id":id,"verified":true,"empty_confirmed":snapshot["items"].as_array().is_some_and(|v|v.is_empty()),"snapshot":snapshot,"fingerprint":fingerprint}));
+                },
+                Err(error) => { if error == "CANCELLED" || error == "AUTH_REQUIRED" { return Err(error); } progress(&app, &run_id, format!("과목 {id} 영상 확인 실패: {error}"), true); results.push(json!({"course_id":id,"error":error})); },
+            }
         }
         match request(&app, &view, "assignments", Some(id), epoch).await {
             Ok(Value::Object(values)) => responses.extend(values),
@@ -218,10 +266,11 @@ pub async fn campus_collect(app: AppHandle, webview: Webview, run_id: String) ->
             Err(error) => { responses.insert(format!("/api/v1/courses/{id}/assignments"), json!({"error":error})); },
         }
     }
-    let final_identity = identity(&app, &view, epoch).await?;
+    let _=app.emit_to("main","campus:progress",json!({"runId":run_id,"message":"변경 사항 저장 중","current":courses.len(),"total":courses.len()}));
+    let final_identity = request(&app,&view,"owner",None,epoch).await?;
     if final_identity["owner"] != who["owner"] { return Err("AUTH_REQUIRED".into()); }
     let _ = view.hide();
-    let result = json!({"owner":owner,"courses":courses,"results":results,"responses":responses,"transport":"webview2"});
+    let result = json!({"owner":owner,"courses":courses,"results":results,"responses":responses,"transport":"webview2","reused_courses":reused});
     if result.to_string().len() > 1500000 { return Err("COLLECTION_TOO_LARGE".into()); }
     Ok(result)
 }

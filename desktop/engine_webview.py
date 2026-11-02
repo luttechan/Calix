@@ -24,10 +24,16 @@ def identity(value):
 
 
 class BrowserClient(CampusClient):
-    def __init__(self, payload, cancelled):
+    def __init__(self, payload, cancelled, cached_movies=None):
         super().__init__([], cancelled)
+        self.cached_movies = cached_movies or {}
         self.payload = payload
         self.dom_snapshot = payload
+
+    def _snapshot_movies(self, course):
+        if course.id in self.cached_movies:
+            return self.cached_movies[course.id]
+        return super()._snapshot_movies(course)
 
     def _paginated(self, path, params=None, *, collection=None):
         self._check_cancel()
@@ -59,10 +65,46 @@ class BrowserSyncTask(SyncTask):
             raise ValueError("수집 응답을 확인하지 못했습니다.")
         if len(json.dumps(payload, ensure_ascii=False)) > 1800000:
             raise ValueError("수집 응답이 너무 큽니다.")
+        from learning_calendar.storage import Store
+        from learning_calendar.incremental import fingerprints
+
+        store = Store(self.db_path)
+        try:
+            cached = (
+                fingerprints(store) if store.get_meta("canvas_user_id") == owner else {}
+            )
+            from dataclasses import replace
+
+            existing = [
+                replace(e, title=e.source_title or e.title) for e in store.events()
+            ]
+        finally:
+            store.close()
+        cached_movies = {}
+        self.video_fingerprints = {}
         validated = []
         for row in payload["results"]:
             if not isinstance(row, dict):
                 raise ValueError("수집 결과 형식을 확인하지 못했습니다.")
+            course_id = row.get("course_id")
+            digest = row.get("fingerprint")
+            if row.get("unchanged") is True:
+                if (
+                    type(course_id) is not int
+                    or not isinstance(digest, str)
+                    or cached.get(str(course_id)) != digest
+                ):
+                    raise ValueError(
+                        "이전 동기화 기록이 일치하지 않습니다. 다시 동기화하세요."
+                    )
+                cached_movies[course_id] = [
+                    e
+                    for e in existing
+                    if e.course_id == course_id and e.kind == "movie"
+                ]
+                self.video_fingerprints[str(course_id)] = digest
+                validated.append(row)
+                continue
             snapshot = row.get("snapshot")
             if snapshot is not None and (
                 row.get("verified") is not True
@@ -78,8 +120,10 @@ class BrowserSyncTask(SyncTask):
                 )
             else:
                 validated.append(row)
+                if isinstance(digest, str) and len(digest) == 64:
+                    self.video_fingerprints[str(course_id)] = digest
         payload = dict(payload, results=validated)
-        client = BrowserClient(payload, self.cancel_event)
+        client = BrowserClient(payload, self.cancel_event, cached_movies)
         batches, warnings = {}, []
         try:
             for course in courses:

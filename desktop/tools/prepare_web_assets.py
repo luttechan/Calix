@@ -45,6 +45,9 @@ def main():
         json.dumps(dict(tracks=sorted(tracks), critical=(alarm / "crit.mp3").exists())),
         encoding="utf-8",
     )
+    sound=output/'sound'
+    sound.mkdir(exist_ok=True)
+    shutil.copy2(ROOT/'asset/sound/notify.mp3',sound/'notify.mp3')
     print("Local web fonts and assets ready")
 
 

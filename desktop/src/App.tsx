@@ -39,6 +39,7 @@ import { matchesEventFilter, type EventFilter } from "./eventFilters";
 import { groupByCourse } from "./eventGroups";
 import { isTauri, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { SyncNotice } from "./SyncNotice";
 import { WindowControls } from "./WindowControls";
 import { rpc, subscribe, stopEngine } from "./bridge";
 import {
@@ -377,12 +378,6 @@ export function App() {
       }
       if (message.event === "authentication")
         setLoggedIn(Boolean(message.loggedIn));
-      if (message.event === "sync-progress") {
-        notify(String(message.message));
-      }
-      if (message.event === "sync-error") {
-        notify(String(message.message));
-      }
     });
     return () => {
       alive = false;
@@ -920,6 +915,13 @@ export function App() {
           <span className="status-version">{`v${appVersion}`}</span>
         </footer>
       </div>
+      <SyncNotice
+        sound={Boolean(
+          data?.preferences.reminders.enabled &&
+          data?.preferences.reminders.sound,
+        )}
+        volume={data?.preferences.reminders.volume ?? 0.6}
+      />
       {toast && (
         <div className="toast" role="status">
           <Check size={17} />

@@ -1,6 +1,6 @@
 [package]
 name = "calix-desktop"
-version = "1.5.7"
+version = "1.5.8"
 description = "Calix"
 edition = "2021"
 rust-version = "1.90"

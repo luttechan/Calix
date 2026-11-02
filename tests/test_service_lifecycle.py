@@ -25,7 +25,10 @@ def service(tmp_path):
         if isinstance(node, ast.ClassDef) and node.name == "Service"
     )
     output = []
+    from engine_api import EngineAPI
+    api = EngineAPI(tmp_path)
     namespace = dict(
+        api=api,
         QObject=QObject,
         Signal=Signal,
         QTimer=QTimer,
@@ -48,6 +51,7 @@ def service(tmp_path):
     )
     instance = namespace["Service"]()
     yield instance, output
+    api.close()
 
 
 @pytest.mark.parametrize(

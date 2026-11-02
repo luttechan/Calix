@@ -212,7 +212,12 @@ def main():
                         if params.get("log") is True:
                             diagnostics.add(message)
                         else:
-                            self.notify("sync-progress", message=message)
+                            self.notify(
+                                "sync-progress",
+                                message=message,
+                                current=params.get("current"),
+                                total=params.get("total"),
+                            )
                 elif method == "session.import":
                     raise ValueError("학교 로그인 창에서 완료를 누르세요.")
                 elif method == "session.restore":
@@ -398,6 +403,8 @@ def main():
                     else "동기화를 중단했습니다."
                 ),
             )
+            if not restart:
+                self.notify("sync-cancelled", message="동기화를 중단했습니다.")
             if restart and not self.task:
                 self.restart_sync = False
                 self.sync()
@@ -407,7 +414,12 @@ def main():
             self.collector = secrets.token_hex(16)
             self.collection_timer.start(900000)
             diagnostics.add("WebView2 로그인 프로필에서 수집 시작")
-            self.notify("browser-collect", runId=self.collector)
+            from learning_calendar.incremental import cache_state
+
+            self.notify("sync-started", runId=self.collector)
+            self.notify(
+                "browser-collect", runId=self.collector, cache=cache_state(api.store)
+            )
             self.notify("sync-progress", message="학교 일정 확인 중")
 
         def browser_failed(self, params):
@@ -487,7 +499,10 @@ def main():
             self.notify("data-changed")
             self.check_reminders("sync")
             self.notify(
-                "sync-progress", message=result.get("sync_summary") or "동기화 완료"
+                "sync-complete",
+                message=result.get("sync_summary") or "동기화 완료",
+                stats=result.get("stats", {}),
+                warnings=result.get("warnings", []),
             )
 
         def sync_finished(self):

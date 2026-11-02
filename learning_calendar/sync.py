@@ -285,16 +285,18 @@ class CampusClient:
                             self._check_cancel();worker.join(.025)
         return courses,batches,warnings
 
+    def _snapshot_movies(self,course):
+        from .dom_videos import parse_screen
+        result=next((r for r in self.dom_snapshot.get('results',[]) if isinstance(r,dict) and r.get('course_id')==course.id),None)
+        if result is None or 'snapshot' not in result:raise ValueError('주차학습 화면을 확인하지 못했습니다. 기존 영상을 유지합니다.')
+        return parse_screen(course,result['snapshot'])
+
     def _fetch_course(self,course,say):
         batches={};warnings=[];self._check_cancel()
         report={'videos_verified':False,'videos':0,'watched':0,'video_state':'pending','assignment_state':'pending'};self.course_checks[course.id]=report
         say(f'{course.name} / 동영상 조회')
         try:
-            if self.dom_snapshot is not None:
-                from .dom_videos import parse_screen
-                result=next((r for r in self.dom_snapshot.get('results',[]) if isinstance(r,dict) and r.get('course_id')==course.id),None)
-                if result is None or 'snapshot' not in result:raise ValueError('주차학습 화면을 확인하지 못했습니다. 기존 영상을 유지합니다.')
-                events=parse_screen(course,result['snapshot'])
+            if self.dom_snapshot is not None:events=self._snapshot_movies(course)
             else:events=self._course_movies(course)
             complete=getattr(events,'complete',True)
             if events or complete:batches[(course.id,'movie')]=events

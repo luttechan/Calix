@@ -140,3 +140,68 @@ def test_remote_school_webviews_have_no_application_permissions():
         assert not {"campus-worker", "school-login"} & set(
             value.get("windows", []) + value.get("webviews", [])
         )
+
+
+def run_sync(payload,path):
+    success=[];errors=[]
+    task=BrowserSyncTask(payload,path)
+    task.success.connect(success.append);task.error.connect(errors.append)
+    task.run()
+    assert not errors,errors
+    assert success
+    return success[0]
+
+
+def test_incremental_sync_reuses_video_and_preserves_source_and_customization(payload,tmp_path):
+    from learning_calendar.incremental import KEY,fingerprints
+    path=tmp_path/'learning.db'
+    payload['results'][0]['fingerprint']='a'*64
+    first=run_sync(payload,path)
+    assert first['stats']['new_courses']==1
+    store=Store(path)
+    assert fingerprints(store)=={'2':'a'*64}
+    store.set_note('movie:2:12','보존')
+    store.db.execute("INSERT OR REPLACE INTO event_customizations(event_key,title,note) VALUES(?,?,?)",('movie:2:12','내 영상명','보존'))
+    store.db.commit()
+    original=store.db.execute("SELECT title,updated_at FROM events WHERE kind='movie'").fetchone()
+    store.close()
+    packet=deepcopy(payload);packet['results']=[dict(course_id=2,unchanged=True,fingerprint='a'*64)]
+    result=run_sync(packet,path)
+    assert result['stats']['new_courses']==0 and result['stats']['reused_courses']==1
+    assert result['stats']['new']==0 and result['stats']['updated']==0
+    store=Store(path)
+    try:
+        video=next(e for e in store.events() if e.kind=='movie')
+        assert video.title=='내 영상명' and video.note=='보존' and video.completed
+        current=store.db.execute("SELECT title,updated_at FROM events WHERE kind='movie'").fetchone()
+        assert tuple(current)==tuple(original)
+    finally:store.close()
+
+
+@pytest.mark.parametrize('change',['mismatched-hash','different-account','no-cache'])
+def test_incremental_reuse_cannot_use_an_unverified_saved_state(payload,tmp_path,change):
+    path=tmp_path/'learning.db';payload['results'][0]['fingerprint']='a'*64
+    run_sync(payload,path)
+    packet=deepcopy(payload);packet['results']=[dict(course_id=2,unchanged=True,fingerprint='a'*64)]
+    if change=='mismatched-hash':packet['results'][0]['fingerprint']='b'*64
+    if change=='different-account':packet['owner']='8'
+    if change=='no-cache':
+        from learning_calendar.incremental import KEY
+        store=Store(path);store.set_meta(KEY,'{}');store.close()
+    with pytest.raises(ValueError,match='이전 동기화 기록'):
+        BrowserSyncTask(packet,path)._fetch_network()
+
+
+def test_changed_video_is_refreshed_and_failed_video_loses_reuse_permission(payload,tmp_path):
+    from learning_calendar.incremental import fingerprints
+    path=tmp_path/'learning.db';payload['results'][0]['fingerprint']='a'*64
+    run_sync(payload,path)
+    payload['results'][0]['snapshot']['items'][0]['completed']=False
+    payload['results'][0]['fingerprint']='b'*64
+    result=run_sync(payload,path);assert result['stats']['updated']==1
+    store=Store(path);assert not next(e for e in store.events() if e.kind=='movie').completed;store.close()
+    payload['results'][0]['verified']=False
+    run_sync(payload,path)
+    store=Store(path)
+    try:assert fingerprints(store)=={} and len([e for e in store.events() if e.kind=='movie'])==1
+    finally:store.close()

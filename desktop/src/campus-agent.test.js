@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { webcrypto } from "node:crypto";
 import { runInNewContext } from "node:vm";
 import { expect, test, vi } from "vitest";
 
@@ -50,6 +51,8 @@ function browser(
       value = [{ id: 3, name: "과제", submission_types: ["online_upload"] }];
     else if (url.pathname.endsWith("/students/submissions"))
       value = [{ assignment_id: 3, workflow_state: "submitted" }];
+    else if (url.pathname.endsWith("/lessons"))
+      value = { lessons: [{ id: 1 }] };
     else
       value = {
         modules: [
@@ -57,6 +60,8 @@ function browser(
             module_items: [
               {
                 module_item_id: 11,
+                completed: false,
+                attendance_status: "none",
                 content_type: "attendance_item",
                 content_data: {
                   item_content_type: "commons",
@@ -80,6 +85,10 @@ function browser(
       href: "https://canvas.bufs.ac.kr/courses/1",
     },
     URL,
+    Headers,
+    TextEncoder,
+    crypto: webcrypto,
+    Uint8Array,
     XMLHttpRequest: XHR,
     AbortController,
     setTimeout,
@@ -237,4 +246,85 @@ test("중단 시 진행 중인 API 요청을 취소하고 늦은 완료를 폐�
   expect(signal.aborted).toBe(true);
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(Object.keys(state.jobs)).toHaveLength(0);
+});
+
+async function seededManifest() {
+  const value = browser();
+  await value.window.fetch(
+    "/learningx/api/v1/courses/1/modules?include_detail=true",
+    { headers: { Authorization: "Bearer fixture-token" } },
+  );
+  await value.window.fetch("/learningx/api/v1/courses/1/lessons", {
+    headers: { Authorization: "Bearer fixture-token" },
+  });
+  await vi.waitFor(() => expect(value.state.courses["1"].pending).toBe(0));
+  return value;
+}
+test("unchanged content is detected without opening the course again", async () => {
+  const { state, fetch } = await seededManifest();
+  const baseline = await state.videoManifest(1, false);
+  const before = fetch.mock.calls.length;
+  const fresh = await state.videoManifest(1, true);
+  expect(baseline.cacheable).toBe(true);
+  expect(baseline.complete).toBe(true);
+  expect(fresh.digest).toBe(baseline.digest);
+  expect(fresh.states["11"]).toBe(false);
+  expect(fetch.mock.calls.length - before).toBe(2);
+  expect(JSON.stringify(fresh)).not.toContain("fixture-token");
+  expect(fetch.mock.calls.at(-1)[1].cache).toBe("no-cache");
+});
+test.each(["completion", "new-video", "deadline"])(
+  "a changed %s invalidates the saved fingerprint",
+  async (change) => {
+    const { state, fetch } = await seededManifest();
+    const before = await state.videoManifest(1, false);
+    const original = fetch.getMockImplementation();
+    fetch.mockImplementation(async (input, options) => {
+      const response = await original(input, options);
+      if (
+        !new URL(input, "https://canvas.bufs.ac.kr").pathname.endsWith(
+          "/modules",
+        )
+      )
+        return response;
+      const value = JSON.parse(
+        (await response.text()).replace("while(1);", ""),
+      );
+      const item = value.modules[0].module_items[0];
+      if (change === "completion") item.completed = true;
+      if (change === "deadline") item.due_at = "2026-12-01T12:00:00Z";
+      if (change === "new-video")
+        value.modules[0].module_items.push({ ...item, module_item_id: 12 });
+      return new Response(JSON.stringify(value), {
+        headers: { "content-type": "application/json" },
+      });
+    });
+    const after = await state.videoManifest(1, true);
+    expect(after.cacheable).toBe(true);
+    expect(after.digest).not.toBe(before.digest);
+  },
+);
+test("unknown completion and failed probes never authorize cached content", async () => {
+  const { state, fetch } = await seededManifest();
+  const original = fetch.getMockImplementation();
+  fetch.mockImplementation(async (input, options) => {
+    const response = await original(input, options);
+    if (
+      !new URL(input, "https://canvas.bufs.ac.kr").pathname.endsWith("/modules")
+    )
+      return response;
+    const value = JSON.parse((await response.text()).replace("while(1);", ""));
+    delete value.modules[0].module_items[0].completed;
+    return new Response(JSON.stringify(value), {
+      headers: { "content-type": "application/json" },
+    });
+  });
+  expect((await state.videoManifest(1, true)).complete).toBe(false);
+  fetch.mockRejectedValue(new Error("NETWORK_FAILED"));
+  expect((await state.videoManifest(1, true)).cacheable).toBe(false);
+});
+test("without LearningX authentication a probe safely falls back without requests", async () => {
+  const { state, fetch } = browser();
+  expect((await state.videoManifest(1, true)).cacheable).toBe(false);
+  expect(fetch).not.toHaveBeenCalled();
 });

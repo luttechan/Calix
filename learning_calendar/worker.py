@@ -82,7 +82,14 @@ class SyncTask(QThread):
             with store.db:
                 if self.cancel_event.is_set():raise SyncCancelled('취소됨')
                 store.set_meta('canvas_user_id',uid,_commit=False)
+                previous_ids={c.id for c in store.courses()}
                 stats=store.apply_batch(courses,batches,_commit=False)
+                stats['new_courses']=sum(c.id not in previous_ids for c in courses)
+                stats['reused_courses']=sum(r.get('unchanged') is True for r in (self.dom_snapshot or {}).get('results',[]))
+                from .incremental import KEY
+                import json
+                valid={str(cid):digest for cid,digest in getattr(self,'video_fingerprints',{}).items() if course_checks.get(int(cid),{}).get('video_state')=='complete'}
+                store.set_meta(KEY,json.dumps(valid),_commit=False)
                 store.set_meta('sync_partial','1' if warnings else '0',_commit=False)
                 summary=sync_summary(warnings,course_checks);store.set_meta('sync_summary',summary,_commit=False)
                 snapshot=Snapshot(store.events(),store.courses())
