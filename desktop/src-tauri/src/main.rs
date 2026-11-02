@@ -18,11 +18,34 @@ pub fn focus_developer(app: &tauri::AppHandle) {
 fn developer_console(app: tauri::AppHandle, webview: tauri::Webview, open: bool) -> Result<(),String> {
     auth::trusted(&webview,&["main"])?;
     app.state::<DeveloperState>().0.store(open,std::sync::atomic::Ordering::SeqCst);
-    if let Some(window)=app.get_webview_window("main") { window.set_always_on_top(open).map_err(|_|"콘솔 창 우선순위를 적용하지 못했습니다.")?; }
+    if let Some(window)=app.get_webview_window("main") { window.set_always_on_top(open).map_err(|_|"Unable to prioritize Live Console.")?; }
     if let Some(window)=app.get_webview_window("login") { let _=window.set_always_on_top(!open); }
     if let Some(window)=app.get_webview_window("reminder") { let _=window.set_always_on_top(!open); }
     focus_developer(&app);
     Ok(())
+}
+
+#[tauri::command]
+async fn developer_devtools(app: tauri::AppHandle, webview: tauri::Webview) -> Result<(), String> {
+    auth::trusted(&webview, &["main"])?;
+    let window = app.get_webview_window("main").ok_or("Main window unavailable.")?;
+    window.open_devtools();
+    Ok(())
+}
+
+#[tauri::command]
+async fn developer_export(app: tauri::AppHandle, webview: tauri::Webview, report: serde_json::Value) -> Result<bool, String> {
+    use tauri_plugin_dialog::DialogExt;
+    auth::trusted(&webview, &["main"])?;
+    let content = serde_json::to_vec_pretty(&report).map_err(|_| "Invalid diagnostics report.")?;
+    if content.len() > 4 * 1024 * 1024 { return Err("Diagnostics report exceeds the size limit.".into()); }
+    let parent = app.get_webview_window("main").ok_or("Main window unavailable.")?;
+    let selected = app.dialog().file().set_parent(&parent).add_filter("JSON report", &["json"])
+        .set_file_name("Calix-diagnostics.json").blocking_save_file();
+    let Some(selected) = selected else { return Ok(false); };
+    let path = selected.into_path().map_err(|_| "Invalid destination.")?;
+    std::fs::write(path, content).map_err(|_| "Unable to save diagnostics report.")?;
+    Ok(true)
 }
 
 #[tauri::command]
@@ -59,7 +82,7 @@ fn main() {
         .manage(auth::AuthGate(std::sync::Mutex::new(())))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![reminder::reminder_show, reminder::reminder_payload, reminder::reminder_close, reminder::reminder_open_event, developer_console, campus::campus_identity, campus::campus_collect, campus::campus_cancel, campus::campus_debug, quit_app, restart_app, app_ready, auth::auth_open, auth::auth_mount, auth::auth_complete, auth::auth_status, auth::auth_reload, auth::auth_logout, auth::backup_file])
+        .invoke_handler(tauri::generate_handler![reminder::reminder_show, reminder::reminder_payload, reminder::reminder_close, reminder::reminder_open_event, developer_console, developer_devtools, developer_export, campus::campus_identity, campus::campus_collect, campus::campus_cancel, campus::campus_debug, quit_app, restart_app, app_ready, auth::auth_open, auth::auth_mount, auth::auth_complete, auth::auth_status, auth::auth_reload, auth::auth_logout, auth::backup_file])
         .setup(move |app| {
             if let Some(path) = check.clone() {
                 let handle=app.handle().clone();

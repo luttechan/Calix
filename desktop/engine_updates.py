@@ -15,7 +15,7 @@ from learning_calendar.updates import (
     MAX_INSTALLER,
 )
 
-VERSION = "1.5.8"
+VERSION = "1.5.81"
 
 
 class UpdateService(QObject):
@@ -31,6 +31,7 @@ class UpdateService(QObject):
         self.installer = None
         self.received = 0
         self.redirects = 0
+        self.automatic = False
         self.phase = "idle"
         self.state = dict(phase="idle", current=VERSION, message="")
         self.timer = QTimer(self)
@@ -40,7 +41,13 @@ class UpdateService(QObject):
 
     def publish(self, phase, message="", **extra):
         self.phase = phase
-        self.state = dict(phase=phase, current=VERSION, message=message, **extra)
+        self.state = dict(
+            phase=phase,
+            current=VERSION,
+            message=message,
+            automatic=self.automatic,
+            **extra
+        )
         self.notify("update-state", **self.state)
 
     def request(self, url):
@@ -58,15 +65,17 @@ class UpdateService(QObject):
                 else b"application/octet-stream"
             ),
         )
-        request.setTransferTimeout(20000)
+        timeout = 8000 if self.phase == "checking" and self.automatic else 20000
+        request.setTransferTimeout(timeout)
         self.reply = self.manager.get(request)
         self.reply.setReadBufferSize(256 * 1024)
         self.reply.readyRead.connect(self.read)
         self.reply.finished.connect(self.finished)
-        self.timer.start()
+        self.timer.start(timeout)
 
-    def check(self):
+    def check(self, automatic=False):
         self.cancel()
+        self.automatic = automatic
         self.buffer.clear()
         self.publish("checking", "업데이트 확인 중")
         self.request(LATEST_API)

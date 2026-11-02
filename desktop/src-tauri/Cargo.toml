@@ -1,7 +1,8 @@
 [package]
 name = "calix-desktop"
-version = "1.5.8"
+version = "1.5.81"
 description = "Calix"
+authors = ["JINYEONG OH"]
 edition = "2021"
 rust-version = "1.90"
 
@@ -9,7 +10,7 @@ rust-version = "1.90"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon", "unstable"] }
+tauri = { version = "2", features = ["tray-icon", "unstable", "devtools"] }
 tauri-plugin-shell = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-dialog = "2"

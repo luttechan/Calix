@@ -32,6 +32,7 @@ def read_settings(path: str | Path) -> dict:
         "theme": "sky",
         "notifications": False,
         "glass": True,
+        "developer_mode": False,
         "font_mode": "pretendard",
         "avatar": "",
         "nickname": "",
@@ -51,7 +52,12 @@ def read_settings(path: str | Path) -> dict:
                 value = settings.get(key)
                 if type(value) is int and 240 <= value <= 16384:
                     defaults[key] = value
-            for key in ("notifications", "glass", "onboarding_complete"):
+            for key in (
+                "notifications",
+                "glass",
+                "onboarding_complete",
+                "developer_mode",
+            ):
                 if type(settings.get(key)) is bool:
                     defaults[key] = settings[key]
             for key, limit in (("nickname", 30), ("greeting", 120)):
@@ -112,6 +118,7 @@ def write_settings(path: str | Path, settings: dict):
             "notifications",
             "reminders",
             "glass",
+            "developer_mode",
             "font_mode",
             "nickname",
             "greeting",

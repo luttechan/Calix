@@ -16,6 +16,7 @@ import { isTauri, invoke } from "@tauri-apps/api/core";
 import { UpdateDialog } from "./UpdateDialog";
 import { ProfileSettings, ResetSettings } from "./Profile";
 import { ReminderSettingsPanel } from "./Reminders";
+import { DevPanel } from "./DevPanel";
 import { dateKey, dueText, localInput, status, weekdays } from "./dates";
 import type { Task, Preferences } from "./types";
 const taskCollator = new Intl.Collator("ko", { numeric: true });
@@ -556,6 +557,7 @@ export function SettingsPage() {
     ["alarms", "알림과 소리"],
     ["calendar", "일정"],
     ["app", "앱 관리"],
+    ["dev", "Dev"],
   ] as const;
   const [category, setCategory] = useState<string>("profile");
   const selectCategory = (id: string) => {
@@ -605,6 +607,7 @@ export function SettingsPage() {
         {categories.map(([id, label], index) => (
           <button
             key={id}
+            className={id === "dev" ? "settings-tab-dev" : undefined}
             id={`settings-tab-${id}`}
             role="tab"
             aria-selected={category === id}
@@ -636,6 +639,14 @@ export function SettingsPage() {
             {label}
           </button>
         ))}
+      </div>
+      <div
+        role="tabpanel"
+        id="settings-pane-dev"
+        aria-labelledby="settings-tab-dev"
+        hidden={category !== "dev"}
+      >
+        <DevPanel active={category === "dev"} />
       </div>
       <div
         role="tabpanel"

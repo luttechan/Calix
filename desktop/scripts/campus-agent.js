@@ -37,6 +37,7 @@
   state.cancel = () => {
     for (const controller of controllers) controller.abort();
     controllers.clear();
+    window[Symbol.for("calix.canvas.modules")]?.cancel();
     state.jobs = {};
   };
   window[key] = state;
@@ -432,6 +433,9 @@
   state.start = (id, operation, course) => {
     state.jobs = { [id]: { status: "pending" } };
     (async () => {
+      if (operation === "canvas-modules") {
+        return window[Symbol.for("calix.canvas.modules")].collect(course);
+      }
       if (operation === "video-probe" || operation === "video-baseline") {
         if (!Number.isSafeInteger(course) || course <= 0)
           throw Error("INVALID_COURSE");
@@ -511,6 +515,33 @@
             Array.isArray(g.assignments) ? g.assignments : [],
           );
         }
+        const expected =
+          window[Symbol.for("calix.canvas.modules")]?.assignmentIds?.[course] ||
+          [];
+        let missing = false;
+        const found = new Set((rows || []).map((row) => Number(row.id)));
+        for (const id of expected)
+          if (!found.has(id)) {
+            try {
+              const { value } = await jsonRequest(
+                base +
+                  "/assignments/" +
+                  id +
+                  "?include[]=submission&override_assignment_dates=true",
+              );
+              if (Number(value?.id) !== id)
+                throw Error("INVALID_MODULE_ASSIGNMENT");
+              (rows ||= []).push(value);
+              found.add(id);
+            } catch {
+              missing = true;
+            }
+          }
+        if (expected.length)
+          responses[base + "/assignments"] = {
+            data: (rows || []).map(assignment),
+            complete: !missing,
+          };
         const states = [
           "submitted",
           "graded",

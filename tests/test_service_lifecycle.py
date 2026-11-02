@@ -26,6 +26,7 @@ def service(tmp_path):
     )
     output = []
     from engine_api import EngineAPI
+
     api = EngineAPI(tmp_path)
     namespace = dict(
         api=api,
@@ -144,6 +145,32 @@ def test_logging_can_be_enabled_during_collection(service):
     instance.handle(dict(id=1, method="diagnostics.enable", params={"enabled": True}))
     assert next(r for r in output if r.get("id") == 1)["result"] is True
     assert instance.collector == "c" * 32
+
+
+def test_startup_update_checks_once_without_download(service):
+    instance, output = service
+    calls = []
+    instance.updates = SimpleNamespace(
+        phase="idle",
+        state={"phase": "checking"},
+        check=lambda **kwargs: calls.append(kwargs),
+    )
+    for request_id in (1, 2):
+        instance.handle(dict(id=request_id, method="update.startup", params={}))
+    assert calls == [{"automatic": True}]
+    assert all("error" not in row for row in output if "id" in row)
+
+
+def test_developer_metrics_and_inspector_do_not_enable_logging(service):
+    instance, output = service
+    for request_id, method in enumerate(
+        ("diagnostics.metrics", "diagnostics.snapshot"), 1
+    ):
+        instance.handle(dict(id=request_id, method=method, params={}))
+    replies = [row for row in output if "id" in row]
+    assert all("error" not in row for row in replies)
+    assert replies[0]["result"]["rss_mb"] > 0
+    assert replies[1]["result"]["logs"] == {"enabled": False, "rows": []}
 
 
 def test_stop_invalidates_browser_run_and_ignores_late_results(service):

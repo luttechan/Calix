@@ -5,6 +5,7 @@ import threading
 from collections import deque
 from datetime import datetime
 from urllib.parse import urlsplit
+import time
 
 from engine_logging import SecretSafeFormatter
 
@@ -13,6 +14,7 @@ class Diagnostics(logging.Handler):
     def __init__(self):
         super().__init__()
         self.enabled = False
+        self.started = time.monotonic()
         self.rows = deque(maxlen=600)
         self.sequence = 0
         self.lock_rows = threading.RLock()
@@ -51,6 +53,35 @@ class Diagnostics(logging.Handler):
                 enabled=self.enabled, rows=[r for r in self.rows if r["id"] > after]
             )
 
+    def metrics(self):
+        import psutil
+
+        return dict(
+            rss_mb=round(psutil.Process().memory_info().rss / 1048576, 2),
+            uptime_seconds=round(time.monotonic() - self.started, 1),
+        )
+
+    def snapshot(self, api, busy):
+        import platform
+        import ssl
+
+        return dict(
+            schema=1,
+            version="1.5.81",
+            python=platform.python_version(),
+            platform=platform.system(),
+            architecture=platform.machine(),
+            openssl=ssl.OPENSSL_VERSION,
+            metrics=self.metrics(),
+            sync=dict(
+                busy=bool(busy),
+                courses=len(api.store.courses()),
+                events=len(api.store.events()),
+                last_sync=api.store.get_meta("last_sync"),
+            ),
+            logs=self.read(),
+        )
+
     def install_http_trace(self):
         # One reversible wrapper for requests, including its worker threads.
         import requests
@@ -63,13 +94,13 @@ class Diagnostics(logging.Handler):
                 return original(session, request, **kwargs)
             url = urlsplit(request.url)
             target = f"{request.method} {url.hostname}{url.path}"
-            owner.add("HTTP 시작 " + target)
+            owner.add("HTTP START " + target)
             try:
                 response = original(session, request, **kwargs)
             except Exception as error:
-                owner.add(f"HTTP 실패 {target} {type(error).__name__}")
+                owner.add(f"HTTP FAILED {target} {type(error).__name__}")
                 raise
-            owner.add(f"HTTP 응답 {response.status_code} {target}")
+            owner.add(f"HTTP RESPONSE {response.status_code} {target}")
             return response
 
         requests.Session.send = send

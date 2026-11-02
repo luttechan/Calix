@@ -12,14 +12,14 @@ class SecretSafeFormatter(logging.Formatter):
         for pattern, replacement in (
             (
                 rf"""(?i)(['"](?:authorization|cookie|set-cookie|{secret})['"]\s*:\s*){quoted}""",
-                r'\1"[숨김]"',
+                r'\1"[REDACTED]"',
             ),
             (
                 r"(?im)(\b(?:authorization|cookie|set-cookie)\s*:\s*)[^\r\n]*",
-                r"\1[숨김]",
+                r"\1[REDACTED]",
             ),
-            (rf"(?i)(\b(?:cookie|{secret})\s*[=:]\s*){quoted}", r'\1"[숨김]"'),
-            (rf"(?i)(\b(?:cookie|{secret})\s*[=:]\s*)[^\s;,&]+", r"\1[숨김]"),
+            (rf"(?i)(\b(?:cookie|{secret})\s*[=:]\s*){quoted}", r'\1"[REDACTED]"'),
+            (rf"(?i)(\b(?:cookie|{secret})\s*[=:]\s*)[^\s;,&]+", r"\1[REDACTED]"),
         ):
             message = re.sub(pattern, replacement, message)
         return message

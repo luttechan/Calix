@@ -17,4 +17,4 @@ def test_log_redaction_covers_complete_headers_and_quoted_values(message,secrets
     record=logging.LogRecord('test',logging.ERROR,'test',1,message,(),None)
     formatted=namespace['SecretSafeFormatter']('%(message)s').format(record)
     assert all(secret not in formatted for secret in secrets)
-    assert '[숨김]' in formatted
+    assert '[REDACTED]' in formatted

@@ -90,7 +90,7 @@ class EngineAPI:
         events = self.store.events()
         year = datetime.now(KST).year
         return dict(
-            version="1.5.8",
+            version="1.5.81",
             events=[asdict(e) for e in events],
             courses=[asdict(c) for c in self.store.courses()],
             types=self.store.event_types(),
@@ -115,6 +115,7 @@ class EngineAPI:
                         ("theme", "pink"),
                         ("reminders", {}),
                         ("glass", True),
+                        ("developer_mode", False),
                         ("font_mode", "pretendard"),
                         ("nickname", ""),
                         ("avatar", ""),
@@ -438,6 +439,11 @@ class EngineAPI:
             write_settings(self.settings_path, self.settings)
             return settings
         if method == "preferences.save":
+            developer_mode = p.get(
+                "developer_mode", self.settings.get("developer_mode", False)
+            )
+            if type(developer_mode) is not bool:
+                raise ValueError("Developer Mode must be a boolean.")
             theme = p.get("theme", self.settings.get("theme", "pink"))
             glass = p.get("glass", self.settings.get("glass", True))
             mode = p.get("font_mode", self.settings.get("font_mode", "pretendard"))
@@ -447,7 +453,9 @@ class EngineAPI:
                 or mode not in ("pretendard", "windows")
             ):
                 raise ValueError("테마를 확인하세요.")
-            self.settings.update(theme=theme, glass=glass, font_mode=mode)
+            self.settings.update(
+                theme=theme, glass=glass, font_mode=mode, developer_mode=developer_mode
+            )
             write_settings(self.settings_path, self.settings)
             return True
         if method == "holiday.save":

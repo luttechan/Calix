@@ -40,6 +40,7 @@ import { groupByCourse } from "./eventGroups";
 import { isTauri, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { SyncNotice } from "./SyncNotice";
+import { UpdateDialog } from "./UpdateDialog";
 import { WindowControls } from "./WindowControls";
 import { rpc, subscribe, stopEngine } from "./bridge";
 import {
@@ -84,11 +85,13 @@ export function Modal({
   children,
   onClose,
   wide = false,
+  closeLabel = "닫기",
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
+  closeLabel?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -112,8 +115,8 @@ export function Modal({
         <h2>{title}</h2>
         <button
           className="icon-button"
-          title="닫기"
-          aria-label="닫기"
+          title={closeLabel}
+          aria-label={closeLabel}
           onClick={onClose}
         >
           <X size={20} />
@@ -253,6 +256,7 @@ export function App() {
     [busy, setBusy] = useState(false),
     [loggedIn, setLoggedIn] = useState(false),
     [credits, setCredits] = useState(false),
+    [startupUpdate, setStartupUpdate] = useState(false),
     [exit, setExit] = useState(false),
     [install, setInstall] = useState(false),
     [restart, setRestart] = useState(false),
@@ -372,13 +376,21 @@ export function App() {
           () => {},
         );
       if (message.event === "notice") notify(String(message.message));
+      if (
+        message.event === "update-state" &&
+        message.automatic === true &&
+        ["available", "manual"].includes(String(message.phase))
+      )
+        setStartupUpdate(true);
       if (message.event === "update-ready") {
+        setStartupUpdate(false);
         setInstall(true);
         setExit(true);
       }
       if (message.event === "authentication")
         setLoggedIn(Boolean(message.loggedIn));
     });
+    if (isTauri()) void rpc("update.startup").catch(() => {});
     return () => {
       alive = false;
       unsubscribe();
@@ -570,6 +582,7 @@ export function App() {
         >
           <img src="/assets/icons/calix.svg" alt="" />
           <span>Calix</span>
+          {data?.preferences.developer_mode && <b className="dev-badge">Dev</b>}
           <small
             onClick={(event) => {
               event.preventDefault();
@@ -931,13 +944,32 @@ export function App() {
           </button>
         </div>
       )}
+      {startupUpdate && data && (
+        <UpdateDialog
+          onClose={() => setStartupUpdate(false)}
+          onInstall={() => {
+            setStartupUpdate(false);
+            setInstall(true);
+            setExit(true);
+          }}
+        />
+      )}
       {credits && (
         <Modal title="Calix" onClose={() => setCredits(false)}>
           <div className="credit-profile">
-            <img src="/assets/profile-avatar.png" alt="Lutté Laurent" />
-            <h2>Lutté Laurent</h2>
+            <img
+              className="studio-symbol"
+              src="/assets/lutein-studio.png"
+              alt=""
+            />
+            <h2>Lutein Studio</h2>
             <p>Calix {appVersion}</p>
           </div>
+          <div className="credit-developer">
+            <img src="/assets/profile-avatar.png" alt="" />
+            <span>Lutté Laurent</span>
+          </div>
+          <p className="testing-credit">Tested by the BUFS community.</p>
           <div className="credit-links">
             <a
               href="https://github.com/luttechan/Calix"

@@ -1,6 +1,6 @@
 {
   "name": "calix-desktop",
-  "version": "1.5.8",
+  "version": "1.5.81",
   "private": true,
   "type": "module",
   "scripts": {

@@ -53,7 +53,7 @@ def test_http_trace_has_no_query_headers_body_or_response_content(monkeypatch):
         log.set_enabled(True)
         session.send(request)
         output = repr(log.read())
-        assert "HTTP 응답 200" in output
+        assert "HTTP RESPONSE 200" in output
         assert "do-not-log" not in output and "secret-cookie" not in output
     finally:
         restore()

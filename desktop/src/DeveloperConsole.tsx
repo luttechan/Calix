@@ -51,7 +51,12 @@ export function DeveloperConsole() {
         setOpen((value) => !value);
       }
     };
-    const show = () => setOpen(true);
+    const show = () => {
+      setOpen(true);
+      void setLogging(true).catch(() =>
+        setError("Unable to enable log capture."),
+      );
+    };
     window.addEventListener("keydown", key, true);
     window.addEventListener("calix:developer-console", show);
     return () => {
@@ -133,7 +138,12 @@ export function DeveloperConsole() {
   if (!open) return null;
   return (
     <>
-      <Modal title="개발자 콘솔" wide onClose={() => setOpen(false)}>
+      <Modal
+        title="Live Console"
+        closeLabel="Close"
+        wide
+        onClose={() => setOpen(false)}
+      >
         <div className="dialog-actions developer-actions">
           <label className="developer-log-toggle">
             <input
@@ -159,10 +169,10 @@ export function DeveloperConsole() {
                   });
               }}
             />
-            수집 로그
+            Capture logs
           </label>
           <button disabled={requesting} onClick={() => void requestSync()}>
-            동기화
+            Sync
           </button>
           <button
             disabled={!busy || requesting}
@@ -173,13 +183,13 @@ export function DeveloperConsole() {
                 .finally(() => setRequesting(false));
             }}
           >
-            동기화 중단
+            Cancel Sync
           </button>
           <small>{busy ? "Collector running" : "Collector idle"}</small>
         </div>
         {error && <p role="alert">{error}</p>}
         <pre
-          aria-label="크롤링 로그"
+          aria-label="Live logs"
           style={{
             background: "#111218",
             color: "#d8e8dc",
@@ -195,12 +205,13 @@ export function DeveloperConsole() {
         >
           {rows
             .map((row) => `[${row.time.slice(11)}] ${row.message}`)
-            .join("\n") || "기록 없음"}
+            .join("\n") || "No logs captured"}
         </pre>
       </Modal>
       {force && (
         <Modal
           title="Force Synchronizing?"
+          closeLabel="Close"
           onClose={() => {
             if (!requesting) setForce(false);
           }}

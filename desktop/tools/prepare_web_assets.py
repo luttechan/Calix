@@ -30,6 +30,7 @@ def main():
     for source, target in [
         ("asset/icons/calix.svg", "icons/calix.svg"),
         ("asset/profile-avatar.png", "profile-avatar.png"),
+        ("asset/lutein-studio.png", "lutein-studio.png"),
         ("asset/style/Pretendard-OFL.txt", "fonts/Pretendard-OFL.txt"),
     ]:
         shutil.copy2(ROOT / source, output / target)

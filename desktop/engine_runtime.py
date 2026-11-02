@@ -104,6 +104,7 @@ def main():
             self.closing = False
             self.closed = False
             self.updates = None
+            self.startup_update_checked = False
             self.install_on_exit = False
             self.input = None
             self.reported_busy = None
@@ -146,6 +147,8 @@ def main():
                 ):
                     raise ValueError("요청을 확인하세요.")
                 method, params = request.get("method"), request.get("params", {})
+                if isinstance(method, str) and not method.startswith("diagnostics."):
+                    diagnostics.add(f"RPC {method[:100]}")
                 if self.closing and method != "quit":
                     raise ValueError("종료 중입니다.")
                 if method in (
@@ -166,6 +169,16 @@ def main():
                     if type(after) is not int or after < 0:
                         raise ValueError("로그 위치를 확인하세요.")
                     result = diagnostics.read(after)
+                elif method == "diagnostics.metrics":
+                    result = diagnostics.metrics()
+                elif method == "diagnostics.snapshot":
+                    result = diagnostics.snapshot(
+                        api,
+                        self.task
+                        or self.collector
+                        or self.pending_sync
+                        or self.restart_sync,
+                    )
                 elif method == "engine.state":
                     result = dict(
                         loggedIn=self.logged_in,
@@ -269,7 +282,17 @@ def main():
                         from engine_updates import UpdateService
 
                         self.updates = UpdateService(self.notify, self)
-                    if method == "update.state":
+                    if method == "update.startup":
+                        if not self.startup_update_checked:
+                            self.startup_update_checked = True
+                            if self.updates.phase not in (
+                                "checking",
+                                "downloading",
+                                "ready",
+                            ):
+                                self.updates.check(automatic=True)
+                        result = self.updates.state
+                    elif method == "update.state":
                         result = self.updates.state
                     elif method == "update.check":
                         self.updates.check()
@@ -374,7 +397,7 @@ def main():
             return True
 
         def sync(self):
-            diagnostics.add("동기화 요청")
+            diagnostics.add("Synchronization requested")
             if self.task or self.collector or self.pending_sync or self.restart_sync:
                 raise ValueError("동기화 중입니다.")
             if not self.logged_in:
@@ -412,8 +435,8 @@ def main():
 
         def start_collector(self):
             self.collector = secrets.token_hex(16)
-            self.collection_timer.start(900000)
-            diagnostics.add("WebView2 로그인 프로필에서 수집 시작")
+            self.collection_timer.start(210000)
+            diagnostics.add("Collector started with the WebView2 login profile")
             from learning_calendar.incremental import cache_state
 
             self.notify("sync-started", runId=self.collector)

@@ -6,7 +6,7 @@ def test_popup_does_not_import_the_main_app_or_start_an_engine():
         code=(ROOT/'desktop/src'/name).read_text(encoding='utf-8')
         assert 'from "./App"' not in code and "from './App'" not in code
         assert 'bridge' not in code and 'sidecar' not in code
-    assert 'reminder-entry.tsx' in (ROOT/'desktop/reminder.html').read_text()
+    assert 'reminder-entry.tsx' in (ROOT/'desktop/reminder.html').read_text(encoding='utf-8')
 
 def test_windows_reminder_commands_do_not_block_the_ipc_thread():
     code=(ROOT/'desktop/src-tauri/src/reminder.rs').read_text(encoding='utf-8')

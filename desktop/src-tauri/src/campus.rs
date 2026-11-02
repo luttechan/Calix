@@ -4,6 +4,7 @@ use tauri::{AppHandle, Emitter, Manager, Webview, WebviewUrl, WebviewWindow, Web
 
 pub const ARGS: &str = "--disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows --autoplay-policy=user-gesture-required";
 const MEDIA_RULES: &str = include_str!("../../../learning_calendar/media_types.json");
+const CANVAS_MODULES: &str = include_str!("../../scripts/canvas-modules.js");
 const AGENT: &str = include_str!("../../scripts/campus-agent.js");
 const SNAPSHOT: &str = include_str!("../../scripts/campus-snapshot.js");
 
@@ -30,7 +31,7 @@ fn worker(app: &AppHandle) -> Result<WebviewWindow, String> {
     WebviewWindowBuilder::new(app, "campus-worker", WebviewUrl::External("https://canvas.bufs.ac.kr/".parse().unwrap()))
         .title("Calix 동기화").inner_size(1280.0, 900.0).visible(false).focused(false).skip_taskbar(true)
         .data_directory(directory(app)?).additional_browser_args(ARGS)
-        .initialization_script_for_all_frames(AGENT.replace("__CALIX_MEDIA_RULES__", MEDIA_RULES))
+        .initialization_script_for_all_frames(format!("{}\n{}",AGENT.replace("__CALIX_MEDIA_RULES__", MEDIA_RULES),CANVAS_MODULES))
         .on_navigation(crate::auth::campus)
         .on_new_window(|_, _| tauri::webview::NewWindowResponse::Deny)
         .build().map_err(|e| format!("수집 브라우저를 열지 못했습니다. ({e})"))
@@ -140,9 +141,10 @@ fn progress(app: &AppHandle, run_id: &str, message: String, log: bool) {
     }
 }
 
-async fn course_snapshot(app: &AppHandle, view: &WebviewWindow, owner: &str, course: u64, epoch: u64) -> Result<Value, String> {
-    view.navigate(format!("https://canvas.bufs.ac.kr/courses/{course}").parse().unwrap()).map_err(|_| "COURSE_NAVIGATION_FAILED")?;
-    let deadline = Instant::now() + Duration::from_secs(60);
+async fn course_snapshot(app: &AppHandle, view: &WebviewWindow, owner: &str, course: u64, epoch: u64, entry:Option<&str>, known:bool) -> Result<Value, String> {
+    let start_url=entry.and_then(|value|url::Url::parse(value).ok()).filter(|u|u.scheme()=="https" && u.host_str()==Some("canvas.bufs.ac.kr") && u.port_or_known_default()==Some(443) && u.username().is_empty() && u.password().is_none() && u.path().starts_with(&format!("/courses/{course}/external_tools/"))).unwrap_or_else(||format!("https://canvas.bufs.ac.kr/courses/{course}").parse().unwrap());
+    view.navigate(start_url).map_err(|_| "COURSE_NAVIGATION_FAILED")?;
+    let deadline = Instant::now() + Duration::from_secs(30);
     let mut routes = HashSet::new();
     let mut last = String::new();
     let mut since = Instant::now();
@@ -184,11 +186,24 @@ async fn course_snapshot(app: &AppHandle, view: &WebviewWindow, owner: &str, cou
                 if signature != last { last = signature; since = Instant::now(); }
                 else if since.elapsed() >= Duration::from_secs(1) { let _ = view.hide(); return Ok(snap.clone()); }
             } else { last.clear(); }
-        } else { last.clear(); }
+        } else {
+            last.clear();
+            if !known && started.elapsed()>=Duration::from_secs(5) {return Err("LEARNINGX_NOT_FOUND".into());}
+        }
         tokio::time::sleep(Duration::from_millis(200)).await;
     }
 }
 
+fn cancel_reads(view:&WebviewWindow) {
+    let _=view.eval("(()=>{const walk=(w,n=0)=>{if(n>6)return;try{w[Symbol.for('calix.campus.reader')]?.cancel();for(const f of w.document.querySelectorAll('iframe'))if(f.contentWindow)walk(f.contentWindow,n+1);}catch{}};walk(window);})()");
+}
+async fn bounded_request(app:&AppHandle,view:&WebviewWindow,operation:&str,course:Option<u64>,epoch:u64,budget:Duration)->Result<Value,String> {
+    if budget.is_zero(){return Err("COURSE_BUDGET_EXCEEDED".into());}
+    match tokio::time::timeout(budget,request(app,view,operation,course,epoch)).await {
+        Ok(value)=>value,
+        Err(_)=>{cancel_reads(view);Err("COURSE_BUDGET_EXCEEDED".into())}
+    }
+}
 fn reuse_manifest(probe:&Value, previous:&str)->bool {
     probe["cacheable"]==true && probe["complete"]==true && previous.len()==64 && previous.bytes().all(|b|b.is_ascii_hexdigit()) && probe["digest"].as_str()==Some(previous)
 }
@@ -226,7 +241,8 @@ pub async fn campus_collect(app: AppHandle, webview: Webview, run_id: String, ca
     current(&app, epoch)?;
     let view = worker(&app)?;
     let _hide = HideOnDrop(view.clone());
-    let who = identity(&app, &view, epoch).await?;
+    let collection_deadline=Instant::now()+Duration::from_secs(180);
+    let who = bounded_request(&app,&view,"identity",None,epoch,Duration::from_secs(12)).await?;
     let owner = who["owner"].as_str().ok_or("INVALID_OWNER")?;
     let courses = who["courses"].as_array().ok_or("INVALID_COURSES")?;
     let mut results = Vec::new();
@@ -238,36 +254,57 @@ pub async fn campus_collect(app: AppHandle, webview: Webview, run_id: String, ca
         let id = course["id"].as_u64().ok_or("INVALID_COURSE")?;
         progress(&app, &run_id, format!("{} / 주차학습 확인 중", course["name"].as_str().unwrap_or("수업")), false);
         let _=app.emit_to("main","campus:progress",json!({"runId":run_id,"message":format!("{} 확인 중",course["name"].as_str().unwrap_or("수업")),"current":index,"total":courses.len()}));
+        let remaining=collection_deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero(){
+            results.push(json!({"course_id":id,"error":"COLLECTION_BUDGET_EXCEEDED"}));
+            responses.insert(format!("/api/v1/courses/{id}/assignments"),json!({"error":"COLLECTION_BUDGET_EXCEEDED"}));continue;
+        }
+        let course_deadline=Instant::now()+remaining.min(Duration::from_secs(45));
+        let canvas=match bounded_request(&app,&view,"canvas-modules",Some(id),epoch,course_deadline.saturating_duration_since(Instant::now()).min(Duration::from_secs(13))).await {
+            Ok(value)=>value,
+            Err(error)=>{if error=="CANCELLED"||error=="AUTH_REQUIRED"{return Err(error);}json!({"status":"unavailable","complete":false,"items":[],"learningx":{"present":null},"warnings":["모듈 응답 시간 초과"]})}
+        };
+        match bounded_request(&app,&view,"assignments",Some(id),epoch,course_deadline.saturating_duration_since(Instant::now()).min(Duration::from_secs(8))).await {
+            Ok(Value::Object(values))=>responses.extend(values),
+            Ok(_)=>(),
+            Err(error)=>{responses.insert(format!("/api/v1/courses/{id}/assignments"),json!({"error":error}));}
+        }
+        let need_lx=canvas["learningx"]["present"]!=false;
+        let canvas_clear=canvas["complete"]==true && canvas["items"].as_array().is_some_and(|rows|rows.is_empty());
         let previous=known["videos"][id.to_string()].as_str().filter(|v|v.len()==64);
-        let unchanged=if let Some(digest)=previous {
-            match request(&app,&view,"video-probe",Some(id),epoch).await {
+        let unchanged=if need_lx && canvas_clear { if let Some(digest)=previous {
+            match bounded_request(&app,&view,"video-probe",Some(id),epoch,course_deadline.saturating_duration_since(Instant::now()).min(Duration::from_secs(8))).await {
                 Ok(probe)=>reuse_manifest(&probe,digest),
-                Err(error)=>{if error=="CANCELLED" {return Err(error);}false}
+                Err(error)=>{if error=="CANCELLED"{return Err(error);}false}
             }
-        } else {false};
+        } else {false} } else {false};
         if unchanged {
-            reused+=1;
-            results.push(json!({"course_id":id,"unchanged":true,"fingerprint":previous}));
+            reused+=1;results.push(json!({"course_id":id,"unchanged":true,"fingerprint":previous}));
             progress(&app,&run_id,format!("과목 {id} 변경 없음: 저장된 영상 유지"),true);
+        } else if !need_lx {
+            results.push(json!({"course_id":id,"canvas":canvas,"sources_complete":canvas["complete"]==true,"verified":true}));
         } else {
-            match course_snapshot(&app, &view, owner, id, epoch).await {
-                Ok(snapshot) => {
-                    let baseline=request(&app,&view,"video-baseline",Some(id),epoch).await.unwrap_or(Value::Null);
-                    let aligned=manifest_matches_snapshot(&snapshot,&baseline);
-                    let fingerprint=if aligned && baseline["cacheable"]==true && baseline["complete"]==true {baseline["digest"].clone()}else{Value::Null};
-                    results.push(json!({"course_id":id,"verified":true,"empty_confirmed":snapshot["items"].as_array().is_some_and(|v|v.is_empty()),"snapshot":snapshot,"fingerprint":fingerprint}));
-                },
-                Err(error) => { if error == "CANCELLED" || error == "AUTH_REQUIRED" { return Err(error); } progress(&app, &run_id, format!("과목 {id} 영상 확인 실패: {error}"), true); results.push(json!({"course_id":id,"error":error})); },
+            let budget=course_deadline.saturating_duration_since(Instant::now()).min(Duration::from_secs(30));
+            let collected=tokio::time::timeout(budget,course_snapshot(&app,&view,owner,id,epoch,canvas["learningx"]["url"].as_str(),canvas["learningx"]["present"]==true)).await;
+            match collected {
+                Ok(Ok(snapshot))=>{
+                    let baseline=bounded_request(&app,&view,"video-baseline",Some(id),epoch,course_deadline.saturating_duration_since(Instant::now()).min(Duration::from_secs(2))).await.unwrap_or(Value::Null);
+                    let fingerprint=if canvas_clear && manifest_matches_snapshot(&snapshot,&baseline) && baseline["cacheable"]==true && baseline["complete"]==true {baseline["digest"].clone()}else{Value::Null};
+                    results.push(json!({"course_id":id,"verified":true,"empty_confirmed":snapshot["items"].as_array().is_some_and(|v|v.is_empty()),"snapshot":snapshot,"fingerprint":fingerprint,"canvas":canvas,"sources_complete":canvas["complete"]==true}));
+                }
+                value=>{
+                    let error=match value {Ok(Err(error))=>error,_=>"COURSE_CONTENT_TIMEOUT".into()};
+                    if error=="CANCELLED"||error=="AUTH_REQUIRED"{return Err(error);}
+                    cancel_reads(&view);
+                    results.push(json!({"course_id":id,"canvas":canvas,"sources_complete":false,"error":error}));
+                    progress(&app,&run_id,format!("과목 {id} 영상 확인 보류: {error}"),true);
+                }
             }
         }
-        match request(&app, &view, "assignments", Some(id), epoch).await {
-            Ok(Value::Object(values)) => responses.extend(values),
-            Ok(_) => (),
-            Err(error) => { responses.insert(format!("/api/v1/courses/{id}/assignments"), json!({"error":error})); },
-        }
+
     }
     let _=app.emit_to("main","campus:progress",json!({"runId":run_id,"message":"변경 사항 저장 중","current":courses.len(),"total":courses.len()}));
-    let final_identity = request(&app,&view,"owner",None,epoch).await?;
+    let final_identity = bounded_request(&app,&view,"owner",None,epoch,Duration::from_secs(8)).await?;
     if final_identity["owner"] != who["owner"] { return Err("AUTH_REQUIRED".into()); }
     let _ = view.hide();
     let result = json!({"owner":owner,"courses":courses,"results":results,"responses":responses,"transport":"webview2","reused_courses":reused});

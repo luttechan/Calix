@@ -81,6 +81,7 @@ export type ReminderPayload = {
   >[];
 };
 export type Preferences = {
+  developer_mode: boolean;
   reminders: ReminderSettings;
   theme: "pink" | "sky" | "mint" | "purple" | "dark";
   glass: boolean;

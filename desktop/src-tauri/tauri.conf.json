@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Calix",
-  "version": "1.5.8",
+  "version": "1.5.81",
   "identifier": "io.github.luttechan.calix",
   "build": {
     "beforeDevCommand": "pnpm dev",
@@ -42,7 +42,7 @@
     "resources": {
       "engine/_internal/": "_internal/"
     },
-    "publisher": "Lutté Laurent",
+    "publisher": "Lutein Studio",
     "shortDescription": "일정 관리",
     "windows": {
       "webviewInstallMode": {
@@ -55,6 +55,7 @@
         "displayLanguageSelector": false,
         "installMode": "currentUser"
       }
-    }
+    },
+    "copyright": "Copyright 2026 JINYEONG OH, Lutein Studio"
   }
 }

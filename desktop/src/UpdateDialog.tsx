@@ -56,7 +56,12 @@ export function UpdateDialog({
     void rpc<State>("update.state")
       .then((value) => {
         if (!active) return;
-        if (value.phase === "ready") setState(value);
+        if (
+          ["ready", "available", "manual", "checking", "downloading"].includes(
+            value.phase,
+          )
+        )
+          setState(value);
         else return rpc("update.check");
       })
       .catch((error) => {

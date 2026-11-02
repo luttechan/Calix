@@ -30,10 +30,42 @@ class BrowserClient(CampusClient):
         self.payload = payload
         self.dom_snapshot = payload
 
+    def _course_assignments(self, course):
+        events = super()._course_assignments(course)
+        response = self.payload.get("responses", {}).get(
+            f"/api/v1/courses/{course.id}/assignments", {}
+        )
+        if response.get("complete") is False:
+            from learning_calendar.parsers import CollectedEvents
+
+            return CollectedEvents(events, complete=False)
+        return events
+
     def _snapshot_movies(self, course):
         if course.id in self.cached_movies:
             return self.cached_movies[course.id]
-        return super()._snapshot_movies(course)
+        row = next(
+            (
+                r
+                for r in self.payload.get("results", [])
+                if r.get("course_id") == course.id
+            ),
+            {},
+        )
+        if "canvas" not in row:
+            return super()._snapshot_movies(course)
+        from learning_calendar.canvas_modules import parse_canvas_modules
+        from learning_calendar.parsers import CollectedEvents
+
+        canvas = parse_canvas_modules(course, row["canvas"])
+        videos = []
+        complete = canvas.complete and row.get("sources_complete") is True
+        if row.get("snapshot") is not None:
+            lx = super()._snapshot_movies(course)
+            videos.extend(lx)
+            complete = complete and lx.complete
+        videos.extend(canvas)
+        return CollectedEvents(videos, complete=complete)
 
     def _paginated(self, path, params=None, *, collection=None):
         self._check_cancel()
@@ -131,6 +163,13 @@ class BrowserSyncTask(SyncTask):
                 part, notes = client._fetch_course(course, self.progress.emit)
                 batches.update(part)
                 warnings.extend(notes)
+                row = next(
+                    (r for r in payload["results"] if r.get("course_id") == course.id),
+                    {},
+                )
+                for warning in row.get("canvas", {}).get("warnings", []):
+                    if isinstance(warning, str):
+                        warnings.append(f"{course.name}: {warning[:160]}")
             return owner, courses, batches, warnings, False, client.course_checks
         finally:
             client.session.close()
