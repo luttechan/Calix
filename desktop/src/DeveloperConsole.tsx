@@ -3,7 +3,7 @@ import { isTauri, invoke } from "@tauri-apps/api/core";
 import { Modal } from "./App";
 import { rpc, subscribe } from "./bridge";
 type Row = { id: number; time: string; message: string };
-export function DeveloperConsole() {
+export function DeveloperConsole({ allowed }: { allowed: boolean }) {
   const [open, setOpen] = useState(false),
     [enabled, setEnabled] = useState(false),
     [rows, setRows] = useState<Row[]>([]),
@@ -38,6 +38,7 @@ export function DeveloperConsole() {
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (
+        allowed &&
         event.ctrlKey &&
         event.shiftKey &&
         !event.altKey &&
@@ -52,6 +53,7 @@ export function DeveloperConsole() {
       }
     };
     const show = () => {
+      if (!allowed) return;
       setOpen(true);
       void setLogging(true).catch(() =>
         setError("Unable to enable log capture."),
@@ -63,7 +65,13 @@ export function DeveloperConsole() {
       window.removeEventListener("keydown", key, true);
       window.removeEventListener("calix:developer-console", show);
     };
-  }, []);
+  }, [allowed]);
+  useEffect(() => {
+    if (!allowed) {
+      setOpen(false);
+      if (isTauri()) void invoke("developer_disable").catch(() => {});
+    }
+  }, [allowed]);
   useEffect(() => {
     if (isTauri())
       void prioritize(open).catch((e) => {
@@ -135,7 +143,7 @@ export function DeveloperConsole() {
       setRequesting(false);
     }
   };
-  if (!open) return null;
+  if (!open || !allowed) return null;
   return (
     <>
       <Modal

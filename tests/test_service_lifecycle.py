@@ -55,6 +55,20 @@ def service(tmp_path):
     api.close()
 
 
+@pytest.fixture
+def developer_service(service):
+    instance, output = service
+    instance.handle(
+        dict(
+            id=900,
+            method="preferences.save",
+            params=dict(developer_mode=True, developer_acknowledged=True),
+        )
+    )
+    output.clear()
+    return service
+
+
 @pytest.mark.parametrize(
     "method", ["session.logout", "session.prepare", "session.import", "session.restore"]
 )
@@ -139,8 +153,8 @@ def test_restore_failure_opens_login_only_for_a_waiting_sync(service):
     assert any(row.get("event") == "auth-required" for row in output)
 
 
-def test_logging_can_be_enabled_during_collection(service):
-    instance, output = service
+def test_logging_can_be_enabled_during_collection(developer_service):
+    instance, output = developer_service
     instance.collector = "c" * 32
     instance.handle(dict(id=1, method="diagnostics.enable", params={"enabled": True}))
     assert next(r for r in output if r.get("id") == 1)["result"] is True
@@ -161,8 +175,8 @@ def test_startup_update_checks_once_without_download(service):
     assert all("error" not in row for row in output if "id" in row)
 
 
-def test_developer_metrics_and_inspector_do_not_enable_logging(service):
-    instance, output = service
+def test_developer_metrics_and_inspector_do_not_enable_logging(developer_service):
+    instance, output = developer_service
     for request_id, method in enumerate(
         ("diagnostics.metrics", "diagnostics.snapshot"), 1
     ):
@@ -183,8 +197,8 @@ def test_stop_invalidates_browser_run_and_ignores_late_results(service):
     assert instance.browser_complete(dict(runId=run, payload={})) is False
 
 
-def test_force_restarts_collector_with_a_new_run_id(service):
-    instance, output = service
+def test_force_restarts_collector_with_a_new_run_id(developer_service):
+    instance, output = developer_service
     run = "e" * 32
     instance.collector = run
     instance.logged_in = True
@@ -198,8 +212,8 @@ def test_force_restarts_collector_with_a_new_run_id(service):
     assert events == ["browser-cancel", "browser-collect"]
 
 
-def test_force_waits_for_saving_worker_before_restart(service):
-    instance, output = service
+def test_force_waits_for_saving_worker_before_restart(developer_service):
+    instance, output = developer_service
     cancelled = []
     instance.logged_in = True
     instance.task = SimpleNamespace(
@@ -211,8 +225,8 @@ def test_force_waits_for_saving_worker_before_restart(service):
     assert instance.task is None and not instance.restart_sync and instance.collector
 
 
-def test_stop_clears_a_pending_force_restart(service):
-    instance, output = service
+def test_stop_clears_a_pending_force_restart(developer_service):
+    instance, output = developer_service
     instance.logged_in = True
     instance.task = SimpleNamespace(cancel=lambda: None, deleteLater=lambda: None)
     instance.handle(dict(id=1, method="sync.force", params={}))
@@ -221,11 +235,54 @@ def test_stop_clears_a_pending_force_restart(service):
     assert instance.collector is None and not instance.restart_sync
 
 
-def test_developer_sync_request_reports_busy_without_starting_another_run(service):
-    instance, output = service
+def test_developer_sync_request_reports_busy_without_starting_another_run(
+    developer_service,
+):
+    instance, output = developer_service
     instance.collector = "f" * 32
     instance.handle(dict(id=1, method="sync.request", params={}))
     assert next(r for r in output if r.get("id") == 1)["result"] == dict(
         alreadyRunning=True
     )
     assert not any(r.get("event") == "browser-collect" for r in output)
+
+
+@pytest.mark.parametrize(
+    "method",
+    [
+        "diagnostics.enable",
+        "diagnostics.snapshot",
+        "diagnostics.metrics",
+        "sync.force",
+        "sync.request",
+        "developer.maintenance.start",
+    ],
+)
+def test_developer_requests_are_blocked_before_opt_in(service, method):
+    instance, output = service
+    instance.handle(
+        dict(
+            id=1,
+            method=method,
+            params=dict(enabled=True, action="optimize", confirmed=True),
+        )
+    )
+    reply = next(row for row in output if row.get("id") == 1)
+    assert reply["error"] == "Developer Mode is disabled."
+    assert instance.maintenance is None and instance.collector is None
+
+
+def test_maintenance_rejects_requests_during_sync(developer_service):
+    instance, output = developer_service
+    instance.collector = "a" * 32
+    instance.handle(
+        dict(
+            id=1,
+            method="developer.maintenance.start",
+            params=dict(action="optimize", confirmed=True),
+        )
+    )
+    assert (
+        "active operation" in next(row for row in output if row.get("id") == 1)["error"]
+    )
+    assert instance.maintenance is None

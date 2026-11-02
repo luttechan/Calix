@@ -13,6 +13,10 @@ export function DevPanel({ active }: { active: boolean }) {
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
   const [fps, setFps] = useState(0);
+  const [enableWarning, setEnableWarning] = useState(false);
+  const [operation, setOperation] = useState<string | null>(null);
+  const [maintenance, setMaintenance] = useState(false);
+  const unlocked = Boolean(data.preferences.developer_mode);
   const [developerMode, setDeveloperMode] = useState(
     Boolean(data.preferences.developer_mode),
   );
@@ -21,14 +25,16 @@ export function DevPanel({ active }: { active: boolean }) {
     [data.preferences.developer_mode],
   );
   useEffect(() => {
-    if (!active) {
+    if (!active || !unlocked) {
       setMonitoring(false);
       setReport(null);
       setForce(false);
+      setOperation(null);
+      setEnableWarning(false);
     }
-  }, [active]);
+  }, [active, unlocked]);
   useEffect(() => {
-    if (!active || !monitoring) return;
+    if (!active || !unlocked || !monitoring) return;
     let cancelled = false,
       timer: ReturnType<typeof setTimeout>,
       frame = 0;
@@ -59,9 +65,54 @@ export function DevPanel({ active }: { active: boolean }) {
       clearTimeout(timer);
       cancelAnimationFrame(frame);
     };
-  }, [active, monitoring]);
+  }, [active, unlocked, monitoring]);
+  useEffect(() => {
+    if (!active || !unlocked) return;
+    let cancelled = false,
+      timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const state = await rpc<{
+          phase: string;
+          report?: object;
+          message?: string;
+        }>("developer.maintenance.state");
+        if (cancelled) return;
+        setMaintenance(state.phase === "working");
+        if (state.phase === "working") timer = setTimeout(poll, 400);
+        else if (state.phase === "complete" && state.report && maintenance) {
+          setReport(state.report);
+          setMessage("Maintenance completed. Review the report.");
+        } else if (state.phase === "error")
+          setMessage(state.message || "Maintenance failed.");
+      } catch {
+        if (!cancelled) setMaintenance(false);
+      }
+    };
+    void poll();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [active, unlocked, maintenance]);
+  const applyMode = async (value: boolean) => {
+    setPending(true);
+    setMessage("");
+    try {
+      await mutate("preferences.save", {
+        developer_mode: value,
+        developer_acknowledged: value,
+      });
+      setDeveloperMode(value);
+      setEnableWarning(false);
+    } catch {
+      setMessage("Unable to change Developer Mode.");
+    } finally {
+      setPending(false);
+    }
+  };
   const run = async (action: () => Promise<void>) => {
-    if (pending) return;
+    if (pending || maintenance || !unlocked) return;
     setPending(true);
     setMessage("");
     try {
@@ -124,6 +175,21 @@ export function DevPanel({ active }: { active: boolean }) {
           if (saved) setMessage("Diagnostics exported.");
         }),
     ],
+    [
+      "Check Database",
+      "Check SQLite integrity and foreign keys.",
+      () => setOperation("integrity"),
+    ],
+    [
+      "Reset Sync Cache",
+      "Discard content fingerprints and recheck courses on the next sync.",
+      () => setOperation("clear_sync_cache"),
+    ],
+    [
+      "Optimize Database",
+      "Update SQLite query plans. A recovery copy is saved first.",
+      () => setOperation("optimize"),
+    ],
   ] as const;
   return (
     <section className="dev-panel" lang="en">
@@ -136,46 +202,45 @@ export function DevPanel({ active }: { active: boolean }) {
           <input
             type="checkbox"
             checked={developerMode}
-            disabled={pending}
+            disabled={pending || maintenance}
             onChange={(event) => {
               const value = event.target.checked;
-              setDeveloperMode(value);
-              void run(async () => {
-                try {
-                  await mutate("preferences.save", { developer_mode: value });
-                } catch (error) {
-                  setDeveloperMode(!value);
-                  throw error;
-                }
-              });
+              if (value) setEnableWarning(true);
+              else void applyMode(false);
             }}
           />
           Developer Mode
         </label>
       </div>
       <p className="dev-warning">
-        Developer tools are not recommended for general use.
+        Developer tools can cause critical errors, data loss, or an unusable
+        database. Not recommended for general use.
       </p>
-      <div className="dev-tools">
-        {tools.map(([name, description, action]) => (
-          <button
-            key={name}
-            disabled={pending}
-            onClick={action}
-            aria-pressed={
-              name === "Performance Monitor" ? monitoring : undefined
-            }
-          >
-            <strong>
-              {name}
-              {name === "Performance Monitor" && monitoring ? " / Live" : ""}
-            </strong>
-            <span>{description}</span>
-            <b aria-hidden="true">↗</b>
-          </button>
-        ))}
-      </div>
-      {monitoring && (
+      {unlocked && (
+        <div className="dev-tools">
+          {tools.map(([name, description, action]) => (
+            <button
+              key={name}
+              disabled={pending || maintenance}
+              onClick={action}
+              aria-pressed={
+                name === "Performance Monitor" ? monitoring : undefined
+              }
+            >
+              <strong>
+                {name}
+                {name === "Performance Monitor" && monitoring ? " / Live" : ""}
+              </strong>
+              <span>{description}</span>
+              <b aria-hidden="true">↗</b>
+            </button>
+          ))}
+        </div>
+      )}
+      {unlocked && maintenance && (
+        <p role="status">Database maintenance is running…</p>
+      )}
+      {unlocked && monitoring && (
         <output className="dev-metrics">
           <span>
             Engine RSS{" "}
@@ -191,9 +256,9 @@ export function DevPanel({ active }: { active: boolean }) {
         </output>
       )}
       {message && <p role="status">{message}</p>}
-      {report && active && (
+      {unlocked && report && active && (
         <Modal
-          title="Sync Inspector"
+          title={"action" in report ? "Maintenance Report" : "Sync Inspector"}
           closeLabel="Close"
           wide
           onClose={() => setReport(null)}
@@ -201,7 +266,7 @@ export function DevPanel({ active }: { active: boolean }) {
           <pre className="dev-report">{JSON.stringify(report, null, 2)}</pre>
         </Modal>
       )}
-      {force && active && (
+      {unlocked && force && active && (
         <Modal
           title="Force Synchronizing?"
           closeLabel="Close"
@@ -226,6 +291,76 @@ export function DevPanel({ active }: { active: boolean }) {
               }
             >
               Force Synchronizing
+            </button>
+          </div>
+        </Modal>
+      )}
+      {enableWarning && active && (
+        <Modal
+          title="Enable Developer Mode?"
+          closeLabel="Close"
+          onClose={() => setEnableWarning(false)}
+        >
+          <p>
+            Developer tools can cause critical errors, data loss, or an unusable
+            database.
+          </p>
+          <p className="muted">Enable only if you understand these risks.</p>
+          <div className="dialog-actions">
+            <span />
+            <button disabled={pending} onClick={() => setEnableWarning(false)}>
+              Cancel
+            </button>
+            <button
+              className="primary"
+              disabled={pending}
+              onClick={() => void applyMode(true)}
+            >
+              Enable Developer Mode
+            </button>
+          </div>
+        </Modal>
+      )}
+      {unlocked && operation && active && (
+        <Modal
+          title="Run Database Maintenance?"
+          closeLabel="Close"
+          onClose={() => setOperation(null)}
+        >
+          <p>
+            {operation === "integrity"
+              ? "Run a read-only integrity check on the active learning database?"
+              : operation === "clear_sync_cache"
+                ? "Reset content fingerprints? Courses will be checked again on the next sync."
+                : "Update the active database's SQLite query plans?"}
+          </p>
+          {operation !== "integrity" && (
+            <p className="dev-warning">
+              Internal data will change. A recovery copy is saved first. Do not
+              interrupt the operation.
+            </p>
+          )}
+          <div className="dialog-actions">
+            <span />
+            <button disabled={pending} onClick={() => setOperation(null)}>
+              Cancel
+            </button>
+            <button
+              className="primary"
+              disabled={pending}
+              onClick={() =>
+                void run(async () => {
+                  await rpc("developer.maintenance.start", {
+                    action: operation,
+                    confirmed: true,
+                  });
+                  setReport(null);
+                  setOperation(null);
+                  setMaintenance(true);
+                })
+              }
+            >
+              Run Maintenance
             </button>
           </div>
         </Modal>

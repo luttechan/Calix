@@ -9,6 +9,27 @@ mod campus;
 #[derive(Default)]
 pub struct DeveloperState(pub std::sync::atomic::AtomicBool);
 
+fn developer_settings_enabled(value: &serde_json::Value) -> bool {
+    value["developer_mode"].as_bool() == Some(true) && value["developer_acknowledged"].as_bool() == Some(true)
+}
+
+pub(crate) fn require_developer() -> Result<(), String> {
+    let enabled = std::env::var_os("APPDATA").map(std::path::PathBuf::from)
+        .map(|path|path.join("LutteLaurent/Calix/settings.json"))
+        .and_then(|path|std::fs::metadata(&path).ok().filter(|meta|meta.len() <= 5_000_000).and_then(|_|std::fs::read(path).ok()))
+        .and_then(|data|serde_json::from_slice::<serde_json::Value>(&data).ok())
+        .is_some_and(|value|developer_settings_enabled(&value));
+    if enabled { Ok(()) } else { Err("Developer Mode is disabled.".into()) }
+}
+
+#[tauri::command]
+fn developer_disable(app: tauri::AppHandle, webview: tauri::Webview) -> Result<(), String> {
+    auth::trusted(&webview, &["main"])?;
+    app.state::<DeveloperState>().0.store(false, std::sync::atomic::Ordering::SeqCst);
+    if let Some(window) = app.get_webview_window("main") { window.close_devtools(); let _=window.set_always_on_top(false); }
+    campus::campus_debug(app, webview, false)
+}
+
 pub fn focus_developer(app: &tauri::AppHandle) {
     if app.state::<DeveloperState>().0.load(std::sync::atomic::Ordering::SeqCst) {
         if let Some(window)=app.get_webview_window("main") { let _=window.set_always_on_top(true);let _=window.unminimize();let _=window.show();let _=window.set_focus(); }
@@ -17,6 +38,7 @@ pub fn focus_developer(app: &tauri::AppHandle) {
 #[tauri::command]
 fn developer_console(app: tauri::AppHandle, webview: tauri::Webview, open: bool) -> Result<(),String> {
     auth::trusted(&webview,&["main"])?;
+    if open { require_developer()?; }
     app.state::<DeveloperState>().0.store(open,std::sync::atomic::Ordering::SeqCst);
     if let Some(window)=app.get_webview_window("main") { window.set_always_on_top(open).map_err(|_|"Unable to prioritize Live Console.")?; }
     if let Some(window)=app.get_webview_window("login") { let _=window.set_always_on_top(!open); }
@@ -28,6 +50,7 @@ fn developer_console(app: tauri::AppHandle, webview: tauri::Webview, open: bool)
 #[tauri::command]
 async fn developer_devtools(app: tauri::AppHandle, webview: tauri::Webview) -> Result<(), String> {
     auth::trusted(&webview, &["main"])?;
+    require_developer()?;
     let window = app.get_webview_window("main").ok_or("Main window unavailable.")?;
     window.open_devtools();
     Ok(())
@@ -37,6 +60,7 @@ async fn developer_devtools(app: tauri::AppHandle, webview: tauri::Webview) -> R
 async fn developer_export(app: tauri::AppHandle, webview: tauri::Webview, report: serde_json::Value) -> Result<bool, String> {
     use tauri_plugin_dialog::DialogExt;
     auth::trusted(&webview, &["main"])?;
+    require_developer()?;
     let content = serde_json::to_vec_pretty(&report).map_err(|_| "Invalid diagnostics report.")?;
     if content.len() > 4 * 1024 * 1024 { return Err("Diagnostics report exceeds the size limit.".into()); }
     let parent = app.get_webview_window("main").ok_or("Main window unavailable.")?;
@@ -82,7 +106,7 @@ fn main() {
         .manage(auth::AuthGate(std::sync::Mutex::new(())))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![reminder::reminder_show, reminder::reminder_payload, reminder::reminder_close, reminder::reminder_open_event, developer_console, developer_devtools, developer_export, campus::campus_identity, campus::campus_collect, campus::campus_cancel, campus::campus_debug, quit_app, restart_app, app_ready, auth::auth_open, auth::auth_mount, auth::auth_complete, auth::auth_status, auth::auth_reload, auth::auth_logout, auth::backup_file])
+        .invoke_handler(tauri::generate_handler![reminder::reminder_show, reminder::reminder_payload, reminder::reminder_close, reminder::reminder_open_event, developer_console, developer_disable, developer_devtools, developer_export, campus::campus_identity, campus::campus_collect, campus::campus_cancel, campus::campus_debug, quit_app, restart_app, app_ready, auth::auth_open, auth::auth_mount, auth::auth_complete, auth::auth_status, auth::auth_reload, auth::auth_logout, auth::backup_file])
         .setup(move |app| {
             if let Some(path) = check.clone() {
                 let handle=app.handle().clone();
@@ -126,4 +150,14 @@ fn main() {
         ;
     let builder = if check_mode { builder } else { builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show(app))) };
     builder.run(context).expect("Calix failed to start");
+}
+
+#[cfg(test)]
+mod developer_gate_tests {
+    use super::*;
+    #[test]
+    fn developer_tools_require_explicit_boolean_consent() {
+        assert!(developer_settings_enabled(&serde_json::json!({"developer_mode":true,"developer_acknowledged":true})));
+        for value in [serde_json::json!({}),serde_json::json!({"developer_mode":true}),serde_json::json!({"developer_mode":"true","developer_acknowledged":true}),serde_json::json!({"developer_mode":true,"developer_acknowledged":false})] { assert!(!developer_settings_enabled(&value)); }
+    }
 }

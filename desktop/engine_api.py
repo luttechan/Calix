@@ -444,6 +444,12 @@ class EngineAPI:
             )
             if type(developer_mode) is not bool:
                 raise ValueError("Developer Mode must be a boolean.")
+            if (
+                developer_mode
+                and "developer_mode" in p
+                and p.get("developer_acknowledged") is not True
+            ):
+                raise ValueError("Acknowledge the Developer Mode warning first.")
             theme = p.get("theme", self.settings.get("theme", "pink"))
             glass = p.get("glass", self.settings.get("glass", True))
             mode = p.get("font_mode", self.settings.get("font_mode", "pretendard"))
@@ -454,7 +460,15 @@ class EngineAPI:
             ):
                 raise ValueError("테마를 확인하세요.")
             self.settings.update(
-                theme=theme, glass=glass, font_mode=mode, developer_mode=developer_mode
+                theme=theme,
+                glass=glass,
+                font_mode=mode,
+                developer_mode=developer_mode,
+                developer_acknowledged=developer_mode
+                and (
+                    p.get("developer_acknowledged") is True
+                    or self.settings.get("developer_acknowledged") is True
+                ),
             )
             write_settings(self.settings_path, self.settings)
             return True

@@ -13,7 +13,9 @@ def test_developer_mode_is_opt_in_persistent_and_strict(tmp_path):
         assert api.bootstrap()["preferences"]["developer_mode"] is False
         with pytest.raises(ValueError):
             api.dispatch("preferences.save", {"developer_mode": "true"})
-        api.dispatch("preferences.save", {"developer_mode": True})
+        api.dispatch(
+            "preferences.save", {"developer_mode": True, "developer_acknowledged": True}
+        )
     finally:
         api.close()
     api = EngineAPI(tmp_path)

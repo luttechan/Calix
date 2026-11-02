@@ -96,6 +96,8 @@ def main():
             super().__init__()
             self.incoming.connect(self.handle)
             self.task = None
+            self.maintenance = None
+            self.maintenance_state = dict(phase="idle")
             self.collector = None
             self.restore_token = None
             self.pending_sync = False
@@ -147,6 +149,29 @@ def main():
                 ):
                     raise ValueError("요청을 확인하세요.")
                 method, params = request.get("method"), request.get("params", {})
+                developer_enabled = (
+                    api.settings.get("developer_mode") is True
+                    and api.settings.get("developer_acknowledged") is True
+                )
+                if isinstance(method, str) and (
+                    method.startswith(("diagnostics.", "developer."))
+                    or method in ("sync.force", "sync.request")
+                ):
+                    cleanup = (
+                        method == "diagnostics.enable"
+                        and params.get("enabled") is False
+                    ) or method == "diagnostics.read"
+                    if not developer_enabled and not cleanup:
+                        raise ValueError("Developer Mode is disabled.")
+                if (
+                    self.maintenance
+                    and method
+                    not in ("bootstrap", "engine.state", "quit", "preferences.save")
+                    and not str(method).startswith(
+                        ("diagnostics.", "developer.maintenance.state")
+                    )
+                ):
+                    raise ValueError("Database maintenance is running.")
                 if isinstance(method, str) and not method.startswith("diagnostics."):
                     diagnostics.add(f"RPC {method[:100]}")
                 if self.closing and method != "quit":
@@ -158,7 +183,39 @@ def main():
                     "session.logout",
                 ) and (self.task or self.collector):
                     raise ValueError("동기화가 끝난 뒤 로그인 상태를 변경하세요.")
-                if method == "diagnostics.enable":
+                if method == "developer.maintenance.state":
+                    result = self.maintenance_state
+                elif method == "developer.maintenance.start":
+                    from engine_maintenance import MaintenanceTask, ACTIONS
+
+                    action = params.get("action")
+                    if action not in ACTIONS or params.get("confirmed") is not True:
+                        raise ValueError("Confirm the maintenance operation first.")
+                    if (
+                        self.maintenance
+                        or self.task
+                        or self.collector
+                        or self.restore_token
+                        or self.pending_sync
+                        or self.restart_sync
+                    ):
+                        raise ValueError("Wait for the active operation to finish.")
+                    self.maintenance_state = dict(phase="working", action=action)
+                    self.maintenance = MaintenanceTask(api.store.path, action, self)
+                    self.maintenance.success.connect(
+                        lambda report: self.maintenance_result(
+                            dict(phase="complete", report=report)
+                        )
+                    )
+                    self.maintenance.error.connect(
+                        lambda message: self.maintenance_result(
+                            dict(phase="error", message=message)
+                        )
+                    )
+                    self.maintenance.finished.connect(self.maintenance_finished)
+                    self.maintenance.start()
+                    result = self.maintenance_state
+                elif method == "diagnostics.enable":
                     result = diagnostics.set_enabled(params.get("enabled"))
 
                 elif method == "diagnostics.record":
@@ -345,6 +402,16 @@ def main():
                     self.notify("auth-cancelled")
                     self.notify("authentication", loggedIn=False)
                     self.notify("data-changed")
+                elif method == "preferences.save":
+                    result = api.dispatch(method, params)
+                    if not api.settings.get("developer_mode"):
+                        diagnostics.set_enabled(False)
+                        if self.maintenance:
+                            self.maintenance.cancel()
+                    self.notify(
+                        "developer-mode",
+                        enabled=api.settings.get("developer_mode") is True,
+                    )
                 else:
                     if method.startswith("backup.") and (
                         self.task or self.collector or self.restore_token
@@ -528,6 +595,17 @@ def main():
                 warnings=result.get("warnings", []),
             )
 
+        def maintenance_result(self, state):
+            self.maintenance_state = state
+            self.notify("developer-maintenance", **state)
+
+        def maintenance_finished(self):
+            task, self.maintenance = self.maintenance, None
+            if task:
+                task.deleteLater()
+            if self.closing:
+                self.finish_shutdown()
+
         def sync_finished(self):
             task, self.task = self.task, None
             if task:
@@ -550,6 +628,8 @@ def main():
                 self.input.stop()
             if self.task:
                 self.task.cancel()
+            if self.maintenance:
+                self.maintenance.cancel()
             if self.collector:
                 self.notify("browser-cancel", runId=self.collector)
                 self.collector = None
@@ -559,7 +639,13 @@ def main():
             self.finish_shutdown()
 
         def finish_shutdown(self):
-            if self.closed or self.task or self.collector or self.restore_token:
+            if (
+                self.closed
+                or self.task
+                or self.collector
+                or self.restore_token
+                or self.maintenance
+            ):
                 return
             self.closed = True
             api.close()

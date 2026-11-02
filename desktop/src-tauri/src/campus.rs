@@ -116,6 +116,7 @@ pub async fn campus_identity(app: AppHandle, webview: Webview) -> Result<Value, 
 #[tauri::command]
 pub fn campus_debug(app: AppHandle, webview: Webview, enabled: bool) -> Result<(), String> {
     crate::auth::trusted(&webview, &["main"])?;
+    if enabled { crate::require_developer()?; }
     app.state::<CampusState>().debug.store(enabled, Ordering::SeqCst);
     if let Some(view)=app.get_webview_window("campus-worker") {
         let script=format!("(()=>{{const walk=(w,n=0)=>{{if(n>6)return;try{{const s=w[Symbol.for('calix.campus.reader')];if(s){{s.debug={enabled};if(!s.debug)s.logs=[];}}for(const f of w.document.querySelectorAll('iframe'))if(f.contentWindow)walk(f.contentWindow,n+1);}}catch{{}}}};walk(window);}})()");

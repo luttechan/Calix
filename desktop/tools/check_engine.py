@@ -48,6 +48,7 @@ def check(exe):
         "engine_reset",
         "engine_webview",
         "engine_diagnostics",
+        "engine_maintenance",
         "learning_calendar.dom_videos",
         "learning_calendar.media_types",
         "learning_calendar.timetable_terms",

@@ -33,6 +33,7 @@ def read_settings(path: str | Path) -> dict:
         "notifications": False,
         "glass": True,
         "developer_mode": False,
+        "developer_acknowledged": False,
         "font_mode": "pretendard",
         "avatar": "",
         "nickname": "",
@@ -57,6 +58,7 @@ def read_settings(path: str | Path) -> dict:
                 "glass",
                 "onboarding_complete",
                 "developer_mode",
+                "developer_acknowledged",
             ):
                 if type(settings.get(key)) is bool:
                     defaults[key] = settings[key]
@@ -100,6 +102,9 @@ def read_settings(path: str | Path) -> dict:
                 defaults["active_db"] = name
     except (OSError, ValueError):
         pass
+    defaults["developer_mode"] = (
+        defaults["developer_mode"] and defaults["developer_acknowledged"]
+    )
     return defaults
 
 
@@ -119,6 +124,7 @@ def write_settings(path: str | Path, settings: dict):
             "reminders",
             "glass",
             "developer_mode",
+            "developer_acknowledged",
             "font_mode",
             "nickname",
             "greeting",

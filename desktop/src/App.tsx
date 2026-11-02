@@ -570,7 +570,7 @@ export function App() {
   );
   return (
     <div className="app-shell">
-      <DeveloperConsole />
+      <DeveloperConsole allowed={Boolean(data?.preferences.developer_mode)} />
       <aside className="sidebar">
         <a
           className="brand"
@@ -591,7 +591,7 @@ export function App() {
               const last = developerClicks.current;
               const count = now - last.time < 1500 ? last.count + 1 : 1;
               developerClicks.current = { count, time: now };
-              if (count >= 5) {
+              if (count >= 5 && data?.preferences.developer_mode) {
                 developerClicks.current.count = 0;
                 window.dispatchEvent(new Event("calix:developer-console"));
               }

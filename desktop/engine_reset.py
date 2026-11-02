@@ -20,6 +20,27 @@ def reset_data(api):
     }
     owned = []
     for path in folder.iterdir():
+        if path.name == "developer-recovery":
+            if (
+                path.is_symlink()
+                or not path.is_dir()
+                or path.resolve().parent != folder
+            ):
+                raise ValueError("Developer recovery directory is invalid.")
+            for backup in path.iterdir():
+                if (
+                    backup.is_symlink()
+                    or not backup.is_file()
+                    or not re.fullmatch(
+                        r"learning-[a-f0-9]{32}\.db(?:-(?:wal|shm|journal))?",
+                        backup.name,
+                    )
+                ):
+                    raise ValueError(
+                        "Developer recovery directory contains unknown files."
+                    )
+            owned.append(path)
+            continue
         base = re.sub(r"-(wal|shm|journal)$", "", path.name)
         if (
             base in names
