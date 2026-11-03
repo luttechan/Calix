@@ -101,7 +101,7 @@ class EngineAPI:
         events = self.store.events()
         year = datetime.now(KST).year
         return dict(
-            version="1.5.91",
+            version="1.5.92",
             events=[asdict(e) for e in events],
             courses=[asdict(c) for c in self.store.courses()],
             types=self.store.event_types(),

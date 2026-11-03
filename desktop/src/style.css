@@ -2856,72 +2856,103 @@ body.reminder-surface {
   height: 25px;
 }
 .reminder-intro {
-  padding: 18px 0 22px;
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0 16px;
 }
 .reminder-bell {
-  display: flex;
-  width: 54px;
-  height: 54px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 42px;
+  height: 42px;
+  border-radius: 13px;
   background: var(--accent-soft);
   color: var(--accent);
-  margin-bottom: 16px;
 }
 .reminder-card.urgent .reminder-bell {
   color: #d25768;
   background: #d2576818;
 }
 .reminder-intro .eyebrow {
-  margin: 0 0 8px;
+  margin: 0 0 3px;
 }
 .reminder-intro h1 {
-  font-size: 23px;
-  line-height: 1.4;
-  letter-spacing: -0.6px;
-  margin: 0 0 8px;
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.35;
+  letter-spacing: -0.5px;
   font-weight: 650;
 }
-.reminder-intro > p:last-child {
-  font-size: 13px;
+.reminder-list-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex: none;
+  padding: 0 2px 8px;
+  font-size: 12px;
+}
+.reminder-list-heading span,
+.reminder-list-more {
   color: var(--muted);
+  font-size: 12px;
+}
+.reminder-list-more {
+  padding: 10px;
   margin: 0;
 }
 .reminder-events {
   flex: 1;
-  overflow: auto;
   min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 5px;
 }
 .reminder-events > button {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 11px;
+  flex: none;
+  gap: 9px;
   width: 100%;
-  padding: 13px;
+  padding: 8px 10px;
   background: var(--surface);
-  border-radius: 15px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
   text-align: left;
 }
-.reminder-events > button > span:nth-child(2) {
-  flex: 1;
-  min-width: 0;
+.reminder-events strong,
+.reminder-events small > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .reminder-events strong {
-  display: block;
-  font-weight: 550;
+  font-weight: 600;
   font-size: 13px;
-  overflow-wrap: anywhere;
-  line-height: 1.5;
+  line-height: 1.45;
 }
 .reminder-events small {
-  display: block;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
   font-size: 11px;
   color: var(--muted);
-  margin: 2px 0;
+}
+.reminder-events time {
+  flex: none;
+  white-space: nowrap;
+}
+.reminder-events:focus-visible,
+.reminder-events > button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 .reminder-type {
   font-size: 11px;
@@ -2937,9 +2968,10 @@ body.reminder-surface {
 }
 .reminder-card > footer {
   display: flex;
+  flex: none;
   align-items: center;
   gap: 8px;
-  padding-top: 18px;
+  padding-top: 10px;
 }
 .reminder-card > footer > span {
   flex: 1;
@@ -3528,5 +3560,62 @@ body.reminder-surface {
   }
 }
 
-.menu-options { display: flex; flex-wrap: wrap; gap: 16px; margin: 12px 0; }
-.menu-options label { display: inline-flex; align-items: center; gap: 8px; }
+.menu-settings h2 {
+  margin-bottom: 6px;
+}
+.menu-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 20px;
+  padding: 16px 0;
+  cursor: pointer;
+}
+.menu-option + .menu-option {
+  border-top: 1px solid var(--line);
+}
+.menu-option strong,
+.menu-option small {
+  display: block;
+}
+.menu-option small {
+  margin-top: 4px;
+  color: var(--muted);
+}
+.menu-option input {
+  appearance: none;
+  width: 38px;
+  height: 22px;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--accent-soft);
+  display: flex;
+  align-items: center;
+  padding: 2px;
+  cursor: pointer;
+}
+.menu-option input::before {
+  content: "";
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 3px #0003;
+}
+.menu-option input:checked {
+  background: var(--accent);
+  justify-content: flex-end;
+}
+.menu-option input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+@media (forced-colors: active) {
+  .menu-option input {
+    appearance: auto;
+  }
+  .menu-option input::before {
+    content: none;
+  }
+}
