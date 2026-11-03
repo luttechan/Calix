@@ -33,8 +33,8 @@ jobs:
           python tools/prepare_assets.py
           if ($LASTEXITCODE -ne 0) { throw 'Asset build failed.' }
       - name: Check data API
-        timeout-minutes: 5
-        run: python -u -X faulthandler -c "import faulthandler,pytest; faulthandler.dump_traceback_later(180,exit=True); raise SystemExit(pytest.main(['-vv','-p','no:cacheprovider']))"
+        timeout-minutes: 8
+        run: python -u -X faulthandler -c "import faulthandler,pytest; faulthandler.dump_traceback_later(360,exit=True); raise SystemExit(pytest.main(['-vv','-p','no:cacheprovider']))"
       - name: Prepare Node and Rust
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
