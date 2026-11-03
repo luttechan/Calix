@@ -642,28 +642,37 @@ export function SettingsPage() {
         ))}
       </div>
       {category === "menus" && (
-        <section className="glass settings-panel" role="tabpanel" id="settings-pane-menus" aria-labelledby="settings-tab-menus">
-          <h2>메뉴 활성화</h2>
-          <h3>출결</h3>
-          <div className="menu-options">
+        <div
+          role="tabpanel"
+          id="settings-pane-menus"
+          aria-labelledby="settings-tab-menus"
+        >
+          <section className="glass settings-panel menu-settings">
+            <h2>출결</h2>
             {([
-              ["attendance_visible", "메뉴 표시"],
-              ["attendance_sync", "동기화"],
-            ] as const).map(([key, label]) => (
-              <label key={key}>
+              ["attendance_visible", "메뉴 표시", "사이드바에 출결 메뉴를 표시합니다."],
+              ["attendance_sync", "출결 동기화", "다음 동기화부터 출결 기록을 가져옵니다."],
+            ] as const).map(([key, label, description]) => (
+              <label className="menu-option" key={key}>
+                <span>
+                  <strong>{label}</strong>
+                  <small>{description}</small>
+                </span>
                 <input
                   type="checkbox"
+                  role="switch"
+                  aria-label={label}
                   checked={data.preferences[key] === true}
                   onChange={(event) => {
-                    void mutate("preferences.save", { [key]: event.target.checked }).catch(() => {});
+                    void mutate("preferences.save", {
+                      [key]: event.target.checked,
+                    }).catch(() => {});
                   }}
                 />
-                {label}
               </label>
             ))}
-          </div>
-          <p>동기화 설정은 다음 동기화부터 적용됩니다.</p>
-        </section>
+          </section>
+        </div>
       )}
       <div
         role="tabpanel"

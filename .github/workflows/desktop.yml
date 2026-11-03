@@ -1,12 +1,12 @@
-name: Desktop 1.5.91 validation
+name: Desktop 1.5.92 validation
 on:
   workflow_dispatch:
   push:
-    branches: ['codex/calix1591-build']
+    branches: ['codex/calix1592-build']
 permissions:
   contents: read
 concurrency:
-  group: calix-1591-build
+  group: calix-1592-build
   cancel-in-progress: true
 jobs:
   windows:
@@ -95,7 +95,7 @@ jobs:
           Get-Content $report -Raw
       - name: Check native photos and alarm media
         run: |
-          $report = Join-Path $env:RUNNER_TEMP 'calix1591-media.json'
+          $report = Join-Path $env:RUNNER_TEMP 'calix1592-media.json'
           $exe = (Resolve-Path desktop/src-tauri/target/release/calix-desktop.exe).Path
           $process = Start-Process -FilePath $exe -ArgumentList @('--reminder-check',$report) -WindowStyle Hidden -PassThru
           if (-not $process.WaitForExit(90000)) { $process.Kill(); throw 'Media check timed out.' }
@@ -117,13 +117,13 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $target = Join-Path $env:RUNNER_TEMP 'calix1421-installed'
           if (Test-Path -LiteralPath $target) { throw 'Install directory must be new.' }
-          $setup = (Resolve-Path desktop/.build/packages/Calix-1.5.91-Setup-x64.exe).Path
+          $setup = (Resolve-Path desktop/.build/packages/Calix-1.5.92-Setup-x64.exe).Path
           $process = Start-Process -FilePath $setup -ArgumentList @('/S',"/D=$target") -WindowStyle Hidden -PassThru
           if (-not $process.WaitForExit(180000)) { $process.Kill(); throw 'Installer timed out.' }
           if ($process.ExitCode -ne 0) { throw 'Installer failed.' }
           $portable = Join-Path $env:RUNNER_TEMP 'calix1421-portable'
-          Expand-Archive -LiteralPath desktop/.build/packages/Calix-1.5.91-Windows-x64.zip -DestinationPath $portable
-          $expected = Join-Path $portable 'Calix 1.5.91'
+          Expand-Archive -LiteralPath desktop/.build/packages/Calix-1.5.92-Windows-x64.zip -DestinationPath $portable
+          $expected = Join-Path $portable 'Calix 1.5.92'
           foreach ($name in @('calix-engine.exe','_internal')) {
             if (-not (Test-Path -LiteralPath (Join-Path $target $name))) { throw "Missing installed $name" }
           }
@@ -169,7 +169,7 @@ jobs:
           $engine.StandardInput.Close()
           if ($engine.ExitCode -ne 0) { throw $stderr.Result }
           $reply = $stdout.Result -split "`n" | Where-Object { $_.Trim() } | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object id -eq 1
-          if ($reply.result.version -ne '1.5.91') { throw 'Installed engine bootstrap failed.' }
+          if ($reply.result.version -ne '1.5.92') { throw 'Installed engine bootstrap failed.' }
           Write-Output 'Installer, embedded runtime hashes and installed engine startup verified.'
           if (-not $uiMatches) { throw 'Inspect UI binary difference before publication.' }
 
@@ -177,7 +177,7 @@ jobs:
         run: python desktop/tools/check_update_install.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: Calix-1.5.91-development-Windows-x64
+          name: Calix-1.5.92-development-Windows-x64
           path: desktop/.build/packages/*
           compression-level: 0
           retention-days: 7

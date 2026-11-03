@@ -148,7 +148,7 @@ def preview(data_dir=None, open_browser=True, smoke_report=None):
         if smoke_report:
             assert "/src/main.tsx" in document
             version = rpc("bootstrap")["result"]["version"]
-            assert version == "1.5.91"
+            assert version == "1.5.92"
             Path(smoke_report).write_text(
                 json.dumps(
                     dict(ui="React", version=version, legacyQt=False, sourceEntry=True)

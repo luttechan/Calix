@@ -64,27 +64,39 @@ export function ReminderCard({
         </button>
       </header>
       <div className="reminder-intro">
-        <span className="reminder-bell">
-          {payload.urgent ? <BellRing size={28} /> : <Bell size={28} />}
+        <span className="reminder-bell" aria-hidden="true">
+          {payload.urgent ? <BellRing size={22} /> : <Bell size={22} />}
         </span>
-        <p className="eyebrow">{payload.urgent ? "긴급 REMIND" : "REMIND"}</p>
-        <h1>{payload.title}</h1>
-        <p>{payload.message}</p>
+        <div>
+          <p className="eyebrow">{payload.urgent ? "긴급 REMIND" : "REMIND"}</p>
+          <h1>{payload.title}</h1>
+        </div>
       </div>
-      <div className="reminder-events">
+      <div className="reminder-list-heading">
+        <strong>마감 예정</strong>
+        <span>총 {payload.total}건</span>
+      </div>
+      <div className="reminder-events" role="region" aria-label="마감 예정 일정" tabIndex={0}>
         {payload.events.map((event) => (
           <button key={event.key} onClick={() => onOpen(event.key)}>
             <span className={`reminder-type ${event.kind}`}>
               {event.kind === "assignment" ? "과제" : "영상"}
             </span>
             <span>
-              <small>{event.course_name}</small>
-              <strong>{event.title}</strong>
-              <small>{dueText(event.due_at)}</small>
+              <strong title={event.title}>{event.title}</strong>
+              <small>
+                <span title={event.course_name}>{event.course_name}</span>
+                <time dateTime={event.due_at ?? undefined}>{dueText(event.due_at)}</time>
+              </small>
             </span>
             <ArrowUpRight size={16} />
           </button>
         ))}
+        {payload.total > payload.events.length && (
+          <p className="reminder-list-more">
+            나머지 {payload.total - payload.events.length}건은 일정에서 확인할 수 있습니다.
+          </p>
+        )}
       </div>
       <footer>
         {blocked && (
