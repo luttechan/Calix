@@ -556,6 +556,7 @@ export function SettingsPage() {
     ["appearance", "화면"],
     ["alarms", "알림과 소리"],
     ["calendar", "일정"],
+    ["menus", "메뉴 활성화"],
     ["app", "앱 관리"],
     ["dev", "Dev"],
   ] as const;
@@ -640,6 +641,30 @@ export function SettingsPage() {
           </button>
         ))}
       </div>
+      {category === "menus" && (
+        <section className="glass settings-panel" role="tabpanel" id="settings-pane-menus" aria-labelledby="settings-tab-menus">
+          <h2>메뉴 활성화</h2>
+          <h3>출결</h3>
+          <div className="menu-options">
+            {([
+              ["attendance_visible", "메뉴 표시"],
+              ["attendance_sync", "동기화"],
+            ] as const).map(([key, label]) => (
+              <label key={key}>
+                <input
+                  type="checkbox"
+                  checked={data.preferences[key] === true}
+                  onChange={(event) => {
+                    void mutate("preferences.save", { [key]: event.target.checked }).catch(() => {});
+                  }}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+          <p>동기화 설정은 다음 동기화부터 적용됩니다.</p>
+        </section>
+      )}
       <div
         role="tabpanel"
         id="settings-pane-dev"

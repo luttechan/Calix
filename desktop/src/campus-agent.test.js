@@ -167,6 +167,27 @@ test("attendance requests join all four read-only endpoints and strip private me
   ).toBe(true);
 });
 
+test("three attendance courses start together and retain successful responses", async () => {
+  const { fetch, job } = browser();
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  fetch.mockImplementation(async (input) => {
+    const path = new URL(input, "https://canvas.bufs.ac.kr").pathname;
+    await gate;
+    const body = path.endsWith("/summary") ? { attendance_summaries: {} }
+      : path.endsWith("/attendance_items") ? { attendance_items: [] } : [];
+    return new Response(JSON.stringify(body), {
+      headers: { "content-type": "application/json" },
+    });
+  });
+  const pending = job("attendance-batch", [1, 2, 3]);
+  await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(12));
+  release();
+  const result = await pending;
+  expect(result.status).toBe("ready");
+  expect(Object.keys(result.value)).toHaveLength(12);
+});
+
 test("one attendance endpoint failure preserves the successful responses", async () => {
   const { fetch, job } = browser();
   fetch.mockImplementation(async (input) => {

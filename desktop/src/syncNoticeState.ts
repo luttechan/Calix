@@ -3,6 +3,7 @@ export type SyncNoticeState = {
   message: string;
   current: number;
   total: number;
+  remainingSeconds: number | null;
   stats: Record<string, number>;
   warnings: string[];
 };
@@ -11,6 +12,7 @@ const initial = (): SyncNoticeState => ({
   message: "학교 일정 확인 중",
   current: 0,
   total: 0,
+  remainingSeconds: null,
   stats: {},
   warnings: [],
 });
@@ -26,6 +28,10 @@ export function syncNoticeState(
       message: String(event.message || "학교 일정 확인 중").slice(0, 300),
     };
     if (Number.isSafeInteger(event.total) && Number(event.total) > 0) {
+      next.remainingSeconds = Number.isSafeInteger(event.remainingSeconds)
+        && Number(event.remainingSeconds) > 0
+        ? Number(event.remainingSeconds)
+        : null;
       next.total = Number(event.total);
       next.current = Math.max(
         0,
