@@ -91,6 +91,12 @@ export const SyncNotice = memo(function SyncNotice({
   const progress = state.total
     ? Math.round((state.current / state.total) * 100)
     : null;
+  const seconds = state.remainingSeconds;
+  const estimate = seconds === null
+    ? state.total > 0 && state.current === state.total ? "마무리 중" : "예상 시간 계산 중"
+    : seconds < 60
+      ? `약 ${seconds}초 남음`
+      : `약 ${Math.floor(seconds / 60)}분 ${seconds % 60}초 남음`;
   const title = running
     ? "동기화 중"
     : state.phase === "success"
@@ -151,7 +157,7 @@ export const SyncNotice = memo(function SyncNotice({
                 ? `${state.current} / ${state.total}개 강의`
                 : "학교 응답을 기다리는 중"}
             </span>
-            {progress !== null && <span>{progress}%</span>}
+            <span>{estimate}</span>
           </footer>
         </>
       ) : (

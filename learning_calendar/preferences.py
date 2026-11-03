@@ -26,6 +26,8 @@ def read_settings(path: str | Path) -> dict:
 
     defaults = {
         "reminders": DEFAULTS.copy(),
+        "attendance_visible": False,
+        "attendance_sync": False,
         "window_width": 1240,
         "window_height": 840,
         "active_db": "learning.db",
@@ -56,6 +58,8 @@ def read_settings(path: str | Path) -> dict:
             for key in (
                 "notifications",
                 "glass",
+                "attendance_visible",
+                "attendance_sync",
                 "onboarding_complete",
                 "developer_mode",
                 "developer_acknowledged",
@@ -122,6 +126,8 @@ def write_settings(path: str | Path, settings: dict):
             "theme",
             "notifications",
             "reminders",
+            "attendance_visible",
+            "attendance_sync",
             "glass",
             "developer_mode",
             "developer_acknowledged",

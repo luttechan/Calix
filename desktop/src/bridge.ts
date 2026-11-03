@@ -35,7 +35,11 @@ function browserMessage(message: Record<string, unknown>) {
     void browserBarrier
       .then(() => {
         if (stopping || generation !== peer) return undefined;
-        return invoke("campus_collect", { runId, cache: message.cache });
+        return invoke("campus_collect", {
+          runId,
+          cache: message.cache,
+          ...(message.attendanceSync === true ? { attendanceSync: true } : {}),
+        });
       })
       .then((payload) => {
         if (stopping || generation !== peer || payload === undefined) return;

@@ -614,6 +614,18 @@
         if (!unique.size) throw Error("NO_COURSES");
         return { owner, courses: [...unique.values()] };
       }
+      if (operation === "attendance-batch") {
+        if (!Array.isArray(course) || course.length === 0 || course.length > 3 ||
+            !course.every((id) => Number.isSafeInteger(id) && id > 0)) {
+          throw Error("INVALID_ATTENDANCE_BATCH");
+        }
+        const results = await Promise.allSettled(
+          [...new Set(course)].map((id) => state.attendance(id)),
+        );
+        return Object.assign({}, ...results.flatMap((result) =>
+          result.status === "fulfilled" ? [result.value] : [],
+        ));
+      }
       if (
         operation === "attendance" &&
         Number.isSafeInteger(course) &&

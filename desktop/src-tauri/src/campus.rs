@@ -53,7 +53,7 @@ pub(crate) async fn evaluate(view: &WebviewWindow, script: String) -> Result<Val
     if let Value::String(text) = value { serde_json::from_str(&text).map_err(|_| "INVALID_BROWSER_RESPONSE".into()) } else { Ok(value) }
 }
 
-async fn request(app: &AppHandle, view: &WebviewWindow, operation: &str, course: Option<u64>, epoch: u64) -> Result<Value, String> {
+async fn request(app: &AppHandle, view: &WebviewWindow, operation: &str, course: Value, epoch: u64) -> Result<Value, String> {
     let id = app.state::<CampusState>().sequence.fetch_add(1, Ordering::SeqCst).to_string();
     let deadline = Instant::now() + Duration::from_secs(65);
     let mut started = false;
@@ -84,7 +84,7 @@ async fn request(app: &AppHandle, view: &WebviewWindow, operation: &str, course:
 }
 
 async fn identity(app: &AppHandle, view: &WebviewWindow, epoch: u64) -> Result<Value, String> {
-    request(app, view, "identity", None, epoch).await
+    request(app, view, "identity", Value::Null, epoch).await
 }
 
 pub async fn identity_internal(app: &AppHandle) -> Result<Value, String> {
@@ -200,7 +200,7 @@ fn cancel_reads(view:&WebviewWindow) {
 }
 async fn bounded_request(app:&AppHandle,view:&WebviewWindow,operation:&str,course:Option<u64>,epoch:u64,budget:Duration)->Result<Value,String> {
     if budget.is_zero(){return Err("COURSE_BUDGET_EXCEEDED".into());}
-    match tokio::time::timeout(budget,request(app,view,operation,course,epoch)).await {
+    match tokio::time::timeout(budget,request(app,view,operation,json!(course),epoch)).await {
         Ok(value)=>value,
         Err(_)=>{cancel_reads(view);Err("COURSE_BUDGET_EXCEEDED".into())}
     }
@@ -233,7 +233,7 @@ mod incremental_tests {
 }
 
 #[tauri::command]
-pub async fn campus_collect(app: AppHandle, webview: Webview, run_id: String, cache: Option<Value>) -> Result<Value, String> {
+pub async fn campus_collect(app: AppHandle, webview: Webview, run_id: String, cache: Option<Value>, attendance_sync: Option<bool>) -> Result<Value, String> {
     crate::auth::trusted(&webview, &["main"])?;
     if run_id.len() != 32 || !run_id.bytes().all(|b| b.is_ascii_hexdigit()) { return Err("INVALID_RUN".into()); }
     let state = app.state::<CampusState>();
@@ -250,12 +250,21 @@ pub async fn campus_collect(app: AppHandle, webview: Webview, run_id: String, ca
     let mut responses = serde_json::Map::new();
     let known = cache.filter(|c|c["owner"].as_str()==Some(owner)).unwrap_or(Value::Null);
     let mut reused = 0;
+    let courses_started = Instant::now();
+    let attendance_enabled = attendance_sync.unwrap_or(false);
     for (index, course) in courses.iter().enumerate() {
         current(&app, epoch)?;
         let id = course["id"].as_u64().ok_or("INVALID_COURSE")?;
         progress(&app, &run_id, format!("{} / 주차학습 확인 중", course["name"].as_str().unwrap_or("수업")), false);
-        let _=app.emit_to("main","campus:progress",json!({"runId":run_id,"message":format!("{} 확인 중",course["name"].as_str().unwrap_or("수업")),"current":index,"total":courses.len()}));
         let remaining=collection_deadline.saturating_duration_since(Instant::now());
+        let remaining_seconds = if index == 0 {
+            None
+        } else {
+            let average = courses_started.elapsed().as_secs_f64() / index as f64;
+            let estimate = average * (courses.len() - index) as f64;
+            Some(estimate.min(remaining.as_secs_f64()).ceil() as u64 + 1)
+        };
+        let _=app.emit_to("main","campus:progress",json!({"runId":run_id,"message":format!("{} 확인 중",course["name"].as_str().unwrap_or("수업")),"current":index,"total":courses.len(),"remainingSeconds":remaining_seconds}));
         if remaining.is_zero(){
             results.push(json!({"course_id":id,"error":"COLLECTION_BUDGET_EXCEEDED"}));
             responses.insert(format!("/api/v1/courses/{id}/assignments"),json!({"error":"COLLECTION_BUDGET_EXCEEDED"}));continue;
@@ -303,18 +312,40 @@ pub async fn campus_collect(app: AppHandle, webview: Webview, run_id: String, ca
             }
         }
 
-        match bounded_request(&app,&view,"attendance",Some(id),epoch,course_deadline.saturating_duration_since(Instant::now()).min(Duration::from_secs(6))).await {
-            Ok(Value::Object(values))=>responses.extend(values),
-            Err(error) if error=="CANCELLED"=>return Err(error),
-            _=>(),
+    }
+    if attendance_enabled {
+        let course_ids: Vec<u64> = courses.iter().filter_map(|course| course["id"].as_u64()).collect();
+        let attendance_started = Instant::now();
+        let attendance_deadline = attendance_started + Duration::from_secs(20);
+        let batches = course_ids.chunks(3);
+        let total_batches = batches.len();
+        for (index, batch) in batches.enumerate() {
+            current(&app, epoch)?;
+            let remaining = attendance_deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() { break; }
+            let seconds_per_batch = if index == 0 { 4.5 } else {
+                attendance_started.elapsed().as_secs_f64() / index as f64
+            };
+            let estimate = (seconds_per_batch * (total_batches - index) as f64)
+                .min(remaining.as_secs_f64()).ceil() as u64 + 1;
+            let _ = app.emit_to("main", "campus:progress", json!({
+                "runId": run_id, "message": "출결 확인 중", "current": courses.len(),
+                "total": courses.len(), "remainingSeconds": estimate
+            }));
+            let budget = remaining.min(Duration::from_secs(6));
+            match tokio::time::timeout(budget, request(&app, &view, "attendance-batch", json!(batch), epoch)).await {
+                Ok(Ok(Value::Object(values))) => responses.extend(values),
+                Ok(Err(error)) if error == "CANCELLED" => return Err(error),
+                Err(_) => cancel_reads(&view),
+                _ => (),
+            }
         }
-
     }
     let _=app.emit_to("main","campus:progress",json!({"runId":run_id,"message":"변경 사항 저장 중","current":courses.len(),"total":courses.len()}));
     let final_identity = bounded_request(&app,&view,"owner",None,epoch,Duration::from_secs(8)).await?;
     if final_identity["owner"] != who["owner"] { return Err("AUTH_REQUIRED".into()); }
     let _ = view.hide();
-    let result = json!({"owner":owner,"courses":courses,"results":results,"responses":responses,"transport":"webview2","reused_courses":reused});
+    let result = json!({"owner":owner,"courses":courses,"results":results,"responses":responses,"transport":"webview2","reused_courses":reused,"attendance_sync":attendance_enabled});
     if result.to_string().len() > 1500000 { return Err("COLLECTION_TOO_LARGE".into()); }
     Ok(result)
 }

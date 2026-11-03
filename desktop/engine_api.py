@@ -101,7 +101,7 @@ class EngineAPI:
         events = self.store.events()
         year = datetime.now(KST).year
         return dict(
-            version="1.5.9",
+            version="1.5.91",
             events=[asdict(e) for e in events],
             courses=[asdict(c) for c in self.store.courses()],
             types=self.store.event_types(),
@@ -125,6 +125,8 @@ class EngineAPI:
                     for k, d in [
                         ("theme", "pink"),
                         ("reminders", {}),
+                        ("attendance_visible", False),
+                        ("attendance_sync", False),
                         ("glass", True),
                         ("developer_mode", False),
                         ("font_mode", "pretendard"),
@@ -485,7 +487,14 @@ class EngineAPI:
                 or mode not in ("pretendard", "windows")
             ):
                 raise ValueError("테마를 확인하세요.")
+            menu_settings = {
+                key: p.get(key, self.settings.get(key, False))
+                for key in ("attendance_visible", "attendance_sync")
+            }
+            if any(type(value) is not bool for value in menu_settings.values()):
+                raise ValueError("메뉴 활성화 설정을 확인하세요.")
             self.settings.update(
+                **menu_settings,
                 theme=theme,
                 glass=glass,
                 font_mode=mode,

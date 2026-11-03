@@ -91,6 +91,8 @@ export type ReminderPayload = {
   >[];
 };
 export type Preferences = {
+  attendance_visible: boolean;
+  attendance_sync: boolean;
   developer_mode: boolean;
   reminders: ReminderSettings;
   theme: "pink" | "sky" | "mint" | "purple" | "dark";

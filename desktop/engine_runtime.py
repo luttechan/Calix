@@ -288,6 +288,7 @@ def main():
                                 message=message,
                                 current=params.get("current"),
                                 total=params.get("total"),
+                                remainingSeconds=params.get("remainingSeconds"),
                             )
                 elif method == "session.import":
                     raise ValueError("학교 로그인 창에서 완료를 누르세요.")
@@ -520,7 +521,10 @@ def main():
 
             self.notify("sync-started", runId=self.collector)
             self.notify(
-                "browser-collect", runId=self.collector, cache=cache_state(api.store)
+                "browser-collect",
+                runId=self.collector,
+                cache=cache_state(api.store),
+                attendanceSync=api.settings.get("attendance_sync") is True,
             )
             self.notify("sync-progress", message="학교 일정 확인 중")
 

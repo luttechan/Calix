@@ -606,7 +606,7 @@ export function App() {
         </a>
         <div className="nav-label">워크스페이스</div>
         <nav>
-          {navigation.map(([id, title, Icon]) => (
+          {navigation.filter(([id]) => id !== "attendance" || data?.preferences.attendance_visible).map(([id, title, Icon]) => (
             <button
               key={id}
               className={page === id ? "active" : ""}

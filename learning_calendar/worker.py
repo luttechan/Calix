@@ -144,7 +144,10 @@ class SyncTask(QThread):
                     if course_checks.get(int(cid), {}).get("video_state") == "complete"
                 }
                 store.set_meta(KEY, json.dumps(valid), _commit=False)
-                if (self.dom_snapshot or {}).get("transport") == "webview2":
+                if (
+                    (self.dom_snapshot or {}).get("transport") == "webview2"
+                    and self.dom_snapshot.get("attendance_sync") is True
+                ):
                     from .attendance import save as save_attendance
 
                     save_attendance(store, courses, self.dom_snapshot)
