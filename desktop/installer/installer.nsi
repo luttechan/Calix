@@ -42,7 +42,8 @@ ${StrLoc}
 !define WEBVIEW2APPGUID "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
 
 !define MANUFACTURER "{{manufacturer}}"
-!define PRODUCTNAME "{{product_name}}"
+!define PRODUCTNAME "Calix"
+!define CALIXDISPLAYNAME "{{product_name}}"
 !define VERSION "{{version}}"
 !define VERSIONWITHBUILD "{{version_with_build}}"
 !define HOMEPAGE "{{homepage}}"
@@ -79,8 +80,9 @@ Var UpdateMode
 Var NoShortcutMode
 Var WixMode
 Var OldMainBinaryName
+Var CalixPreviousDisplayName
 
-Name "${PRODUCTNAME}"
+Name "${CALIXDISPLAYNAME}"
 BrandingText "${COPYRIGHT}"
 OutFile "${OUTFILE}"
 
@@ -404,7 +406,17 @@ Var AppStartMenuFolder
 !insertmacro MUI_PAGE_FINISH
 
 Function RunMainBinary
-  nsis_tauri_utils::RunAsUser "$INSTDIR\${MAINBINARYNAME}.exe" ""
+  StrCpy $R0 ""
+  Call CalixLaunch
+FunctionEnd
+
+Function CalixLaunch
+  SetOutPath "$INSTDIR"
+  !if "${INSTALLMODE}" == "currentUser"
+    ExecShell "open" "$INSTDIR\${MAINBINARYNAME}.exe" "$R0" SW_SHOWNORMAL
+  !else
+    nsis_tauri_utils::RunAsUser "$INSTDIR\${MAINBINARYNAME}.exe" "$R0"
+  !endif
 FunctionEnd
 
 ; Uninstaller Pages
@@ -643,6 +655,7 @@ Section WebView2
 SectionEnd
 
 Section Install
+  ReadRegStr $CalixPreviousDisplayName SHCTX "${UNINSTKEY}" "DisplayName"
   Call FindWixInstall
   ${If} $R6 != ""
     StrCpy $WixMode 1
@@ -753,7 +766,7 @@ Section Install
   WriteRegStr SHCTX "${UNINSTKEY}" "MainBinaryName" "${MAINBINARYNAME}.exe"
 
   ; Registry information for add/remove programs
-  WriteRegStr SHCTX "${UNINSTKEY}" "DisplayName" "${PRODUCTNAME}"
+  WriteRegStr SHCTX "${UNINSTKEY}" "DisplayName" "${CALIXDISPLAYNAME}"
   WriteRegStr SHCTX "${UNINSTKEY}" "DisplayIcon" "$\"$INSTDIR\${MAINBINARYNAME}.exe$\""
   WriteRegStr SHCTX "${UNINSTKEY}" "DisplayVersion" "${VERSION}"
   WriteRegStr SHCTX "${UNINSTKEY}" "Publisher" "${MANUFACTURER}"
@@ -796,14 +809,15 @@ Section Install
 SectionEnd
 
 Function .onInstSuccess
-  ; Check for `/R` flag only in silent and passive installers because
-  ; GUI installer has a toggle for the user to (re)start the app
+  ; Older app versions pass /UPDATE without /R. Relaunch them as well.
+  ; Interactive Setup uses the Finish page run checkbox.
   ${If} $PassiveMode = 1
   ${OrIf} ${Silent}
     ${GetOptions} $CMDLINE "/R" $R0
     ${IfNot} ${Errors}
+    ${OrIf} $UpdateMode = 1
       ${GetOptions} $CMDLINE "/ARGS" $R0
-      nsis_tauri_utils::RunAsUser "$INSTDIR\${MAINBINARYNAME}.exe" "$R0"
+      Call CalixLaunch
     ${EndIf}
   ${EndIf}
 FunctionEnd
@@ -880,26 +894,26 @@ Section Uninstall
 
     ; Remove start menu shortcut
     !insertmacro MUI_STARTMENU_GETFOLDER Application $AppStartMenuFolder
-    !insertmacro IsShortcutTarget "$SMPROGRAMS\$AppStartMenuFolder\${PRODUCTNAME}.lnk" "$INSTDIR\${MAINBINARYNAME}.exe"
+    !insertmacro IsShortcutTarget "$SMPROGRAMS\$AppStartMenuFolder\${CALIXDISPLAYNAME}.lnk" "$INSTDIR\${MAINBINARYNAME}.exe"
     Pop $0
     ${If} $0 = 1
-      !insertmacro UnpinShortcut "$SMPROGRAMS\$AppStartMenuFolder\${PRODUCTNAME}.lnk"
-      Delete "$SMPROGRAMS\$AppStartMenuFolder\${PRODUCTNAME}.lnk"
+      !insertmacro UnpinShortcut "$SMPROGRAMS\$AppStartMenuFolder\${CALIXDISPLAYNAME}.lnk"
+      Delete "$SMPROGRAMS\$AppStartMenuFolder\${CALIXDISPLAYNAME}.lnk"
       RMDir "$SMPROGRAMS\$AppStartMenuFolder"
     ${EndIf}
-    !insertmacro IsShortcutTarget "$SMPROGRAMS\${PRODUCTNAME}.lnk" "$INSTDIR\${MAINBINARYNAME}.exe"
+    !insertmacro IsShortcutTarget "$SMPROGRAMS\${CALIXDISPLAYNAME}.lnk" "$INSTDIR\${MAINBINARYNAME}.exe"
     Pop $0
     ${If} $0 = 1
-      !insertmacro UnpinShortcut "$SMPROGRAMS\${PRODUCTNAME}.lnk"
-      Delete "$SMPROGRAMS\${PRODUCTNAME}.lnk"
+      !insertmacro UnpinShortcut "$SMPROGRAMS\${CALIXDISPLAYNAME}.lnk"
+      Delete "$SMPROGRAMS\${CALIXDISPLAYNAME}.lnk"
     ${EndIf}
 
     ; Remove desktop shortcuts
-    !insertmacro IsShortcutTarget "$DESKTOP\${PRODUCTNAME}.lnk" "$INSTDIR\${MAINBINARYNAME}.exe"
+    !insertmacro IsShortcutTarget "$DESKTOP\${CALIXDISPLAYNAME}.lnk" "$INSTDIR\${MAINBINARYNAME}.exe"
     Pop $0
     ${If} $0 = 1
-      !insertmacro UnpinShortcut "$DESKTOP\${PRODUCTNAME}.lnk"
-      Delete "$DESKTOP\${PRODUCTNAME}.lnk"
+      !insertmacro UnpinShortcut "$DESKTOP\${CALIXDISPLAYNAME}.lnk"
+      Delete "$DESKTOP\${CALIXDISPLAYNAME}.lnk"
     ${EndIf}
   ${EndIf}
 
@@ -967,68 +981,67 @@ Function un.SkipIfPassive
 FunctionEnd
 
 Function CreateOrUpdateStartMenuShortcut
-  ; We used to use product name as MAINBINARYNAME
-  ; migrate old shortcuts to target the new MAINBINARYNAME
-  StrCpy $R0 0
-
-  !insertmacro IsShortcutTarget "$SMPROGRAMS\$AppStartMenuFolder\${PRODUCTNAME}.lnk" "$INSTDIR\$OldMainBinaryName"
-  Pop $0
-  ${If} $0 = 1
-    !insertmacro SetShortcutTarget "$SMPROGRAMS\$AppStartMenuFolder\${PRODUCTNAME}.lnk" "$INSTDIR\${MAINBINARYNAME}.exe"
-    StrCpy $R0 1
-  ${EndIf}
-
-  !insertmacro IsShortcutTarget "$SMPROGRAMS\${PRODUCTNAME}.lnk" "$INSTDIR\$OldMainBinaryName"
-  Pop $0
-  ${If} $0 = 1
-    !insertmacro SetShortcutTarget "$SMPROGRAMS\${PRODUCTNAME}.lnk" "$INSTDIR\${MAINBINARYNAME}.exe"
-    StrCpy $R0 1
-  ${EndIf}
-
-  ${If} $R0 = 1
-    Return
-  ${EndIf}
-
-  ; Skip creating shortcut if in update mode or no shortcut mode
-  ; but always create if migrating from wix
-  ${If} $WixMode = 0
-    ${If} $UpdateMode = 1
-    ${OrIf} $NoShortcutMode = 1
-      Return
-    ${EndIf}
-  ${EndIf}
-
   !if "${STARTMENUFOLDER}" != ""
-    CreateDirectory "$SMPROGRAMS\$AppStartMenuFolder"
-    CreateShortcut "$SMPROGRAMS\$AppStartMenuFolder\${PRODUCTNAME}.lnk" "$INSTDIR\${MAINBINARYNAME}.exe"
-    !insertmacro SetLnkAppUserModelId "$SMPROGRAMS\$AppStartMenuFolder\${PRODUCTNAME}.lnk"
+    StrCpy $R1 "$SMPROGRAMS\$AppStartMenuFolder"
   !else
-    CreateShortcut "$SMPROGRAMS\${PRODUCTNAME}.lnk" "$INSTDIR\${MAINBINARYNAME}.exe"
-    !insertmacro SetLnkAppUserModelId "$SMPROGRAMS\${PRODUCTNAME}.lnk"
+    StrCpy $R1 "$SMPROGRAMS"
   !endif
+  Call CalixCreateShortcut
 FunctionEnd
 
 Function CreateOrUpdateDesktopShortcut
-  ; We used to use product name as MAINBINARYNAME
-  ; migrate old shortcuts to target the new MAINBINARYNAME
-  !insertmacro IsShortcutTarget "$DESKTOP\${PRODUCTNAME}.lnk" "$INSTDIR\$OldMainBinaryName"
-  Pop $0
-  ${If} $0 = 1
-    !insertmacro SetShortcutTarget "$DESKTOP\${PRODUCTNAME}.lnk" "$INSTDIR\${MAINBINARYNAME}.exe"
+  StrCpy $R1 "$DESKTOP"
+  Call CalixCreateShortcut
+FunctionEnd
+
+Function CalixCreateShortcut
+  ${If} $NoShortcutMode = 1
     Return
   ${EndIf}
-
-  ; Skip creating shortcut if in update mode or no shortcut mode
-  ; but always create if migrating from wix
-  ${If} $WixMode = 0
-    ${If} $UpdateMode = 1
-    ${OrIf} $NoShortcutMode = 1
-      Return
+  StrCpy $R2 "$R1\${CALIXDISPLAYNAME}.lnk"
+  StrCpy $R3 "$R1\${PRODUCTNAME}.lnk"
+  ; DisplayName comes from the stable key. Construct versioned paths from
+  ; validated version characters only, and only remove links to Calix.
+  StrCpy $R4 $CalixPreviousDisplayName 7
+  StrCpy $R5 $CalixPreviousDisplayName 1 -1
+  ${If} $R4 == "Calix ("
+  ${AndIf} $R5 == ")"
+    StrCpy $R4 $CalixPreviousDisplayName -1 7
+    ${If} $R4 != ""
+      StrCpy $R5 0
+      ${Do}
+        StrCpy $R6 $R4 1 $R5
+        ${If} $R6 == ""
+          StrCpy $R3 "$R1\$CalixPreviousDisplayName.lnk"
+          ${ExitDo}
+        ${EndIf}
+        ${StrLoc} $R7 "0123456789." "$R6" ">"
+        ${If} $R7 == ""
+          ${ExitDo}
+        ${EndIf}
+        IntOp $R5 $R5 + 1
+      ${Loop}
     ${EndIf}
   ${EndIf}
-
-  CreateShortcut "$DESKTOP\${PRODUCTNAME}.lnk" "$INSTDIR\${MAINBINARYNAME}.exe"
-  !insertmacro SetLnkAppUserModelId "$DESKTOP\${PRODUCTNAME}.lnk"
+  StrCpy $R4 0
+  ${If} $CalixPreviousLocation != ""
+    !insertmacro IsShortcutTarget "$R3" "$CalixPreviousLocation\${MAINBINARYNAME}.exe"
+    Pop $R4
+  ${EndIf}
+  ${If} $UpdateMode = 1
+  ${AndIf} $R4 <> 1
+    Return
+  ${EndIf}
+  CreateDirectory "$R1"
+  ClearErrors
+  CreateShortcut "$R2" "$INSTDIR\${MAINBINARYNAME}.exe"
+  ${IfNot} ${Errors}
+    !insertmacro SetLnkAppUserModelId "$R2"
+    ${If} $R4 = 1
+    ${AndIf} $R2 != $R3
+      Delete "$R3"
+    ${EndIf}
+  ${EndIf}
 FunctionEnd
 
 ; Resolve by the stable uninstall key first. Publisher labels may change.
