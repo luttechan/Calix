@@ -92,7 +92,7 @@ export function UpdateDialog({
             <ArrowDownToLine size={28} />
           )}
         </div>
-        <p className="eyebrow">Calix ({state.current})</p>
+        <p className="eyebrow">Calix {state.current}</p>
         <h2>{state.message}</h2>
         {state.latest && (
           <p className="muted">{state.latest.replace(/^v/, "")}</p>

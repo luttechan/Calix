@@ -188,6 +188,13 @@ VIAddVersionKey "ProductVersion" "${VERSION}"
 ; 4. Custom page to ask user if he wants to reinstall/uninstall
 ;    only if a previous installation was detected
 Var ReinstallPageCheck
+Var CalixPreviousLocation
+Var CalixHasExistingData
+Var CalixKeepOption
+Var CalixResetOption
+Var CalixPreserveOption
+Var CalixResetRoaming
+Var CalixResetLocal
 Page custom PageReinstall PageLeaveReinstall
 
 ; Find a previous WiX installation and set $R6 to its uninstall registry key, or to "" if none.
@@ -220,157 +227,78 @@ Function FindWixInstall
 FunctionEnd
 
 Function PageReinstall
-  ; Uninstall previous WiX installation if exists.
+  StrCpy $CalixPreviousLocation ""
+  StrCpy $CalixHasExistingData 0
   Call FindWixInstall
+  StrCpy $WixMode 0
   ${If} $R6 != ""
     StrCpy $WixMode 1
-    Goto compare_version
-  ${EndIf}
-
-  ; Check if there is an existing installation, if not, abort the reinstall page
-  ReadRegStr $R0 SHCTX "${UNINSTKEY}" ""
-  ReadRegStr $R1 SHCTX "${UNINSTKEY}" "UninstallString"
-  ${IfThen} "$R0$R1" == "" ${|} Abort ${|}
-
-  ; Compare this installar version with the existing installation
-  ; and modify the messages presented to the user accordingly
-  compare_version:
-  StrCpy $R4 "$(older)"
-  ${If} $WixMode = 1
-    ReadRegStr $R0 HKLM "$R6" "DisplayVersion"
   ${Else}
-    ReadRegStr $R0 SHCTX "${UNINSTKEY}" "DisplayVersion"
+    Call CalixResolveInstallLocation
+    StrCpy $CalixPreviousLocation $4
   ${EndIf}
-  ${IfThen} $R0 == "" ${|} StrCpy $R4 "$(unknown)" ${|}
-
-  nsis_tauri_utils::SemverCompare "${VERSION}" $R0
-  Pop $R0
-
-  ; Read the install choice header through $R5 so a custom language file that only
-  ; defines the misspelled `choowHowToInstall` still shows its own text
-  ; TODO: remove the `choowHowToInstall` fallback in a future major version
-  StrCpy $R5 "$(chooseHowToInstall)"
-  ${IfThen} $R5 == "" ${|} StrCpy $R5 "$(choowHowToInstall)" ${|}
-
-  ; Reinstalling the same version
-  ${If} $R0 = 0
-    StrCpy $R1 "$(alreadyInstalledLong)"
-    StrCpy $R2 "$(addOrReinstall)"
-    StrCpy $R3 "$(uninstallApp)"
-    !insertmacro MUI_HEADER_TEXT "$(alreadyInstalled)" "$(chooseMaintenanceOption)"
-  ; Upgrading
-  ${ElseIf} $R0 = 1
-    StrCpy $R1 "$(olderOrUnknownVersionInstalled)"
-    StrCpy $R2 "$(uninstallBeforeInstalling)"
-    StrCpy $R3 "$(dontUninstall)"
-    !insertmacro MUI_HEADER_TEXT "$(alreadyInstalled)" "$R5"
-  ; Downgrading
-  ${ElseIf} $R0 = -1
-    StrCpy $R1 "$(newerVersionInstalled)"
-    StrCpy $R2 "$(uninstallBeforeInstalling)"
-    !if "${ALLOWDOWNGRADES}" == "true"
-      StrCpy $R3 "$(dontUninstall)"
-    !else
-      StrCpy $R3 "$(dontUninstallDowngrade)"
-    !endif
-    !insertmacro MUI_HEADER_TEXT "$(alreadyInstalled)" "$R5"
-  ${Else}
+  ${If} ${FileExists} "$APPDATA\LutteLaurent\Calix"
+  ${OrIf} ${FileExists} "$LOCALAPPDATA\${BUNDLEID}"
+    StrCpy $CalixHasExistingData 1
+  ${EndIf}
+  ${If} $PassiveMode = 1
+  ${OrIf} $UpdateMode = 1
+    Abort
+  ${EndIf}
+  ${If} $CalixPreviousLocation == ""
+  ${AndIf} $WixMode = 0
+  ${AndIf} $CalixHasExistingData = 0
     Abort
   ${EndIf}
 
-  ; Skip showing the page if passive
-  ;
-  ; Note that we don't call this earlier at the beginning
-  ; of this function because we need to populate some variables
-  ; related to current installed version if detected and whether
-  ; we are downgrading or not.
-  ${If} $PassiveMode = 1
-    Call PageLeaveReinstall
-  ${Else}
-    nsDialogs::Create 1018
-    Pop $R4
-    ${IfThen} $(^RTL) = 1 ${|} nsDialogs::SetRTL $(^RTL) ${|}
-
-    ${NSD_CreateLabel} 0 0 100% 24u $R1
-    Pop $R1
-
-    ${NSD_CreateRadioButton} 30u 50u -30u 8u $R2
-    Pop $R2
-    ${NSD_OnClick} $R2 PageReinstallUpdateSelection
-
-    ${NSD_CreateRadioButton} 30u 70u -30u 8u $R3
-    Pop $R3
-    ; Disable this radio button if downgrading and downgrades are disabled
-    !if "${ALLOWDOWNGRADES}" == "false"
-      ${IfThen} $R0 = -1 ${|} EnableWindow $R3 0 ${|}
-    !endif
-    ${NSD_OnClick} $R3 PageReinstallUpdateSelection
-
-    ; Check the first radio button if this the first time
-    ; we enter this page or if the second button wasn't
-    ; selected the last time we were on this page
-    ${If} $ReinstallPageCheck <> 2
-      SendMessage $R2 ${BM_SETCHECK} ${BST_CHECKED} 0
-    ${Else}
-      SendMessage $R3 ${BM_SETCHECK} ${BST_CHECKED} 0
-    ${EndIf}
-
-    ${NSD_SetFocus} $R2
-    nsDialogs::Show
+  !insertmacro MUI_HEADER_TEXT "Calix 설치" "이전 버전과 데이터 처리 방법을 선택하세요."
+  nsDialogs::Create 1018
+  Pop $R4
+  ${If} $R4 == error
+    Abort
   ${EndIf}
-FunctionEnd
-Function PageReinstallUpdateSelection
-  ${NSD_GetState} $R2 $R1
-  ${If} $R1 == ${BST_CHECKED}
-    StrCpy $ReinstallPageCheck 1
-  ${Else}
-    StrCpy $ReinstallPageCheck 2
+  ${NSD_CreateRadioButton} 0 12u 100% 14u "데이터 유지 · 이전 버전 삭제"
+  Pop $CalixPreserveOption
+  ${NSD_CreateRadioButton} 0 42u 100% 14u "데이터 초기화 · 새로 설치"
+  Pop $CalixResetOption
+  ${NSD_CreateRadioButton} 0 72u 100% 14u "이전 버전도 보관"
+  Pop $CalixKeepOption
+  ${NSD_CreateLabel} 12u 90u 95% 18u "새 버전은 별도 폴더에 설치되며 기존 데이터를 함께 사용합니다."
+  Pop $R3
+  ${If} $CalixPreviousLocation == ""
+    EnableWindow $CalixKeepOption 0
+    EnableWindow $R3 0
   ${EndIf}
+  ${If} $CalixHasExistingData = 0
+    EnableWindow $CalixResetOption 0
+  ${EndIf}
+  ${If} $ReinstallPageCheck = 2
+    ${NSD_Check} $CalixResetOption
+  ${ElseIf} $ReinstallPageCheck = 3
+    ${NSD_Check} $CalixKeepOption
+  ${Else}
+    ${NSD_Check} $CalixPreserveOption
+  ${EndIf}
+  nsDialogs::Show
 FunctionEnd
+
 Function PageLeaveReinstall
-  ${If} $PassiveMode = 1
-    ; No radio controls exist in passive mode.
-    StrCpy $R1 0
-  ${Else}
-    ${NSD_GetState} $R2 $R1
+  StrCpy $ReinstallPageCheck 1
+  ${NSD_GetState} $CalixResetOption $0
+  ${If} $0 = ${BST_CHECKED}
+    MessageBox MB_ICONEXCLAMATION|MB_YESNO|MB_DEFBUTTON2 "일정, 설정, 일기와 로그인 정보가 삭제됩니다. 복구할 수 없습니다. 계속하시겠습니까?" IDYES calix_reset_confirmed
+    Abort
+    calix_reset_confirmed:
+    StrCpy $ReinstallPageCheck 2
+    Return
   ${EndIf}
-
-  ; If migrating from Wix, always uninstall
-  ${If} $WixMode = 1
-    Goto reinst_uninstall
+  ${NSD_GetState} $CalixKeepOption $0
+  ${If} $0 = ${BST_CHECKED}
+    StrCpy $ReinstallPageCheck 3
   ${EndIf}
+FunctionEnd
 
-  ; In update mode, always proceeds without uninstalling
-  ${If} $UpdateMode = 1
-    Goto reinst_done
-  ${EndIf}
-
-  ; $R0 holds whether same(0)/upgrading(1)/downgrading(-1) version
-  ; $R1 holds the radio buttons state:
-  ;   1 => first choice was selected
-  ;   0 => second choice was selected
-  ${If} $R0 = 0 ; Same version, proceed
-    ${If} $R1 = 1              ; User chose to add/reinstall
-      Goto reinst_done
-    ${Else}                    ; User chose to uninstall
-      Goto reinst_uninstall
-    ${EndIf}
-  ${ElseIf} $R0 = 1 ; Upgrading
-    ${If} $R1 = 1              ; User chose to uninstall
-      Goto reinst_uninstall
-    ${Else}
-      Goto reinst_done         ; User chose NOT to uninstall
-    ${EndIf}
-  ${ElseIf} $R0 = -1 ; Downgrading
-    ${If} $R1 = 1              ; User chose to uninstall
-      Goto reinst_uninstall
-    ${Else}
-      Goto reinst_done         ; User chose NOT to uninstall
-    ${EndIf}
-  ${EndIf}
-
-  reinst_uninstall:
-    HideWindow
+Function CalixRemovePreviousInstallation
     ClearErrors
 
     ${If} $WixMode = 1
@@ -380,16 +308,14 @@ Function PageLeaveReinstall
       Call CalixResolveInstallLocation
       ${If} $4 == ""
         MessageBox MB_ICONEXCLAMATION "$(unableToUninstall)"
-        Abort
+        SetErrorLevel 2
+        Quit
       ${EndIf}
       ReadRegStr $R1 SHCTX "${UNINSTKEY}" "UninstallString"
-      ${IfThen} $UpdateMode = 1 ${|} StrCpy $R1 "$R1 /UPDATE" ${|} ; append /UPDATE
-      ${IfThen} $PassiveMode = 1 ${|} StrCpy $R1 "$R1 /P" ${|} ; append /P
-      StrCpy $R1 "$R1 _?=$4" ; append uninstall directory
+      ; Removing old binaries during Setup must never offer to delete app data.
+      StrCpy $R1 "$R1 /P /UPDATE _?=$4"
       ExecWait '$R1' $0
     ${EndIf}
-
-    BringToFront
 
     ${IfThen} ${Errors} ${|} StrCpy $0 2 ${|} ; ExecWait failed, set fake exit code
 
@@ -402,17 +328,20 @@ Function PageLeaveReinstall
       ; User cancelled wix uninstaller? return to select un/reinstall page
       ${If} $WixMode = 1
       ${AndIf} $0 = 1602
-        Abort
+        SetErrorLevel 2
+        Quit
       ${EndIf}
 
       ; User cancelled NSIS uninstaller? return to select un/reinstall page
       ${If} $0 = 1
-        Abort
+        SetErrorLevel 2
+        Quit
       ${EndIf}
 
       ; Other errors? show generic error message and return to select un/reinstall page
       MessageBox MB_ICONEXCLAMATION "$(unableToUninstall)"
-      Abort
+      SetErrorLevel 2
+      Quit
     ${EndIf}
 
     ; The NSIS uninstaller was run in place (`_?=`), so it cannot delete itself
@@ -423,7 +352,7 @@ Function PageLeaveReinstall
       ; Old uninstallers only remove the files listed in their bundle.
       ; _internal is the packaged engine runtime. Leave other files alone.
       Push "$4\_internal"
-      Call CalixRemoveEngineRuntime
+      Call CalixRemoveTree
       Delete "$4\uninstall.exe"
       ${If} ${FileExists} "$4\_internal"
       ${OrIf} ${FileExists} "$4\calix-engine.exe"
@@ -434,11 +363,16 @@ Function PageLeaveReinstall
       ${EndIf}
       RMDir "$4"
     ${EndIf}
-  reinst_done:
 FunctionEnd
 
 ; 5. Choose install directory page
-!define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassive
+Function CalixDirectoryPage
+  ${If} $ReinstallPageCheck = 3
+    Abort
+  ${EndIf}
+  Call SkipIfPassive
+FunctionEnd
+!define MUI_PAGE_CUSTOMFUNCTION_PRE CalixDirectoryPage
 !insertmacro MUI_PAGE_DIRECTORY
 
 ; 6. Start menu shortcut page
@@ -479,7 +413,8 @@ Var DeleteAppDataCheckbox
 Var DeleteAppDataCheckboxState
 !define /ifndef WS_EX_LAYOUTRTL         0x00400000
 !define MUI_PAGE_CUSTOMFUNCTION_SHOW un.ConfirmShow
-Function un.ConfirmShow ; Add add a `Delete app data` check box
+Function un.ConfirmShow
+  StrCpy $DeleteAppDataCheckboxState ${BST_UNCHECKED}
   ; $1 inner dialog HWND
   ; $2 window DPI
   ; $3 style
@@ -708,6 +643,41 @@ Section WebView2
 SectionEnd
 
 Section Install
+  Call FindWixInstall
+  ${If} $R6 != ""
+    StrCpy $WixMode 1
+  ${Else}
+    Call CalixResolveInstallLocation
+    StrCpy $CalixPreviousLocation $4
+  ${EndIf}
+  ${If} $ReinstallPageCheck = 3
+    Call CalixChooseSideBySideLocation
+  ${ElseIf} $WixMode = 1
+    Call CalixRemovePreviousInstallation
+  ${ElseIf} $UpdateMode <> 1
+  ${AndIf} $CalixPreviousLocation != ""
+    Call CalixRemovePreviousInstallation
+  ${EndIf}
+  ${If} $ReinstallPageCheck = 2
+    ; The fresh installation cannot live inside a directory being reset.
+    GetFullPathName $0 "$INSTDIR\."
+    StrCpy $0 "$0\"
+    StrCpy $1 "$APPDATA\LutteLaurent\Calix\"
+    StrLen $2 $1
+    StrCpy $3 $0 $2
+    ${If} $3 == $1
+      Goto calix_reset_install_path_invalid
+    ${EndIf}
+    StrCpy $1 "$LOCALAPPDATA\${BUNDLEID}\"
+    StrLen $2 $1
+    StrCpy $3 $0 $2
+    ${If} $3 == $1
+      calix_reset_install_path_invalid:
+      MessageBox MB_ICONEXCLAMATION "데이터 폴더와 다른 위치에 설치하세요."
+      SetErrorLevel 2
+      Quit
+    ${EndIf}
+  ${EndIf}
   SetOutPath $INSTDIR
 
   !ifmacrodef NSIS_HOOK_PREINSTALL
@@ -746,6 +716,19 @@ Section Install
     WriteRegStr SHCTX "Software\Classes\\{{protocol}}\DefaultIcon" "" "$\"$INSTDIR\${MAINBINARYNAME}.exe$\",0"
     WriteRegStr SHCTX "Software\Classes\\{{protocol}}\shell\open\command" "" "$\"$INSTDIR\${MAINBINARYNAME}.exe$\" $\"%1$\""
   {{/each}}
+
+  ${If} $ReinstallPageCheck = 2
+    Call CalixResetSelectedData
+  ${ElseIf} $ReinstallPageCheck = 3
+    ; The preserved executable is usable, but only the new install is registered.
+    ClearErrors
+    Rename "$CalixPreviousLocation\uninstall.exe" "$CalixPreviousLocation\uninstall.previous"
+    ${If} ${Errors}
+      MessageBox MB_ICONEXCLAMATION "이전 버전을 보관하지 못했습니다."
+      SetErrorLevel 2
+      Quit
+    ${EndIf}
+  ${EndIf}
 
   ; Create uninstaller
   WriteUninstaller "$INSTDIR\uninstall.exe"
@@ -939,7 +922,7 @@ Section Uninstall
 
   ; Delete app data if the checkbox is selected
   ; and if not updating
-  ${If} $DeleteAppDataCheckboxState = 1
+  ${If} $DeleteAppDataCheckboxState = ${BST_CHECKED}
   ${AndIf} $UpdateMode <> 1
     ; Clear the install location $INSTDIR from registry
     DeleteRegKey SHCTX "${MANUPRODUCTKEY}"
@@ -1049,7 +1032,82 @@ Function CreateOrUpdateDesktopShortcut
 FunctionEnd
 
 ; Resolve by the stable uninstall key first. Publisher labels may change.
-Function CalixRemoveEngineRuntime
+Function CalixChooseSideBySideLocation
+  ${GetParent} "$CalixPreviousLocation" $0
+  StrCpy $INSTDIR "$0\Calix ${VERSION}"
+  StrCpy $1 1
+  ${While} ${FileExists} "$INSTDIR"
+    IntOp $1 $1 + 1
+    StrCpy $INSTDIR "$0\Calix ${VERSION} ($1)"
+  ${EndWhile}
+FunctionEnd
+
+Function CalixResetSelectedData
+  ; Move both stores first so a locked profile cannot cause a partial reset.
+  StrCpy $CalixResetRoaming ""
+  StrCpy $CalixResetLocal ""
+  ${If} ${FileExists} "$APPDATA\LutteLaurent\Calix"
+    GetTempFileName $0 "$APPDATA\LutteLaurent"
+    ${If} $0 == ""
+      Goto calix_reset_failed
+    ${EndIf}
+    Delete "$0"
+    ClearErrors
+    Rename "$APPDATA\LutteLaurent\Calix" "$0"
+    ${If} ${Errors}
+      Goto calix_reset_failed
+    ${EndIf}
+    StrCpy $CalixResetRoaming $0
+  ${EndIf}
+  ${If} ${FileExists} "$LOCALAPPDATA\${BUNDLEID}"
+    GetTempFileName $0 "$LOCALAPPDATA"
+    ${If} $0 == ""
+      Goto calix_reset_failed
+    ${EndIf}
+    Delete "$0"
+    ClearErrors
+    Rename "$LOCALAPPDATA\${BUNDLEID}" "$0"
+    ${If} ${Errors}
+      Goto calix_reset_failed
+    ${EndIf}
+    StrCpy $CalixResetLocal $0
+  ${EndIf}
+
+  ; An empty directory prevents the old BUFS database from being imported again.
+  ClearErrors
+  CreateDirectory "$APPDATA\LutteLaurent\Calix"
+  ${If} ${Errors}
+    Goto calix_reset_failed
+  ${EndIf}
+  ${If} $CalixResetRoaming != ""
+    Push "$CalixResetRoaming"
+    Call CalixRemoveTree
+  ${EndIf}
+  ${If} $CalixResetLocal != ""
+    Push "$CalixResetLocal"
+    Call CalixRemoveTree
+  ${EndIf}
+  ${If} ${FileExists} "$CalixResetRoaming"
+  ${OrIf} ${FileExists} "$CalixResetLocal"
+    MessageBox MB_ICONEXCLAMATION "데이터가 초기화되었지만 일부 이전 파일을 삭제하지 못했습니다."
+    SetErrorLevel 2
+    Quit
+  ${EndIf}
+  Return
+
+  calix_reset_failed:
+  ${If} $CalixResetRoaming != ""
+    Rename "$CalixResetRoaming" "$APPDATA\LutteLaurent\Calix"
+  ${EndIf}
+  ${If} $CalixResetLocal != ""
+    Rename "$CalixResetLocal" "$LOCALAPPDATA\${BUNDLEID}"
+  ${EndIf}
+  MessageBox MB_ICONEXCLAMATION "데이터를 초기화하지 못했습니다. Calix를 종료한 뒤 다시 시도하세요."
+  SetErrorLevel 2
+  Quit
+FunctionEnd
+
+Function CalixRemoveTree
   Exch $0
   Push $1
   Push $2
@@ -1070,7 +1128,7 @@ Function CalixRemoveEngineRuntime
             ${If} $3 != "."
             ${AndIf} $3 != ".."
               Push "$0\$3"
-              Call CalixRemoveEngineRuntime
+              Call CalixRemoveTree
             ${EndIf}
             ClearErrors
             FindNext $2 $3
