@@ -4,6 +4,7 @@ from pathlib import Path
 import hashlib
 import json
 import os
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -92,7 +93,18 @@ def main():
         sentinel.write_text(
             "Synthetic CI data. Must survive every update.", encoding="utf-8"
         )
-        before = digest(sentinel)
+        settings = data / "settings.json"
+        settings.write_text('{"nickname": "CI fixture"}', encoding="utf-8")
+        database = data / "learning.db"
+        with sqlite3.connect(database) as connection:
+            connection.execute("CREATE TABLE preserved (title TEXT)")
+            connection.execute("INSERT INTO preserved VALUES ('synthetic schedule')")
+        connection.close()
+        campus = Path(os.environ["LOCALAPPDATA"]) / "io.github.luttechan.calix" / "campus-session"
+        campus.mkdir(parents=True, exist_ok=True)
+        profile = campus / "installer-preserve-check.txt"
+        profile.write_text("Synthetic campus profile.", encoding="utf-8")
+        before = {path: digest(path) for path in (sentinel, settings, database, profile)}
         obsolete_runtime = target / "_internal" / "obsolete" / "legacy.dll"
         obsolete_runtime.parent.mkdir(parents=True)
         obsolete_runtime.write_bytes(b"obsolete runtime fixture")
@@ -172,7 +184,7 @@ def main():
                 or (target / "calix-desktop.exe").read_bytes() != expected_ui
             ):
                 raise RuntimeError("In-app same-version reinstall failed")
-        if digest(sentinel) != before:
+        if any(not path.is_file() or digest(path) != checksum for path, checksum in before.items()):
             raise RuntimeError("Update modified user data")
     print(
         json.dumps(
