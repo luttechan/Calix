@@ -41,7 +41,7 @@ def launch_installer(path):
         if not kernel.SetDllDirectoryW(None):
             raise OSError("Unable to restore Windows DLL search paths")
     subprocess.Popen(
-        [str(path), "/P", "/UPDATE"],
+        [str(path), "/P", "/UPDATE", "/R"],
         cwd=path.parent,
         env=installer_environment(),
         close_fds=True,

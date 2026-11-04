@@ -45,5 +45,5 @@ def test_update_launch_uses_preserving_update_mode_and_resets_dll_search(
     path = tmp_path / "한글 폴더" / "Calix-Setup.exe"
     engine_utility.launch_installer(path)
     assert calls[0] == ("dll", None)
-    assert calls[1][1] == [str(path), "/P", "/UPDATE"]
+    assert calls[1][1] == [str(path), "/P", "/UPDATE", "/R"]
     assert calls[1][2]["cwd"] == path.parent and calls[1][2]["close_fds"] is True

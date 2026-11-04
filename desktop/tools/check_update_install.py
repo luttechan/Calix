@@ -57,7 +57,7 @@ def main():
         raise RuntimeError(
             "Installer registry tests are restricted to disposable Windows CI runners"
         )
-    setup = ROOT / "desktop/.build/packages/Calix-1.5.93-Setup-x64.exe"
+    setup = ROOT / "desktop/.build/packages/Calix-1.5.94-Setup-x64.exe"
     expected = ROOT / "desktop/src-tauri/target/release/calix-desktop.exe"
     # NSIS changes the Tauri marker when embedding the UI into its payload.
     expected_ui = expected.read_bytes().replace(
@@ -86,7 +86,7 @@ def main():
             winreg.HKEY_CURRENT_USER, UNINSTALL, 0, winreg.KEY_SET_VALUE
         ) as key:
             # Same-version passive reinstall exercises the old uninstaller path.
-            winreg.SetValueEx(key, "DisplayVersion", 0, winreg.REG_SZ, "1.5.93")
+            winreg.SetValueEx(key, "DisplayVersion", 0, winreg.REG_SZ, "1.5.94")
         data = Path(os.environ["APPDATA"]) / "LutteLaurent/Calix"
         data.mkdir(parents=True, exist_ok=True)
         sentinel = data / "installer-preserve-check.txt"
@@ -126,6 +126,8 @@ def main():
             json.dumps(dict(legacyReinstallPassed=True, installedEngineCurrent=True)),
             flush=True,
         )
+        if any(not path.is_file() or digest(path) != checksum for path, checksum in before.items()):
+            raise RuntimeError("Setup modified user data")
         # Run the exact packaged --utility install path, including the parent wait
         # and PyInstaller DLL environment, without touching a real user's registry.
         with tempfile.TemporaryDirectory(prefix="Calix-update-") as update_folder:
@@ -179,13 +181,40 @@ def main():
                     if process.poll() is None:
                         process.kill()
                     process.wait()
+            app = None
+            deadline = time.monotonic() + 25
+            while time.monotonic() < deadline and app is None:
+                for candidate in psutil.process_iter(["exe"]):
+                    try:
+                        executable = candidate.info.get("exe")
+                        if executable and Path(executable).resolve() == (target / "calix-desktop.exe").resolve():
+                            app = candidate
+                            break
+                    except (OSError, psutil.Error):
+                        pass
+                if app is None:
+                    time.sleep(0.05)
+            if app is None:
+                raise RuntimeError("Installed Calix did not launch after updating")
+            for child in app.children(recursive=True):
+                try:
+                    child.terminate()
+                except psutil.NoSuchProcess:
+                    pass
+            app.terminate()
+            app.wait(timeout=20)
             if (
                 installation() != target
                 or (target / "calix-desktop.exe").read_bytes() != expected_ui
             ):
                 raise RuntimeError("In-app same-version reinstall failed")
-        if any(not path.is_file() or digest(path) != checksum for path, checksum in before.items()):
-            raise RuntimeError("Update modified user data")
+        for path in (sentinel, settings, profile):
+            if not path.is_file() or digest(path) != before[path]:
+                raise RuntimeError("Update modified user data")
+        with sqlite3.connect(database) as connection:
+            if connection.execute("SELECT title FROM preserved").fetchone() != ("synthetic schedule",):
+                raise RuntimeError("Update modified the saved schedule")
+        connection.close()
     print(
         json.dumps(
             dict(

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { Modal, useCalix } from "./App";
 import { rpc } from "./bridge";
+import { DeveloperLab } from "./DeveloperLab";
 
 type Metrics = { rss_mb: number; uptime_seconds: number };
 export function DevPanel({ active }: { active: boolean }) {
@@ -256,6 +257,7 @@ export function DevPanel({ active }: { active: boolean }) {
         </output>
       )}
       {message && <p role="status">{message}</p>}
+      {unlocked && active && <DeveloperLab />}
       {unlocked && report && active && (
         <Modal
           title={"action" in report ? "Maintenance Report" : "Sync Inspector"}
