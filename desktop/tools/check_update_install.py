@@ -56,7 +56,7 @@ def main():
         raise RuntimeError(
             "Installer registry tests are restricted to disposable Windows CI runners"
         )
-    setup = ROOT / "desktop/.build/packages/Calix-1.5.92-Setup-x64.exe"
+    setup = ROOT / "desktop/.build/packages/Calix-1.5.93-Setup-x64.exe"
     expected = ROOT / "desktop/src-tauri/target/release/calix-desktop.exe"
     # NSIS changes the Tauri marker when embedding the UI into its payload.
     expected_ui = expected.read_bytes().replace(
@@ -85,7 +85,7 @@ def main():
             winreg.HKEY_CURRENT_USER, UNINSTALL, 0, winreg.KEY_SET_VALUE
         ) as key:
             # Same-version passive reinstall exercises the old uninstaller path.
-            winreg.SetValueEx(key, "DisplayVersion", 0, winreg.REG_SZ, "1.5.92")
+            winreg.SetValueEx(key, "DisplayVersion", 0, winreg.REG_SZ, "1.5.93")
         data = Path(os.environ["APPDATA"]) / "LutteLaurent/Calix"
         data.mkdir(parents=True, exist_ok=True)
         sentinel = data / "installer-preserve-check.txt"
@@ -93,7 +93,14 @@ def main():
             "Synthetic CI data. Must survive every update.", encoding="utf-8"
         )
         before = digest(sentinel)
+        obsolete_runtime = target / "_internal" / "obsolete" / "legacy.dll"
+        obsolete_runtime.parent.mkdir(parents=True)
+        obsolete_runtime.write_bytes(b"obsolete runtime fixture")
+        unrelated = target / "notes.txt"
+        unrelated.write_text("Keep this file.", encoding="utf-8")
         run_installer(setup, ["/P"])
+        if obsolete_runtime.exists() or not unrelated.is_file():
+            raise RuntimeError("Legacy cleanup did not respect the runtime boundary")
         if (
             installation() != target
             or (target / "calix-desktop.exe").read_bytes() != expected_ui

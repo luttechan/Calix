@@ -53,7 +53,7 @@ export function ReminderCard({
       <header className="reminder-brand" data-tauri-drag-region>
         <span>
           <img src="/assets/icons/calix.svg" alt="" />
-          Calix
+          {`Calix (${__CALIX_VERSION__})`}
         </span>
         <button
           className="icon-button"

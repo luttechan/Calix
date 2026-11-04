@@ -328,7 +328,12 @@ Function PageReinstallUpdateSelection
   ${EndIf}
 FunctionEnd
 Function PageLeaveReinstall
-  ${NSD_GetState} $R2 $R1
+  ${If} $PassiveMode = 1
+    ; No radio controls exist in passive mode.
+    StrCpy $R1 0
+  ${Else}
+    ${NSD_GetState} $R2 $R1
+  ${EndIf}
 
   ; If migrating from Wix, always uninstall
   ${If} $WixMode = 1
@@ -388,8 +393,12 @@ Function PageLeaveReinstall
 
     ${IfThen} ${Errors} ${|} StrCpy $0 2 ${|} ; ExecWait failed, set fake exit code
 
+    ${If} $0 = 0
+    ${AndIf} $WixMode = 0
+    ${AndIf} ${FileExists} "$4\${MAINBINARYNAME}.exe"
+      StrCpy $0 2
+    ${EndIf}
     ${If} $0 <> 0
-    ${OrIf} ${FileExists} "$INSTDIR\${MAINBINARYNAME}.exe"
       ; User cancelled wix uninstaller? return to select un/reinstall page
       ${If} $WixMode = 1
       ${AndIf} $0 = 1602
@@ -411,7 +420,18 @@ Function PageLeaveReinstall
     ; https://nsis.sourceforge.io/Docs/Chapter3.html#:~:text=path%20contains%20spaces.-,3.2.3%20Examples,-installer.exe%20/NCRC
     ${If} $WixMode = 0
     ${AndIf} $4 != ""
+      ; Old uninstallers only remove the files listed in their bundle.
+      ; _internal is the packaged engine runtime. Leave other files alone.
+      Push "$4\_internal"
+      Call CalixRemoveEngineRuntime
       Delete "$4\uninstall.exe"
+      ${If} ${FileExists} "$4\_internal"
+      ${OrIf} ${FileExists} "$4\calix-engine.exe"
+      ${OrIf} ${FileExists} "$4\uninstall.exe"
+        MessageBox MB_ICONEXCLAMATION "$(unableToUninstall)"
+        SetErrorLevel 2
+        Quit
+      ${EndIf}
       RMDir "$4"
     ${EndIf}
   reinst_done:
@@ -1029,6 +1049,44 @@ Function CreateOrUpdateDesktopShortcut
 FunctionEnd
 
 ; Resolve by the stable uninstall key first. Publisher labels may change.
+Function CalixRemoveEngineRuntime
+  Exch $0
+  Push $1
+  Push $2
+  Push $3
+  System::Call 'kernel32::GetFileAttributesW(w r0) i .r1'
+  ${If} $1 != -1
+    IntOp $2 $1 & 0x10
+    ${If} $2 = 0
+      Delete "$0"
+    ${Else}
+      ; A junction or directory symlink is removed without visiting its target.
+      IntOp $2 $1 & 0x400
+      ${If} $2 = 0
+        ClearErrors
+        FindFirst $2 $3 "$0\*"
+        ${IfNot} ${Errors}
+          ${Do}
+            ${If} $3 != "."
+            ${AndIf} $3 != ".."
+              Push "$0\$3"
+              Call CalixRemoveEngineRuntime
+            ${EndIf}
+            ClearErrors
+            FindNext $2 $3
+          ${LoopUntil} ${Errors}
+          FindClose $2
+        ${EndIf}
+      ${EndIf}
+      RMDir "$0"
+    ${EndIf}
+  ${EndIf}
+  Pop $3
+  Pop $2
+  Pop $1
+  Pop $0
+FunctionEnd
+
 Function CalixResolveInstallLocation
   ReadRegStr $4 SHCTX "${UNINSTKEY}" "InstallLocation"
   Call CalixValidateInstallLocation

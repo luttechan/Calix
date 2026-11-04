@@ -3311,6 +3311,12 @@ body.reminder-surface {
   min-width: 0;
   flex: 1;
 }
+.sync-notice-version {
+  display: block;
+  color: var(--muted, #867585);
+  font-size: 11px;
+  margin-bottom: 2px;
+}
 .sync-notice strong {
   font-size: 14px;
   font-weight: 650;
