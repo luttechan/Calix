@@ -97,6 +97,12 @@ fn main() {
     let reminder_check=args.iter().any(|arg|arg=="--reminder-check");
     let check = args.iter().position(|arg| arg == "--campus-check" || arg == "--reminder-check").and_then(|index|args.get(index+1)).cloned();
     let mut context = tauri::generate_context!();
+    let window_title = format!("Calix {}", env!("CARGO_PKG_VERSION"));
+    for window in &mut context.config_mut().app.windows {
+        if window.label == "main" {
+            window.title = window_title.clone();
+        }
+    }
     if check.is_some() { context.config_mut().app.windows.clear(); }
     let check_mode = check.is_some();
     let builder = tauri::Builder::default()
@@ -113,7 +119,8 @@ fn main() {
                 tauri::async_runtime::spawn(async move {
                     let result=if reminder_check {reminder::self_check(handle.clone()).await}else{campus::self_check(handle.clone()).await};
                     let passed=result.is_ok();
-                    let report=result.unwrap_or_else(|error|serde_json::json!({"passed":false,"error":error}));
+                    let mut report=result.unwrap_or_else(|error|serde_json::json!({"passed":false,"error":error}));
+                    report["mainWindowTitle"] = serde_json::Value::String(window_title);
                     let _=std::fs::write(path,report.to_string());
                     handle.exit(if passed {0}else{1});
                 });
