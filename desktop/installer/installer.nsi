@@ -383,9 +383,8 @@ Function PageLeaveReinstall
         Abort
       ${EndIf}
       ReadRegStr $R1 SHCTX "${UNINSTKEY}" "UninstallString"
-      ${IfThen} $UpdateMode = 1 ${|} StrCpy $R1 "$R1 /UPDATE" ${|} ; append /UPDATE
-      ${IfThen} $PassiveMode = 1 ${|} StrCpy $R1 "$R1 /P" ${|} ; append /P
-      StrCpy $R1 "$R1 _?=$4" ; append uninstall directory
+      ; Removing old binaries during Setup must never offer to delete app data.
+      StrCpy $R1 "$R1 /P /UPDATE _?=$4"
       ExecWait '$R1' $0
     ${EndIf}
 
@@ -479,7 +478,8 @@ Var DeleteAppDataCheckbox
 Var DeleteAppDataCheckboxState
 !define /ifndef WS_EX_LAYOUTRTL         0x00400000
 !define MUI_PAGE_CUSTOMFUNCTION_SHOW un.ConfirmShow
-Function un.ConfirmShow ; Add add a `Delete app data` check box
+Function un.ConfirmShow
+  StrCpy $DeleteAppDataCheckboxState ${BST_UNCHECKED}
   ; $1 inner dialog HWND
   ; $2 window DPI
   ; $3 style
@@ -939,7 +939,7 @@ Section Uninstall
 
   ; Delete app data if the checkbox is selected
   ; and if not updating
-  ${If} $DeleteAppDataCheckboxState = 1
+  ${If} $DeleteAppDataCheckboxState = ${BST_CHECKED}
   ${AndIf} $UpdateMode <> 1
     ; Clear the install location $INSTDIR from registry
     DeleteRegKey SHCTX "${MANUPRODUCTKEY}"

@@ -108,12 +108,16 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![reminder::reminder_show, reminder::reminder_payload, reminder::reminder_close, reminder::reminder_open_event, developer_console, developer_disable, developer_devtools, developer_export, campus::campus_identity, campus::campus_collect, campus::campus_cancel, campus::campus_debug, quit_app, restart_app, app_ready, auth::auth_open, auth::auth_mount, auth::auth_complete, auth::auth_status, auth::auth_reload, auth::auth_logout, auth::backup_file])
         .setup(move |app| {
+            let window = app.get_webview_window("main").expect("main window configured");
+            window.set_title(&format!("Calix {}", app.package_info().version))?;
+            let window_title = window.title()?;
             if let Some(path) = check.clone() {
                 let handle=app.handle().clone();
                 tauri::async_runtime::spawn(async move {
                     let result=if reminder_check {reminder::self_check(handle.clone()).await}else{campus::self_check(handle.clone()).await};
                     let passed=result.is_ok();
-                    let report=result.unwrap_or_else(|error|serde_json::json!({"passed":false,"error":error}));
+                    let mut report=result.unwrap_or_else(|error|serde_json::json!({"passed":false,"error":error}));
+                    report["mainWindowTitle"] = serde_json::Value::String(window_title);
                     let _=std::fs::write(path,report.to_string());
                     handle.exit(if passed {0}else{1});
                 });

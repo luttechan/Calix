@@ -122,7 +122,6 @@ export const SyncNotice = memo(function SyncNotice({
           )}
         </span>
         <div role={state.phase === "error" ? "alert" : "status"}>
-          <span className="sync-notice-version">{`Calix (${__CALIX_VERSION__})`}</span>
           <strong>{title}</strong>
           {state.message !== title && <p>{state.message}</p>}
         </div>
