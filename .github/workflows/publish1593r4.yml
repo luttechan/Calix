@@ -1,0 +1,81 @@
+name: Publish Calix 1.5.93
+on:
+  push:
+    branches: ['codex/calix1593r4-publish']
+    paths: ['.github/workflows/publish1593r4.yml']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: publish-calix-1593r4
+  cancel-in-progress: false
+jobs:
+  installer-choices:
+    runs-on: windows-latest
+    timeout-minutes: 12
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - name: Verify all three Setup choices
+        shell: pwsh
+        run: |
+          gh run download 41856461730 --repo luttechan/Calix --name Calix-1.5.93-development-Windows-x64 --dir packages
+          if ($LASTEXITCODE -ne 0) { throw 'Setup download failed' }
+          $setup = Resolve-Path packages/Calix-1.5.93-Setup-x64.exe
+          if ((Get-FileHash -LiteralPath $setup).Hash.ToLowerInvariant() -cne 'db92c162a9e84cc1d4e0b84a0ca7b10d336ceaca7e4c8bf9b43c13f9c7b0565b') { throw 'Setup hash mismatch' }
+          python .github/tools/check_calix1593r3_choices.py $setup
+          if ($LASTEXITCODE -ne 0) { throw 'Interactive Setup verification failed' }
+  publish:
+    needs: installer-choices
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE: 5315d40bcc5b9e9ad969ffad4c7e0fa6211d70aa
+      BUILD: 03e8e8c4a9860b119745382d678e0006b4d56eb8
+    steps:
+      - name: Verify source and validated build
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api repos/luttechan/Calix/git/ref/heads/main --jq .object.sha)" = "$SOURCE"
+          test "$(gh api repos/luttechan/Calix/git/commits/$SOURCE --jq .tree.sha)" = "$(gh api repos/luttechan/Calix/git/commits/$BUILD --jq .tree.sha)"
+          gh api repos/luttechan/Calix/actions/runs/41856461730 > run.json
+          jq -e --arg sha "$BUILD" '.conclusion == "success" and .head_sha == $sha and .head_repository.full_name == "luttechan/Calix"' run.json
+          gh api repos/luttechan/Calix/actions/artifacts/13338837270 > artifact.json
+          jq -e --arg sha "$BUILD" '.expired == false and .workflow_run.head_sha == $sha and .digest == "sha256:00e7353f16c9c4ac1556fa65d35f50b63bdea11b710cf0c31f7b1ee99d23ad01"' artifact.json
+      - name: Download and verify packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download 41856461730 --repo luttechan/Calix --name Calix-1.5.93-development-Windows-x64 --dir packages
+          cd packages
+          test "$(find . -maxdepth 1 -type f | wc -l)" -eq 3
+          echo 'db92c162a9e84cc1d4e0b84a0ca7b10d336ceaca7e4c8bf9b43c13f9c7b0565b  Calix-1.5.93-Setup-x64.exe' | sha256sum --check --strict
+          echo '97052940cc5c86203624cc17686ed993d2640b7637a4290d829cb338b01c8f8a  Calix-1.5.93-Windows-x64.zip' | sha256sum --check --strict
+          sha256sum --check --strict SHA256SUMS.txt
+      - name: Replace verified packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api repos/luttechan/Calix/releases/434065085 > previous.json
+          jq -e '.tag_name == "v1.5.93" and (.immutable != true)' previous.json
+          previous=$(gh api repos/luttechan/Calix/git/ref/tags/v1.5.93 --jq .object.sha)
+          test "$previous" = bbbe3f86fb150b04d767972156e8c4c7f5a449ad || test "$previous" = "$SOURCE"
+          cat > notes.md <<'NOTES'
+          - 작업 표시줄 창 제목에 버전 표시
+          - 데이터 유지 · 이전 버전 삭제, 데이터 초기화 · 새로 설치, 이전 버전 보관
+          NOTES
+          gh release edit v1.5.93 --repo luttechan/Calix --draft=true
+          gh api -X PATCH repos/luttechan/Calix/git/refs/tags/v1.5.93 -f sha="$SOURCE" -F force=true
+          gh release upload v1.5.93 --repo luttechan/Calix --clobber packages/Calix-1.5.93-Setup-x64.exe packages/Calix-1.5.93-Windows-x64.zip packages/SHA256SUMS.txt
+          gh api repos/luttechan/Calix/releases/434065085 > updated.json
+          jq -e '.draft and (.assets | length == 3)' updated.json
+          jq -e 'any(.assets[]; .name == "Calix-1.5.93-Setup-x64.exe" and .digest == "sha256:db92c162a9e84cc1d4e0b84a0ca7b10d336ceaca7e4c8bf9b43c13f9c7b0565b")' updated.json
+          jq -e 'any(.assets[]; .name == "Calix-1.5.93-Windows-x64.zip" and .digest == "sha256:97052940cc5c86203624cc17686ed993d2640b7637a4290d829cb338b01c8f8a")' updated.json
+          gh release edit v1.5.93 --repo luttechan/Calix --target "$SOURCE" --title 'Calix 1.5.93' --notes-file notes.md --draft=false --latest
+          gh api repos/luttechan/Calix/releases/latest --jq '.tag_name' | grep -Fx v1.5.93
