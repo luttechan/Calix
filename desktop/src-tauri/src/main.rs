@@ -92,12 +92,27 @@ fn show(app: &tauri::AppHandle) {
     }
 }
 
+#[cfg(windows)]
+fn register_taskbar_identity(identifier: &str) {
+    #[link(name = "shell32")]
+    extern "system" {
+        fn SetCurrentProcessExplicitAppUserModelID(app_id: *const u16) -> i32;
+    }
+    let identifier: Vec<u16> = identifier.encode_utf16().chain(std::iter::once(0)).collect();
+    // Windows reads this null-terminated string before any window is created.
+    unsafe { SetCurrentProcessExplicitAppUserModelID(identifier.as_ptr()) };
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let reminder_check=args.iter().any(|arg|arg=="--reminder-check");
     let check = args.iter().position(|arg| arg == "--campus-check" || arg == "--reminder-check").and_then(|index|args.get(index+1)).cloned();
     let mut context = tauri::generate_context!();
-    let window_title = format!("Calix {}", env!("CARGO_PKG_VERSION"));
+    #[cfg(windows)]
+    if check.is_none() {
+        register_taskbar_identity(&context.config().identifier);
+    }
+    let window_title = format!("Calix ({})", env!("CARGO_PKG_VERSION"));
     for window in &mut context.config_mut().app.windows {
         if window.label == "main" {
             window.title = window_title.clone();
@@ -129,7 +144,7 @@ fn main() {
             let open = MenuItem::with_id(app, "open", "열기", true, None::<&str>)?;
             let exit = MenuItem::with_id(app, "exit", "종료", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&open, &exit])?;
-            let mut tray = TrayIconBuilder::new().tooltip("Calix").menu(&menu)
+            let mut tray = TrayIconBuilder::new().tooltip(window_title.clone()).menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "open" => show(app),
