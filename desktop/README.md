@@ -17,7 +17,7 @@ tests/                 Python 회귀 검사
 
 ## 실행
 
-`main.py`와 `run_source.bat`는 Tauri 개발 모드를 실행합니다. Qt 앱으로 전환하지 않습니다.
+`main.py`와 `run_source.bat`는 Tauri 개발 모드를 실행합니다.
 Rust 및 Windows C++ 빌드 도구가 필요합니다.
 
 React 화면만 편집: `python main.py --preview`.
