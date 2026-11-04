@@ -2,6 +2,9 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+const version = JSON.parse(
+  readFileSync(new URL("./package.json", import.meta.url), "utf8"),
+).version;
 const startup = {
   name: "calix-startup",
   transformIndexHtml: {
@@ -13,17 +16,13 @@ const startup = {
         ? html
         : html.replace(
             "<body>",
-            `<body><style>${readFileSync(new URL("./src/startup.css", import.meta.url), "utf8")}</style>${readFileSync(new URL("./public-startup.html", import.meta.url), "utf8")}`,
+            `<body><style>${readFileSync(new URL("./src/startup.css", import.meta.url), "utf8")}</style>${readFileSync(new URL("./public-startup.html", import.meta.url), "utf8").replace("{{CALIX_VERSION}}", version)}`,
           ),
   },
 };
 export default defineConfig({
   define: {
-    __CALIX_VERSION__: JSON.stringify(
-      JSON.parse(
-        readFileSync(new URL("./package.json", import.meta.url), "utf8"),
-      ).version,
-    ),
+    __CALIX_VERSION__: JSON.stringify(version),
   },
   plugins: [startup, react()],
   clearScreen: false,

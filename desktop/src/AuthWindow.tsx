@@ -86,7 +86,7 @@ export function AuthWindow() {
         <header className="auth-header" data-tauri-drag-region>
           <div className="auth-brand" data-tauri-drag-region>
             <img src="/assets/icons/calix.svg" alt="" />
-            <span>Calix</span>
+            <span>Calix ({__CALIX_VERSION__})</span>
             <small>로그인</small>
           </div>
           <button

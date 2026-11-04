@@ -77,6 +77,6 @@ def test_release_versions_match():
     import tomllib
     from engine_updates import VERSION
     version = json.loads((ROOT/'desktop/package.json').read_text(encoding='utf-8'))['version']
-    assert version == VERSION == '1.5.92'
+    assert version == VERSION == '1.5.93'
     assert tomllib.loads((ROOT/'desktop/src-tauri/Cargo.toml').read_text())['package']['version'] == version
     assert json.loads((ROOT/'desktop/src-tauri/tauri.conf.json').read_text(encoding='utf-8'))['version'] == version
