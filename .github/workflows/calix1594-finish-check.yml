@@ -1,0 +1,24 @@
+name: Check Calix 1.5.94 Setup finish
+on:
+  push:
+    branches: ['codex/calix1594-finish-check']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 8
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - name: Verify interactive Setup launch and Windows names
+        shell: pwsh
+        run: |
+          gh run download 41873193262 --repo luttechan/Calix --name Calix-1.5.94-development-Windows-x64 --dir packages
+          if ($LASTEXITCODE -ne 0) { throw 'Setup download failed' }
+          $setup = Resolve-Path packages/Calix-1.5.94-Setup-x64.exe
+          python .github/tools/check_calix1594_finish.py $setup
+          if ($LASTEXITCODE -ne 0) { throw 'Setup finish launch verification failed' }
