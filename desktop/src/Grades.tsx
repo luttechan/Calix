@@ -28,22 +28,33 @@ function GradeRow({ item, grades, semester, refresh }: { item: Item; grades: str
       void mutate("grades.save", { ...draft, excluded: !!draft.excluded, semester })
         .then(refresh).then(() => notify("저장됨")).catch(() => {}).finally(() => setSaving(false));
     }}>
-      <div className="grade-course">
+      <label className="grade-course grade-field">
+        <span className="grade-field-label">과목</span>
+        <span className="grade-course-input">
         {item.linked && <Link2 size={14} aria-label="시간표 연결" />}
-        <input aria-label="과목명" value={draft.title} readOnly={item.linked} maxLength={200} required onChange={event => field("title", event.target.value)} />
-      </div>
+        <input aria-label="과목명" title={draft.title} value={draft.title} readOnly={item.linked} maxLength={200} required onChange={event => field("title", event.target.value)} />
+        </span>
+      </label>
+      <label className="grade-field"><span className="grade-field-label">학점</span>
       <NumberField aria-label={item.title + " 학점"} value={draft.credits} min={0} max={30} step={0.5} required onValueChange={value => field("credits", value)} />
+      </label>
+      <label className="grade-field"><span className="grade-field-label">성적</span>
       <select aria-label={item.title + " 성적"} value={draft.grade} onChange={event => field("grade", event.target.value)}>
         <option value="">미입력</option>
         {draft.grade && !grades.includes(draft.grade) && <option value={draft.grade}>{draft.grade} (기준 변경 필요)</option>}
         {grades.map(grade => <option key={grade}>{grade}</option>)}
       </select>
+      </label>
+      <label className="grade-field"><span className="grade-field-label">분류</span>
       <select aria-label={item.title + " 분류"} value={draft.category} onChange={event => field("category", event.target.value)}>
         {["전공", "교양", "일반"].map(category => <option key={category}>{category}</option>)}
       </select>
+      </label>
+      <div className="grade-actions">
       <label className="grade-exclude"><input type="checkbox" checked={!!draft.excluded} onChange={event => field("excluded", Number(event.target.checked))} />제외</label>
-      <button className="icon-button" title="성적 저장" aria-label={item.title + " 저장"} disabled={saving}><Save size={17} /></button>
+      <button type="submit" className="icon-button" title="성적 저장" aria-label={item.title + " 저장"} disabled={saving}><Save size={17} /></button>
       {!item.linked && <button type="button" className="icon-button" title="과목 삭제" aria-label={item.title + " 삭제"} disabled={saving} onClick={() => setRemove(true)}><Trash2 size={16} /></button>}
+      </div>
       {remove && <div className="grade-delete" role="alert">
         <span>정말 삭제하시겠습니까?</span>
         <button type="button" onClick={() => setRemove(false)}>취소</button>
@@ -107,7 +118,7 @@ export function GradesPage() {
             .then(refresh).then(() => { setTitle(""); setAdding(false); notify("과목 추가됨"); }).catch(() => {}).finally(() => setPending(false));
         }}><input aria-label="추가할 과목명" placeholder="과목명" value={title} onChange={event => setTitle(event.target.value)} maxLength={200} required autoFocus /><button className="button primary" disabled={pending}>추가</button></form>}
         <div className="grade-table">
-          <div className="grade-table-head" aria-hidden="true"><span>과목</span><span>학점</span><span>성적</span><span>분류</span><span /></div>
+          <div className="grade-table-head" aria-hidden="true"><span>과목</span><span>학점</span><span>성적</span><span>분류</span><span>관리</span></div>
           {grades.items.map(item => <GradeRow key={semester + item.id} item={item} grades={grades.grades} semester={semester} refresh={refresh} />)}
           {!grades.items.length && <div className="empty">시간표에 수업을 추가하거나 과목을 직접 입력하세요.</div>}
         </div>

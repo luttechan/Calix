@@ -117,7 +117,7 @@ class EngineAPI:
         state = self.security.state()
         if state["locked"]:
             return dict(
-                version="1.6.0", events=[], courses=[], types=[], sessions=[],
+                version="1.6.1", events=[], courses=[], types=[], sessions=[],
                 timetableTerms=[], mainTerm="", timetableConfigured=False,
                 sections=[], statuses=[], tasks=[], offDays=[], journals=[],
                 holidays={}, specialDates={}, lastSync="", syncSummary="",
@@ -131,7 +131,7 @@ class EngineAPI:
         events = self.store.events()
         year = datetime.now(KST).year
         return dict(
-            version="1.6.0",
+            version="1.6.1",
             events=[asdict(e) for e in events],
             courses=[asdict(c) for c in self.store.courses()],
             types=self.store.event_types(),
