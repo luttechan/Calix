@@ -1,0 +1,61 @@
+/* Shared text metrics for the main, login and reminder windows. */
+:root {
+  letter-spacing: -0.01em;
+  line-height: 1.6;
+  --muted: #6d626e;
+}
+:root[data-theme="sky"] { --muted: #5d6b80; }
+:root[data-theme="mint"] { --muted: #527165; }
+:root[data-theme="purple"] { --muted: #6b5f7b; }
+:root[data-theme="dark"] { --muted: #aaa5b5; }
+h1, h2, h3, p, label { word-break: keep-all; overflow-wrap: anywhere; }
+h1 { letter-spacing: -0.025em; }
+h2, h3 { line-height: 1.45; letter-spacing: -0.015em; }
+label { font-size: 14px; }
+input, select, textarea { line-height: 1.5; }
+textarea { word-break: normal; }
+small { line-height: 1.5; }
+.nav-label, .sidebar nav small, .creator small, .statusbar { font-size: 11px; }
+.brand small, .type-badge, .section-tabs small, .off-header small,
+.time-axis > span, .session-card small, .session-work > span,
+.timetable-panel .session-work > span, .online-courses > header small,
+.online-course-list .session-work, .journal-list small, .journal-meta > span { font-size: 11px; }
+.event-table-head, .home-progress-labels, .today-event small, .today-event em, .license-note { font-size: 12px; }
+.creator strong, .welcome-note, .eyebrow, .muted, .grade-policy, .security-heading p { font-size: 13px; }
+.creator strong, .event-course, .task-course { min-width: 0; overflow-wrap: anywhere; }
+.home-greeting { letter-spacing: -0.025em; }
+.settings-categories button { font-size: 13px; line-height: 1.5; }
+.checklist-table { font-size: 13px; }
+.checklist-table th, .checklist-table th button { font-size: 12px; font-weight: 500; }
+.checklist-table td, .checklist-table input, .checklist-table select { line-height: 1.5; }
+.holiday-name { font-size: 11px; color: #925067; }
+.calendar-event { font-size: 12px; line-height: 1.45; min-height: 25px; padding: 4px 6px; }
+.calendar-event-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.calendar-event.assignment { color: #805723; }
+.calendar-event.movie { color: #42698b; }
+.calendar-event.late { color: #a1435b; }
+.more-events { font-size: 11px; min-height: 20px; }
+.month-grid { grid-template-rows: repeat(6, minmax(140px, 1fr)); }
+.modal h2 { min-width: 0; line-height: 1.5; }
+.dialog-actions { flex-wrap: wrap; }
+.grade-table-head, .grade-exclude, .grade-sources { font-size: 13px; }
+.grade-row input, .grade-row select { font-size: 14px; }
+.grade-summary small { font-size: 13px; }
+.security-settings label { margin: 0; }
+.security-options { gap: 0; }
+.security-option { min-height: 50px; }
+.security-warning { color: var(--ink); }
+.sync-notice strong { font-size: 15px; }
+.sync-notice p, .reminder-list-heading, .reminder-list-heading span,
+.reminder-list-more, .reminder-card > footer button { font-size: 13px; }
+.reminder-events strong { font-size: 14px; }
+.reminder-events small { font-size: 12px; }
+.reminder-type { font-size: 12px; }
+:root[data-theme="dark"] .holiday-name { color: #e6abc0; }
+:root[data-theme="dark"] .calendar-event.assignment { color: #e4bc80; }
+:root[data-theme="dark"] .calendar-event.movie { color: #a9c8ed; }
+:root[data-theme="dark"] .calendar-event.late { color: #f0a9bb; }
+@media (max-width: 1000px) {
+  .calendar-event { font-size: 11px; }
+  .day-cell { padding-inline: 5px; }
+}

@@ -6,7 +6,7 @@ wraps a random data key; changing a password never decrypts entries to disk.
 from __future__ import annotations
 import json
 import os
-import sqlite3
+from . import secure_db as sqlite3
 import struct
 from datetime import date
 from uuid import uuid4

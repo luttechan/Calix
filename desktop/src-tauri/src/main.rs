@@ -103,6 +103,19 @@ fn register_taskbar_identity(identifier: &str) {
     unsafe { SetCurrentProcessExplicitAppUserModelID(identifier.as_ptr()) };
 }
 
+#[tauri::command]
+fn privacy_lock(app: tauri::AppHandle) {
+    for label in ["main", "developer-console"] {
+        if let Some(window) = app.get_webview_window(label) {
+            window.close_devtools();
+            if label == "developer-console" { let _ = window.hide(); }
+        }
+    }
+    for label in ["login", "reminder"] {
+        if let Some(window) = app.get_webview_window(label) { let _ = window.hide(); }
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let reminder_check=args.iter().any(|arg|arg=="--reminder-check");
@@ -127,7 +140,7 @@ fn main() {
         .manage(auth::AuthGate(std::sync::Mutex::new(())))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![reminder::reminder_show, reminder::reminder_payload, reminder::reminder_close, reminder::reminder_open_event, developer_console, developer_disable, developer_devtools, developer_export, campus::campus_identity, campus::campus_collect, campus::campus_cancel, campus::campus_debug, quit_app, restart_app, app_ready, auth::auth_open, auth::auth_mount, auth::auth_complete, auth::auth_status, auth::auth_reload, auth::auth_logout, auth::backup_file])
+        .invoke_handler(tauri::generate_handler![privacy_lock, reminder::reminder_show, reminder::reminder_payload, reminder::reminder_close, reminder::reminder_open_event, developer_console, developer_disable, developer_devtools, developer_export, campus::campus_identity, campus::campus_collect, campus::campus_cancel, campus::campus_debug, quit_app, restart_app, app_ready, auth::auth_open, auth::auth_mount, auth::auth_complete, auth::auth_status, auth::auth_reload, auth::auth_logout, auth::backup_file])
         .setup(move |app| {
             if let Some(path) = check.clone() {
                 let handle=app.handle().clone();

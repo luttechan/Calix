@@ -1,3 +1,4 @@
+import { NumberField } from "./NumberField";
 import { useMemo, useState } from "react";
 import { Plus, Sun, Trash2, Monitor, ArrowUpRight } from "lucide-react";
 import { Modal, TypeBadge, useCalix } from "./App";
@@ -437,15 +438,15 @@ function TermEditor({
         <div className="form-grid">
           <label>
             학년도
-            <input
+            <NumberField
               aria-label="학년도"
-              type="number"
+
               min={1900}
               max={2200}
               step={1}
               required
               value={year}
-              onChange={(e) => setYear(Number(e.target.value))}
+              onValueChange={setYear}
             />
           </label>
           <label>

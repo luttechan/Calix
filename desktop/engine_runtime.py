@@ -140,6 +140,8 @@ def main():
                 "authentication",
             ):
                 diagnostics.add(f"{event}: {payload.get('message', '')}")
+            if event == "reminder" and api.security.state()["locked"]:
+                return
             emit(dict(event=event, **payload))
 
         def handle(self, request):
@@ -150,6 +152,7 @@ def main():
                 ):
                     raise ValueError("요청을 확인하세요.")
                 method, params = request.get("method"), request.get("params", {})
+                api.security.require(method)
                 developer_enabled = (
                     api.settings.get("developer_mode") is True
                     and api.settings.get("developer_acknowledged") is True
@@ -184,7 +187,11 @@ def main():
                     "session.logout",
                 ) and (self.task or self.collector):
                     raise ValueError("동기화가 끝난 뒤 로그인 상태를 변경하세요.")
-                if method == "developer.maintenance.state":
+                if method in ("security.setup", "security.configure"):
+                    if self.task or self.collector or self.maintenance or self.restore_token:
+                        raise ValueError("진행 중인 작업을 마친 뒤 잠금을 설정하세요.")
+                    result = api.dispatch(method, params)
+                elif method == "developer.maintenance.state":
                     result = self.maintenance_state
                 elif method == "developer.maintenance.start":
                     from engine_maintenance import MaintenanceTask, ACTIONS
@@ -393,6 +400,9 @@ def main():
                         "github": "https://github.com/luttechan/Calix",
                         "family": "https://luttechan.github.io/lutte_family/",
                         "guide": "https://luttechan.github.io/calix/guide/",
+                        "grade45": "https://www.bufs.ac.kr/bbs/board.php?bo_table=university_rules&wr_id=43",
+                        "grade43": "https://rules.yonsei.ac.kr/regulations/2a85e62f-029e-46d6-92c7-edefce6432c0",
+                        "grade40": "https://registrar.berkeley.edu/faculty-staff-resources/grade-definitions/",
                         "releases": "https://github.com/luttechan/Calix/releases",
                     }
                     if params.get("page") not in links:

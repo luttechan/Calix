@@ -58,6 +58,9 @@ def check(exe):
         "learning_calendar.attendance",
         "learning_calendar.focus",
         "learning_calendar.sync",
+        "learning_calendar.secure_db",
+        "learning_calendar.app_security",
+        "learning_calendar.grades",
     ):
         assert required in modules, required
     assert (
@@ -85,12 +88,42 @@ def check(exe):
         responses = [json.loads(line) for line in completed.stdout.splitlines()]
         assert (
             next(r for r in responses if r.get("id") == 1)["result"]["version"]
-            == "1.5.94"
+            == "1.6.0"
         )
         assert (
             next(r for r in responses if r.get("id") == 2)["result"]["initialized"]
             is False
         )
+    with tempfile.TemporaryDirectory(prefix="calix-encryption-check-") as folder:
+        password = "Packaged security fixture 160!"
+        policy = dict(main=True, timetable=True, grades=True, idle_minutes=5)
+
+        def exchange(requests):
+            completed = subprocess.run(
+                [str(exe), "--data-dir", folder],
+                input="".join(json.dumps(request) + "\n" for request in requests),
+                text=True, encoding="utf-8", capture_output=True, timeout=40,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+            assert completed.returncode == 0, completed.stderr
+            values = [json.loads(line) for line in completed.stdout.splitlines()]
+            assert not any(value.get("error") for value in values), values
+            return {value["id"]: value["result"] for value in values if "id" in value}
+
+        exchange([
+            dict(id=1, method="grades.save", params=dict(title="Encrypted fixture", credits=3, grade="A+")),
+            dict(id=2, method="security.setup", params=dict(password=password, policy=policy)),
+            dict(id=3, method="quit", params={}),
+        ])
+        assert not (Path(folder) / "learning.db").read_bytes().startswith(b"SQLite format 3")
+        values = exchange([
+            dict(id=1, method="bootstrap", params={}),
+            dict(id=2, method="security.unlock", params=dict(password=password, scope="grades")),
+            dict(id=3, method="grades.read", params={}),
+            dict(id=4, method="quit", params={}),
+        ])
+        assert values[1]["security"]["locked"]
+        assert values[3]["summary"]["gpa"] == "4.50"
     with tempfile.TemporaryDirectory(prefix="calix-open-pipe-check-") as folder:
         process = subprocess.Popen(
             [str(exe), "--data-dir", folder],
@@ -118,6 +151,7 @@ def check(exe):
         embedded_modules=len(modules),
         stdio_round_trip=True,
         clean_exit=True,
+        encrypted_restart=True,
     )
     print(json.dumps(result))
     return result

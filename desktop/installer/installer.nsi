@@ -288,7 +288,7 @@ Function PageLeaveReinstall
   StrCpy $ReinstallPageCheck 1
   ${NSD_GetState} $CalixResetOption $0
   ${If} $0 = ${BST_CHECKED}
-    MessageBox MB_ICONEXCLAMATION|MB_YESNO|MB_DEFBUTTON2 "일정, 설정, 일기와 로그인 정보가 삭제됩니다. 복구할 수 없습니다. 계속하시겠습니까?" IDYES calix_reset_confirmed
+    MessageBox MB_ICONEXCLAMATION|MB_YESNO|MB_DEFBUTTON2 "일정, 학점, 일기, 설정과 비밀번호가 삭제됩니다. 복구할 수 없습니다. 계속하시겠습니까?" IDYES calix_reset_confirmed
     Abort
     calix_reset_confirmed:
     StrCpy $ReinstallPageCheck 2

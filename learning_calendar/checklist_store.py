@@ -1,6 +1,6 @@
 """Personal checklist data; school events remain read-only references."""
 import json
-import sqlite3
+from . import secure_db as sqlite3
 from uuid import uuid4
 from .models import parse_datetime
 from .schedule_colors import normalize_color
