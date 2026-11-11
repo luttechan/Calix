@@ -1,4 +1,5 @@
 import json,sqlite3,zipfile
+from learning_calendar import secure_db
 from datetime import datetime,timedelta
 import pytest
 from PySide6.QtWidgets import QApplication
@@ -79,7 +80,7 @@ def test_backup_restore_rolls_back_all_databases_on_failure(tmp_path):
     archive=tmp_path/'b.calix';write_backup(archive,store,tmp_path);value=read_backup(archive)
     value['schedule']['events'][0]['title']='changed';value['journals'][0]['body']='changed'
     db=sqlite3.connect(tmp_path/'journals.db');db.execute("CREATE TRIGGER fail_insert BEFORE INSERT ON entries BEGIN SELECT RAISE(ABORT,'synthetic disk failure'); END");db.commit();db.close()
-    with pytest.raises(sqlite3.Error):restore_backup(value,store,tmp_path)
+    with pytest.raises((sqlite3.Error, secure_db.Error)):restore_backup(value,store,tmp_path)
     assert store.events()[0].title=='기존 일정'
     diary=DiaryStore(tmp_path/'journals.db');assert diary.summaries()[0]['title']=='old diary' and diary.read(diary.summaries()[0]['id'])['body']=='original';diary.close();store.close()
 

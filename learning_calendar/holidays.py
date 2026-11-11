@@ -2,7 +2,8 @@
 from pathlib import Path
 from functools import lru_cache
 from datetime import date
-import json,sqlite3,sys
+import json,sys
+from . import secure_db as sqlite3
 
 SOURCE_URL='https://www.data.go.kr/data/15012690/openapi.do'
 SCHEMA='CREATE TABLE IF NOT EXISTS overrides(day TEXT PRIMARY KEY,name TEXT NOT NULL,enabled INTEGER NOT NULL CHECK(enabled IN (0,1)))'

@@ -5,3 +5,4 @@ keyring>=25,<27
 tzdata>=2025.1
 
 cryptography>=44,<51
+sqlcipher3==0.6.5

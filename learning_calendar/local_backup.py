@@ -3,8 +3,9 @@
 from __future__ import annotations
 import json
 import re
-import sqlite3
+from . import secure_db as sqlite3
 import zipfile
+import io
 from pathlib import Path
 from datetime import date
 from .models import parse_datetime
@@ -19,6 +20,8 @@ def _rows(db, query):
 
 def write_backup(path, store, folder):
     folder = Path(folder)
+    from .grades import initialize
+    initialize(store)
     schedule = dict(
         owner=store.get_meta("canvas_user_id"),
         courses=_rows(store.db, "SELECT id,name,alias FROM courses"),
@@ -35,7 +38,9 @@ def write_backup(path, store, folder):
 
     payload = dict(
         format="Calix personal backup",
-        version=6,
+        version=7,
+        grades=_rows(store.db, "SELECT * FROM grade_items"),
+        grade_scales=_rows(store.db, "SELECT * FROM grade_scales"),
         focus_sessions=_rows(store.db, "SELECT id,day,seconds FROM focus_sessions"),
         schedule=schedule,
         checklist=backup_state(store),
@@ -99,10 +104,16 @@ def write_backup(path, store, folder):
     if len(raw) > LIMIT:
         raise ValueError("백업 용량 한도는 64MB입니다.")
     path = Path(path)
-    pending = path.with_name(path.name + ".tmp")
-    with zipfile.ZipFile(pending, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("calix.json", raw)
-    pending.replace(path)
+    from . import secure_db
+    key = secure_db.key_for(folder / "learning.db")
+    data = buffer.getvalue()
+    if key:
+        header = json.loads((folder / "app-lock.json").read_bytes())["header"].encode()
+        data = b"Calix password backup v1\0" + len(header).to_bytes(4, "big") + header + secure_db.seal(data, key)
+    secure_db.atomic_write(path, data)
 
 
 def _string(value, limit, empty=True):
@@ -137,9 +148,23 @@ def _id(value):
     return value
 
 
-def read_backup(path, owner=""):
+def read_backup(path, owner="", password=None):
     try:
-        with zipfile.ZipFile(path) as archive:
+        raw = Path(path).read_bytes()
+        prefix = b"Calix password backup v1\0"
+        if raw.startswith(prefix):
+            from .diary_crypto import unlock_material, wipe
+            from . import secure_db
+            offset = len(prefix)
+            length = int.from_bytes(raw[offset:offset+4], "big")
+            if not 0 < length <= 2048:
+                raise ValueError("백업 형식을 확인하세요.")
+            key = unlock_material(bytes.fromhex(raw[offset+4:offset+4+length].decode()), password)
+            try:
+                raw = secure_db.open_file(raw[offset+4+length:], bytes(key))
+            finally:
+                wipe(key)
+        with zipfile.ZipFile(io.BytesIO(raw)) as archive:
             files = archive.infolist()
             if (
                 len(files) != 1
@@ -150,7 +175,7 @@ def read_backup(path, owner=""):
             value = json.loads(archive.read(files[0]))
         if value.get("format") != "Calix personal backup" or value.get(
             "version"
-        ) not in (1, 2, 3, 4, 5, 6):
+        ) not in (1, 2, 3, 4, 5, 6, 7):
             raise ValueError("지원하지 않는 백업입니다.")
         focus_ids = set()
         for row in _list(value.get("focus_sessions", []), 100000):
@@ -325,6 +350,31 @@ def read_backup(path, owner=""):
                 ):
                     raise ValueError("암호화 일기 형식을 확인하세요.")
                 secret_ids.add(key)
+        from .grades import SCALES
+        import math
+        seen = set()
+        for row in _list(value.get("grades", []), 10000):
+            term = _string(row["semester"], 120, False)
+            key = _string(row["id"], 100, False)
+            if not re.fullmatch(r"(?:course|session):[0-9]+|manual:[a-f0-9]{32}", key):
+                raise ValueError("학점 과목 번호를 확인하세요.")
+            if (term, key) in seen:
+                raise ValueError("학점 과목이 중복되었습니다.")
+            seen.add((term, key))
+            _string(row["title"], 200, False)
+            credits = row["credits"]
+            if type(credits) not in (int, float) or not math.isfinite(credits) or not 0 <= credits <= 30 or credits * 2 != int(credits * 2):
+                raise ValueError("학점을 확인하세요.")
+            if row["grade"] not in ("", "P", "NP", *SCALES["4.3"]):
+                raise ValueError("성적을 확인하세요.")
+            if row["category"] not in ("일반", "교양", "전공") or type(row["excluded"]) is not int or row["excluded"] not in (0, 1):
+                raise ValueError("학점 분류를 확인하세요.")
+        terms = set()
+        for row in _list(value.get("grade_scales", []), 1000):
+            term = _string(row["semester"], 120, False)
+            if term in terms or row["scale"] not in SCALES:
+                raise ValueError("학기 평점 기준을 확인하세요.")
+            terms.add(term)
         return value
     except (
         KeyError,
@@ -348,20 +398,25 @@ def restore_backup(value, store, folder):
         {row["id"]: row for row in store.event_types()} if preserved is not None else {}
     )
     # All SQL is fixed and parameterized. No imported database/schema is executed.
+    from .grades import initialize
+    initialize(store)
     db = store.db
-    db.execute("ATTACH DATABASE ? AS diary_restore", (str(folder / "journals.db"),))
+    sqlite3.attach(db, folder / "journals.db", "diary_restore")
     try:
-        db.execute(
-            "ATTACH DATABASE ? AS vault_restore", (str(folder / "private-diary.db"),)
-        )
+        sqlite3.attach(db, folder / "private-diary.db", "vault_restore")
         try:
-            db.execute(
-                "ATTACH DATABASE ? AS holiday_restore", (str(folder / "holidays.db"),)
-            )
+            sqlite3.attach(db, folder / "holidays.db", "holiday_restore")
             try:
                 # SQLite's rollback journal coordinates these databases as one
                 # transaction. No user-provided SQL/schema enters this connection.
                 with db:
+                    if "grades" in value:
+                        db.execute("DELETE FROM grade_items")
+                        db.executemany("INSERT INTO grade_items VALUES(?,?,?,?,?,?,?)",
+                            [tuple(row[key] for key in ("semester", "id", "title", "credits", "grade", "category", "excluded")) for row in value["grades"]])
+                        db.execute("DELETE FROM grade_scales")
+                        db.executemany("INSERT INTO grade_scales VALUES(?,?)",
+                            [(row["semester"], row["scale"]) for row in value.get("grade_scales", [])])
                     if "checklist" in value:
                         from .checklist_store import restore_state
 

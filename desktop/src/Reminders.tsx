@@ -1,3 +1,4 @@
+import { NumberField } from "./NumberField";
 import { useEffect, useRef, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { Volume2 } from "lucide-react";
@@ -228,18 +229,16 @@ export function ReminderSettingsPanel({ active = true }: { active?: boolean }) {
                   </select>
                   {urgentCustom && (
                     <div className="alarm-number">
-                      <input
+                      <NumberField
                         aria-label="긴급 알림 분"
-                        type="number"
+
                         min={1}
                         max={10080}
                         required
                         step={1}
                         disabled={!form.urgent}
                         value={form.urgent_minutes}
-                        onChange={(e) =>
-                          change("urgent_minutes", Number(e.target.value))
-                        }
+                        onValueChange={value => change("urgent_minutes", value)}
                       />
                       <span>분 전</span>
                     </div>
@@ -274,18 +273,16 @@ export function ReminderSettingsPanel({ active = true }: { active?: boolean }) {
                   </select>
                   {generalCustom && (
                     <div className="alarm-number">
-                      <input
+                      <NumberField
                         aria-label="일반 알림 일"
-                        type="number"
+
                         min={0}
                         max={365}
                         required
                         step={1}
                         disabled={!form.general}
                         value={form.general_days}
-                        onChange={(e) =>
-                          change("general_days", Number(e.target.value))
-                        }
+                        onValueChange={value => change("general_days", value)}
                       />
                       <span>일 전</span>
                     </div>
