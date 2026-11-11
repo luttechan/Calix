@@ -1,0 +1,25 @@
+name: Verify Calix encrypted installation
+on:
+  push:
+    branches: ['codex/calix160-finish']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+      - name: Verify Setup and encrypted profile
+        shell: pwsh
+        run: |
+          gh run download 43053816201 --repo luttechan/Calix --name Calix-1.6.0-development-Windows-x64 --dir packages
+          if ($LASTEXITCODE -ne 0) { throw 'Download failed' }
+          $setup = Resolve-Path packages/Calix-1.6.0-Setup-x64.exe
+          if ((Get-FileHash -LiteralPath $setup).Hash.ToLowerInvariant() -cne '7e5ef3f396b16a72174085327513814946204cc31e0669cd371c091c1077d345') { throw 'Setup hash mismatch' }
+          python .github/tools/check_calix160_finish.py $setup
+          if ($LASTEXITCODE -ne 0) { throw 'Setup verification failed' }
