@@ -88,7 +88,7 @@ def check(exe):
         responses = [json.loads(line) for line in completed.stdout.splitlines()]
         assert (
             next(r for r in responses if r.get("id") == 1)["result"]["version"]
-            == "1.6.0"
+            == "1.6.1"
         )
         assert (
             next(r for r in responses if r.get("id") == 2)["result"]["initialized"]
@@ -111,9 +111,10 @@ def check(exe):
             return {value["id"]: value["result"] for value in values if "id" in value}
 
         exchange([
-            dict(id=1, method="grades.save", params=dict(title="Encrypted fixture", credits=3, grade="A+")),
-            dict(id=2, method="security.setup", params=dict(password=password, policy=policy)),
-            dict(id=3, method="quit", params={}),
+            dict(id=1, method="security.setup", params=dict(password=password, policy=policy)),
+            dict(id=2, method="security.unlock", params=dict(password=password, scope="grades")),
+            dict(id=3, method="grades.save", params=dict(title="Encrypted fixture", credits=3, grade="A+")),
+            dict(id=4, method="quit", params={}),
         ])
         assert not (Path(folder) / "learning.db").read_bytes().startswith(b"SQLite format 3")
         values = exchange([

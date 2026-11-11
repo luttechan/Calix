@@ -152,6 +152,8 @@ class AppSecurity:
     def require(self, method):
         if method.startswith("security.") or method in ("bootstrap", "quit", "engine.state", "data.reset"):
             return
+        if method.startswith("grades.") and not self.material:
+            raise ValueError("학점 메뉴를 사용하려면 비밀번호를 설정하세요.")
         if self.expired():
             raise ValueError("비밀번호로 잠금을 해제하세요.")
         scope = "timetable" if method.startswith("timetable.") else "grades" if method.startswith("grades.") else None

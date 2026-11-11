@@ -1,4 +1,4 @@
-# Calix 1.6.0
+# Calix 1.6.1
 
 React + TypeScript / Tauri. Python 엔진은 표준 입출력으로 연결합니다.
 

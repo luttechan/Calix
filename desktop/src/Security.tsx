@@ -46,6 +46,12 @@ export function UnlockView({ scope = "main" }: { scope?: "main" | "timetable" | 
 export function ProtectedSection({ scope, children }: { scope: "timetable" | "grades"; children: ReactNode }) {
   const { data } = useCalix();
   const security = data.security;
+  if (scope === "grades" && !security?.configured) {
+    return <section className="grade-password-required">
+      <header className="page-heading"><div><h1>학점 메뉴</h1><p className="muted">비밀번호를 설정하면 학점 메뉴를 사용할 수 있습니다.</p></div></header>
+      <SecuritySettings />
+    </section>;
+  }
   return security?.configured && security.policy[scope] && !security.unlocked.includes(scope)
     ? <UnlockView scope={scope} /> : <>{children}</>;
 }

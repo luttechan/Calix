@@ -9,7 +9,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "desktop"))
 from engine_api import EngineAPI
-from learning_calendar.grades import summary
+from learning_calendar.grades import summary, dispatch as grade_dispatch
 from learning_calendar.local_backup import read_backup, write_backup
 
 PASSWORD = "Calix test phrase 160!"
@@ -33,8 +33,9 @@ def test_grade_weighting_and_pass_fail():
 def test_encryption_restart_scopes_backup_and_idle(tmp_path):
     api = EngineAPI(tmp_path)
     term = api.bootstrap()["mainTerm"]
-    api.dispatch("grades.save", dict(semester=term, title="Private course", credits=3, grade="A+", excluded=False))
-    before = api.dispatch("grades.read", {"semester": term})
+    # Preserve the migration test's existing, unprotected 1.6.0 data fixture.
+    grade_dispatch(api.store, "grades.save", dict(semester=term, title="Private course", credits=3, grade="A+", excluded=False))
+    before = grade_dispatch(api.store, "grades.read", {"semester": term})
     assert before["summary"]["gpa"] == "4.50"
     api.dispatch("security.setup", dict(password=PASSWORD, policy=POLICY))
     assert not (tmp_path / "learning.db").read_bytes().startswith(b"SQLite format 3")
@@ -76,7 +77,7 @@ def test_encryption_restart_scopes_backup_and_idle(tmp_path):
 def test_initialization_can_resume_after_migration_failure(tmp_path, monkeypatch):
     from learning_calendar import secure_db
     api = EngineAPI(tmp_path)
-    api.dispatch("grades.save", dict(title="Preserve after failure", credits=3, grade="A"))
+    grade_dispatch(api.store, "grades.save", dict(title="Preserve after failure", credits=3, grade="A"))
     original = secure_db.encrypt_database
     called = False
 
@@ -100,7 +101,7 @@ def test_initialization_can_resume_after_migration_failure(tmp_path, monkeypatch
 
 def test_password_change_and_locked_configuration(tmp_path):
     api = EngineAPI(tmp_path)
-    api.dispatch("grades.save", dict(title="Saved grade", credits=2, grade="B+"))
+    grade_dispatch(api.store, "grades.save", dict(title="Saved grade", credits=2, grade="B+"))
     api.dispatch("security.setup", dict(password=PASSWORD, policy=POLICY))
     replacement = "Replacement phrase 160!"
     api.dispatch("security.configure", dict(password=PASSWORD, replacement=replacement, policy=POLICY))
