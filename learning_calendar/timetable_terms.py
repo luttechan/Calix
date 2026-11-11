@@ -97,6 +97,10 @@ def update(store, operation, name, days=None):
         validate(value)
         with store.db:
             store.db.execute("UPDATE timetable SET semester=?", (name,))
+            tables = {row[0] for row in store.db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            if "grade_items" in tables:
+                store.db.execute("UPDATE grade_items SET semester=? WHERE semester=?", (name, old))
+                store.db.execute("UPDATE grade_scales SET semester=? WHERE semester=?", (name, old))
             store.set_meta(
                 "timetable_config", json.dumps(value, ensure_ascii=False), _commit=False
             )

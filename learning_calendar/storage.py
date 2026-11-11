@@ -1,5 +1,5 @@
 from __future__ import annotations
-import sqlite3
+from . import secure_db as sqlite3
 import json
 from contextlib import nullcontext
 from pathlib import Path

@@ -3,7 +3,8 @@
 from pathlib import Path
 from dataclasses import asdict
 from datetime import datetime
-import json, sqlite3
+import json
+from learning_calendar import secure_db as sqlite3
 from learning_calendar.storage import Store
 from learning_calendar.models import KST
 from learning_calendar.checklist_store import ChecklistStore
@@ -16,6 +17,13 @@ class EngineAPI:
     def __init__(self, folder):
         self.folder = Path(folder)
         self.folder.mkdir(parents=True, exist_ok=True)
+        from learning_calendar.app_security import AppSecurity
+        self.security = AppSecurity(self.folder)
+        self._open_stores()
+
+    def _open_stores(self):
+        locked = self.security.state()["locked"]
+        destination = lambda name: ":memory:" if locked else self.folder / name
         self.settings_path = self.folder / "settings.json"
         self.settings = read_settings(self.settings_path)
         name = self.settings.get("active_db", "learning.db")
@@ -25,17 +33,23 @@ class EngineAPI:
             or not name.endswith(".db")
         ):
             name = "learning.db"
-        self.store = Store(self.folder / name)
+        self.store = Store(destination(name))
+        from learning_calendar.grades import initialize
+        initialize(self.store)
         self.checklist = ChecklistStore(self.store)
         self.checklist.freeze_imports(self.store.events())
-        self.diary = DiaryStore(self.folder / "journals.db")
+        self.diary = DiaryStore(destination("journals.db"))
         self.vault = None
         from learning_calendar.focus import FocusClock
 
         self.focus = FocusClock(lambda: self.store)
-        self.holidays = HolidayCalendar(self.folder / "holidays.db")
+        self.holidays = HolidayCalendar(destination("holidays.db"))
 
     def close(self):
+        self._close_stores()
+        self.security.close()
+
+    def _close_stores(self):
         self.focus.close()
         if self.vault:
             self.vault.close()
@@ -48,6 +62,8 @@ class EngineAPI:
         if path.parent != self.folder.resolve() or not path.name.endswith(".db"):
             raise ValueError("계정 저장소를 확인하세요.")
         candidate = Store(path)
+        from learning_calendar.grades import initialize
+        initialize(candidate)
         try:
             checklist = ChecklistStore(candidate)
             checklist.freeze_imports(candidate.events())
@@ -98,14 +114,29 @@ class EngineAPI:
         return True
 
     def bootstrap(self):
+        state = self.security.state()
+        if state["locked"]:
+            return dict(
+                version="1.6.0", events=[], courses=[], types=[], sessions=[],
+                timetableTerms=[], mainTerm="", timetableConfigured=False,
+                sections=[], statuses=[], tasks=[], offDays=[], journals=[],
+                holidays={}, specialDates={}, lastSync="", syncSummary="",
+                security=state,
+                preferences=dict(theme=self.settings.get("theme", "pink"), glass=True,
+                                 reminders={}, nickname="", greeting="{닉네임}님, 오셨군요!",
+                                 onboarding_complete=True, attendance_visible=False, attendance_sync=False,
+                                 developer_mode=False, font_mode=self.settings.get("font_mode", "pretendard"),
+                                 catholic=False, birthday=False, avatar=""),
+            )
         events = self.store.events()
         year = datetime.now(KST).year
         return dict(
-            version="1.5.94",
+            version="1.6.0",
             events=[asdict(e) for e in events],
             courses=[asdict(c) for c in self.store.courses()],
             types=self.store.event_types(),
-            sessions=self.store.timetable(all_terms=True),
+            security=state,
+            sessions=[] if self.security.material and self.security.policy["timetable"] and "timetable" not in self.security.scopes else self.store.timetable(all_terms=True),
             timetableTerms=self.store.timetable_config()["terms"],
             mainTerm=self.store.timetable_config()["main"],
             timetableConfigured=self.store.timetable_config().get("confirmed", False),
@@ -194,6 +225,38 @@ class EngineAPI:
     def dispatch(self, method, p):
         if not isinstance(method, str) or not isinstance(p, dict):
             raise ValueError("요청을 확인하세요.")
+        self.security.require(method)
+        if method.startswith("security."):
+            if method == "security.state":
+                return self.security.state()
+            if method == "security.activity":
+                if not self.security.expired():
+                    import time
+                    self.security.activity = time.monotonic()
+                return self.security.state()
+            if method == "security.setup":
+                policy = self.security.validate(p.get("policy"))
+                self._close_stores()
+                try:
+                    self.security.initialize(p.get("password"), policy)
+                finally:
+                    self._open_stores()
+            elif method == "security.unlock":
+                was_cold = self.security.key is None
+                self.security.unlock(p.get("password"), p.get("scope", "main"))
+                if was_cold:
+                    self._close_stores()
+                    self._open_stores()
+            elif method == "security.configure":
+                self.security.configure(p.get("password"), p.get("policy"), p.get("replacement"))
+            elif method == "security.lock":
+                self.security.lock(p.get("scope", "main"))
+            else:
+                raise ValueError("잠금 요청을 확인하세요.")
+            return self.security.state()
+        if method.startswith("grades."):
+            from learning_calendar.grades import dispatch
+            return dispatch(self.store, method, p)
         if method == "attendance.read":
             from learning_calendar.attendance import read
 
@@ -266,6 +329,11 @@ class EngineAPI:
             ):
                 raise ValueError("백업 파일을 선택하세요.")
             path = Path(raw)
+            if method == "backup.restore" and not self.security.material:
+                with path.open("rb") as stream:
+                    protected = stream.read(25).startswith(b"Calix password backup v1")
+                if protected:
+                    raise ValueError("먼저 앱 비밀번호를 설정한 뒤 암호화 백업을 복원하세요.")
             if self.vault:
                 self.vault.close()
                 self.vault = None
@@ -273,7 +341,7 @@ class EngineAPI:
             if method == "backup.export":
                 write_backup(path, self.store, self.folder)
             else:
-                value = read_backup(path, self.store.get_meta("canvas_user_id"))
+                value = read_backup(path, self.store.get_meta("canvas_user_id"), p.get("password"))
                 recovery = self.folder / (
                     "recovery-" + datetime.now().strftime("%Y%m%d-%H%M%S-%f") + ".calix"
                 )

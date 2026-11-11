@@ -1,3 +1,4 @@
+import { NumberField } from "./NumberField";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Pause, Play, RotateCcw, SkipForward, Timer, X } from "lucide-react";
 import { rpc, subscribe } from "./bridge";
@@ -355,16 +356,16 @@ export function StudyPage() {
             ).map(([label, value, set]) => (
               <label key={label}>
                 {label}
-                <input
+                <NumberField
                   aria-label={`${label} 분`}
-                  type="number"
+
                   min={1}
                   max={180}
                   value={value}
                   disabled={
                     mode === "free" || !!state?.elapsed || state?.running
                   }
-                  onChange={(e) => set(Number(e.target.value))}
+                  onValueChange={set}
                 />
                 분
               </label>

@@ -17,7 +17,7 @@ tls_policy = Path(ssl.__file__).with_name('codex-rejected-cas.pem')
 runtime_data = [(str(tls_policy), '.')] if tls_policy.is_file() else []
 asset_data=[(str(root/path),str(Path(path).parent)) for path in RUNTIME_ASSETS if path.startswith('asset/calendar/')]
 license_data=[(str(root/'desktop/installer/LICENSE-MIT.txt'),'licenses/Tauri-Installer')]
-for name in ('PySide6','PySide6_Essentials','PySide6_Addons','PySide6_WebEngine','shiboken6','requests','cryptography','keyring'):
+for name in ('PySide6','PySide6_Essentials','PySide6_Addons','PySide6_WebEngine','shiboken6','requests','cryptography','keyring','sqlcipher3'):
     package=distribution(name)
     for item in package.files or ():
         if 'licenses' in item.parts or item.name.lower().startswith(('license','copying')):
@@ -26,7 +26,7 @@ for name in ('PySide6','PySide6_Essentials','PySide6_Addons','PySide6_WebEngine'
 a = Analysis(
     [str(root/'desktop/engine_main.py')], pathex=[str(root),str(root/'desktop')],
     binaries=[], datas=[(str(root/'learning_calendar/media_types.json'),'learning_calendar')] + asset_data + collect_data_files('tzdata') + runtime_data + license_data,
-    hiddenimports=[],
+    hiddenimports=['sqlcipher3.dbapi2'],
     hookspath=[str(root/'tools/pyinstaller_hooks')], hooksconfig={}, runtime_hooks=[], excludes=['PySide6.QtTest'], noarchive=False,
 )
 system_dlls = {'icuuc.dll', 'icuin.dll', 'ucrtbase.dll'}

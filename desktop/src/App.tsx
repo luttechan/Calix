@@ -13,6 +13,7 @@ import {
 import {
   Home,
   CalendarDays,
+  Calculator,
   CheckSquare,
   LayoutGrid,
   BookOpen,
@@ -42,6 +43,8 @@ import { listen } from "@tauri-apps/api/event";
 import { AttendancePage } from "./Attendance";
 import { StudyPage, FocusDock } from "./Study";
 import { SyncNotice } from "./SyncNotice";
+import { GradesPage } from "./Grades";
+import { ProtectedSection, SecurityMonitor, UnlockView } from "./Security";
 import { UpdateDialog } from "./UpdateDialog";
 import { WindowControls } from "./WindowControls";
 import { rpc, subscribe, stopEngine } from "./bridge";
@@ -229,6 +232,7 @@ const navigation: [Page, string, typeof Home][] = [
   ["assignments", "과제", FileText],
   ["videos", "영상", Video],
   ["timetable", "시간표", LayoutGrid],
+  ["grades", "학점", Calculator],
   ["attendance", "출결", CheckSquare],
   ["study", "학습", BookOpen],
   ["checklist", "체크리스트", CheckSquare],
@@ -250,6 +254,8 @@ export function App() {
     };
   }, []);
   const developerClicks = useRef({ count: 0, time: 0 });
+  const privacyLocked = useRef(false);
+  const navigationRequest = useRef(0);
   const [data, setData] = useState<Snapshot | null>(null),
     [error, setError] = useState(""),
     [page, setPage] = useState<Page>("home"),
@@ -300,6 +306,7 @@ export function App() {
       throw error;
     }
   };
+  privacyLocked.current = !!data?.security?.locked;
   const refresh = useCallback(async () => {
     const snapshot = await rpc<Snapshot>("bootstrap");
     setData(snapshot);
@@ -332,29 +339,13 @@ export function App() {
       .catch((e) => {
         if (alive) setError(e.message);
       });
-    if (isTauri())
-      void rpc<string>("browser.restore.begin")
-        .then(async (token) => {
-          try {
-            const identity =
-              await invoke<Record<string, unknown>>("campus_identity");
-            await rpc("browser.identity", {
-              ...identity,
-              interactive: false,
-              token,
-            });
-          } catch {
-            await rpc("browser.restore.failed", { token }).catch(() => {});
-          }
-        })
-        .catch(() => {});
     rpc<{ loggedIn: boolean }>("engine.state")
       .then((value) => {
         if (alive) setLoggedIn(value.loggedIn);
       })
       .catch(() => {});
     const unsubscribe = subscribe((message) => {
-      if (message.event === "reminder" && isTauri()) {
+      if (message.event === "reminder" && isTauri() && !privacyLocked.current) {
         void invoke("reminder_show", { payload: message.payload }).catch(
           (error) => notify(String(error)),
         );
@@ -362,7 +353,7 @@ export function App() {
       if (message.event === "data-changed") {
         void refresh().catch((e) => notify(e.message));
       }
-      if (message.event === "auth-required")
+      if (message.event === "auth-required" && !privacyLocked.current)
         void openLogin().catch((error) => notify(String(error)));
       if (message.event === "sync-state") setBusy(Boolean(message.busy));
       if (message.event === "session-error" && isTauri())
@@ -401,6 +392,25 @@ export function App() {
       if (toastTimer.current) clearTimeout(toastTimer.current);
     };
   }, []);
+  useEffect(() => {
+    if (!data || data.security?.locked) return;
+    if (isTauri())
+      void rpc<string>("browser.restore.begin")
+        .then(async (token) => {
+          try {
+            const identity =
+              await invoke<Record<string, unknown>>("campus_identity");
+            await rpc("browser.identity", {
+              ...identity,
+              interactive: false,
+              token,
+            });
+          } catch {
+            await rpc("browser.restore.failed", { token }).catch(() => {});
+          }
+        })
+        .catch(() => {});
+  }, [Boolean(data), data?.security?.locked]);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
@@ -497,11 +507,17 @@ export function App() {
     };
   }, []);
   const navigate = async (next: Page) => {
+    const request = ++navigationRequest.current;
     try {
       await finishEditing();
+      if (request !== navigationRequest.current) return;
+      if (data?.security?.configured && (page === "grades" || page === "timetable") && page !== next) {
+        await rpc("security.lock", { scope: page });
+        await refresh();
+      }
       setSelected(null);
       setAddDate(null);
-      setPage(next);
+      if (request === navigationRequest.current) setPage(next);
     } catch (e) {
       notify((e as Error).message);
     }
@@ -572,8 +588,14 @@ export function App() {
         : null,
     [data, appVersion, mutate, notify, openEvent],
   );
+  if (data?.security?.locked && context) {
+    return <Context.Provider value={context}>
+      <div className="security-app-lock"><WindowControls /><UnlockView /></div>
+    </Context.Provider>;
+  }
   return (
     <div className="app-shell">
+      <SecurityMonitor state={data?.security} beforeLock={finishEditing} refresh={refresh} />
       <DeveloperConsole allowed={Boolean(data?.preferences.developer_mode)} />
       <aside className="sidebar">
         <a
@@ -899,7 +921,8 @@ export function App() {
               <div hidden={page !== "checklist"}>
                 <CachedChecklist />
               </div>
-              {page === "timetable" && <TimetablePage />}
+              {page === "timetable" && <ProtectedSection scope="timetable"><TimetablePage /></ProtectedSection>}
+              {page === "grades" && <ProtectedSection scope="grades"><GradesPage /></ProtectedSection>}
               {page === "attendance" && <AttendancePage />}
               {page === "study" && <StudyPage />}
               <div hidden={page !== "diary"}>
