@@ -1,6 +1,6 @@
 """Opt-in maintenance on the active learning DB; never touches diary databases."""
 
-import sqlite3
+from learning_calendar import secure_db as sqlite3
 import threading
 import time
 from pathlib import Path

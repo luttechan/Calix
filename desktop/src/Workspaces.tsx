@@ -17,6 +17,7 @@ import { UpdateDialog } from "./UpdateDialog";
 import { ProfileSettings, ResetSettings } from "./Profile";
 import { ReminderSettingsPanel } from "./Reminders";
 import { DevPanel } from "./DevPanel";
+import { SecuritySettings } from "./Security";
 import { dateKey, dueText, localInput, status, weekdays } from "./dates";
 import type { Task, Preferences } from "./types";
 const taskCollator = new Intl.Collator("ko", { numeric: true });
@@ -550,6 +551,7 @@ export function SettingsPage() {
     [special, setSpecial] = useState(false),
     [updates, setUpdates] = useState(false),
     [restore, setRestore] = useState<string | null>(null),
+    [backupPassword, setBackupPassword] = useState(""),
     [fileBusy, setFileBusy] = useState(false);
   const categories = [
     ["profile", "내 프로필"],
@@ -557,6 +559,7 @@ export function SettingsPage() {
     ["alarms", "알림과 소리"],
     ["calendar", "일정"],
     ["menus", "메뉴 활성화"],
+    ["security", "비밀번호와 잠금"],
     ["app", "앱 관리"],
     ["dev", "Dev"],
   ] as const;
@@ -641,6 +644,7 @@ export function SettingsPage() {
           </button>
         ))}
       </div>
+      {category === "security" && <SecuritySettings />}
       {category === "menus" && (
         <div
           role="tabpanel"
@@ -931,6 +935,7 @@ export function SettingsPage() {
           onClose={() => setRestore(null)}
         >
           <p className="muted">현재 자료를 백업 파일로 바꿉니다.</p>
+          <label>백업 비밀번호<input type="password" autoComplete="current-password" placeholder="암호화된 백업만 입력" value={backupPassword} onChange={event => setBackupPassword(event.target.value)} /></label>
           <div className="dialog-actions">
             <span />
             <button onClick={() => setRestore(null)}>취소</button>
@@ -939,9 +944,10 @@ export function SettingsPage() {
               disabled={fileBusy}
               onClick={() => {
                 setFileBusy(true);
-                void mutate("backup.restore", { path: restore })
+                void mutate("backup.restore", { path: restore, password: backupPassword })
                   .then(() => {
                     setRestore(null);
+                    setBackupPassword("");
                     notify("복원됨");
                   })
                   .catch(() => {})

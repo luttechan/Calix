@@ -105,7 +105,15 @@ export type Preferences = {
   greeting: string;
   onboarding_complete: boolean;
 };
+export type SecurityState = {
+  configured: boolean;
+  locked: boolean;
+  policy: { main: boolean; timetable: boolean; grades: boolean; idle_minutes: number };
+  unlocked: string[];
+  retry_after: number;
+};
 export type Snapshot = {
+  security?: SecurityState;
   version: string;
   events: EventItem[];
   courses: Course[];
@@ -126,6 +134,7 @@ export type Snapshot = {
   journals: Summary[];
 };
 export type Page =
+  | "grades"
   | "attendance"
   | "study"
   | "home"

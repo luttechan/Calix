@@ -10,6 +10,7 @@ import shutil
 def reset_data(api):
     folder = api.folder.resolve()
     names = {
+        "app-lock.json",
         "learning.db",
         "journals.db",
         "private-diary.db",
