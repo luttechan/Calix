@@ -23,7 +23,7 @@ small { line-height: 1.5; }
 .timetable-panel .session-work > span, .online-courses > header small,
 .online-course-list .session-work, .journal-list small, .journal-meta > span { font-size: 11px; }
 .event-table-head, .home-progress-labels, .today-event small, .today-event em, .license-note { font-size: 12px; }
-.creator strong, .welcome-note, .eyebrow, .muted, .grade-policy, .security-heading p { font-size: 13px; }
+.creator strong, .welcome-note, .eyebrow, .muted, .grade-policy { font-size: 13px; }
 .creator strong, .event-course, .task-course { min-width: 0; overflow-wrap: anywhere; }
 .home-greeting { letter-spacing: -0.025em; }
 .settings-categories button { font-size: 13px; line-height: 1.5; }
@@ -44,8 +44,6 @@ small { line-height: 1.5; }
 .grade-row input, .grade-row select { font-size: 14px; }
 .grade-summary small { font-size: 13px; }
 .security-settings label { margin: 0; }
-.security-options { gap: 0; }
-.security-option { min-height: 50px; }
 .security-warning { color: var(--ink); }
 .sync-notice strong { font-size: 15px; }
 .sync-notice p, .reminder-list-heading, .reminder-list-heading span,

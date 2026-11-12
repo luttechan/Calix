@@ -32,6 +32,7 @@ import {
   LogOut,
   Sun,
   Power,
+  LockKeyhole,
   UserRound,
   Square,
 } from "lucide-react";
@@ -58,7 +59,7 @@ import {
   status,
   weekdays,
 } from "./dates";
-import type { Snapshot, EventItem, Page } from "./types";
+import type { Snapshot, EventItem, Page, SecurityState } from "./types";
 import { ChecklistPage, TimetablePage, SettingsPage } from "./Workspaces";
 import { DiaryPage } from "./Diary";
 import { DeveloperConsole } from "./DeveloperConsole";
@@ -256,6 +257,9 @@ export function App() {
   const developerClicks = useRef({ count: 0, time: 0 });
   const privacyLocked = useRef(false);
   const navigationRequest = useRef(0);
+  const refreshRequest = useRef(0);
+  const lockRequest = useRef(false);
+  const [locking, setLocking] = useState(false);
   const [data, setData] = useState<Snapshot | null>(null),
     [error, setError] = useState(""),
     [page, setPage] = useState<Page>("home"),
@@ -308,7 +312,9 @@ export function App() {
   };
   privacyLocked.current = !!data?.security?.locked;
   const refresh = useCallback(async () => {
+    const request = ++refreshRequest.current;
     const snapshot = await rpc<Snapshot>("bootstrap");
+    if (request !== refreshRequest.current) return;
     setData(snapshot);
     setError("");
   }, []);
@@ -484,7 +490,7 @@ export function App() {
     let active = true;
     let stop: (() => void) | undefined;
     void listen<{ key: string }>("reminder:open", (event) => {
-      if (active) {
+      if (active && !privacyLocked.current) {
         setQuery("");
         if (event.payload.key) setSelected(event.payload.key);
         else
@@ -507,6 +513,7 @@ export function App() {
     };
   }, []);
   const navigate = async (next: Page) => {
+    if (lockRequest.current) return;
     const request = ++navigationRequest.current;
     try {
       await finishEditing();
@@ -520,6 +527,32 @@ export function App() {
       if (request === navigationRequest.current) setPage(next);
     } catch (e) {
       notify((e as Error).message);
+    }
+  };
+
+  const lockScreen = async () => {
+    if (lockRequest.current || !data?.security?.configured) return;
+    lockRequest.current = true;
+    setLocking(true);
+    try {
+      await finishEditing();
+      ++navigationRequest.current;
+      const security = await rpc<SecurityState>("security.lock", { scope: "main" });
+      if (!security.locked) throw new Error("비밀번호를 먼저 설정하세요.");
+      ++refreshRequest.current;
+      privacyLocked.current = true;
+      setData(previous => previous ? { ...previous, security } : previous);
+      setQuery(""); setSelected(null); setAddDate(null);
+      setExit(false); setCredits(false); setStartupUpdate(false);
+      setInstall(false); setRestart(false); setToast("");
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+      if (isTauri()) await invoke("privacy_lock");
+      await refresh();
+    } catch (error) {
+      notify((error as Error).message);
+    } finally {
+      lockRequest.current = false;
+      setLocking(false);
     }
   };
 
@@ -744,6 +777,16 @@ export function App() {
             >
               <Plus size={17} />
               일정 추가
+            </button>
+            <button
+              className="icon-button"
+              title={data?.security?.configured ? "잠금" : "비밀번호 설정 후 잠금"}
+              aria-label="잠금"
+              aria-busy={locking}
+              disabled={!data?.security?.configured || locking}
+              onClick={() => void lockScreen()}
+            >
+              <LockKeyhole size={16} />
             </button>
             <button
               className="icon-button"

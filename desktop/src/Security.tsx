@@ -68,8 +68,8 @@ export function SecuritySettings() {
   const newPassword = configured ? replacement : password;
   const [custom, setCustom] = useState(![1, 5, 10, 15, 30, 60].includes(policy.idle_minutes));
   return (
-    <section className="security-settings">
-      <div className="security-heading"><ShieldCheck size={25} /><div><h2>비밀번호와 잠금</h2><p>{configured ? "저장 데이터 암호화 사용 중" : "비밀번호를 설정하면 저장 데이터를 암호화합니다."}</p></div></div>
+    <section className="glass settings-panel security-settings">
+      <div className="settings-heading"><ShieldCheck size={20} /><h2>비밀번호와 잠금</h2>{configured && <span className="security-status">암호화 사용 중</span>}</div>
       <form onSubmit={event => {
         event.preventDefault();
         if (newPassword && newPassword !== confirm) { notify("새 비밀번호가 일치하지 않습니다."); return; }
@@ -88,7 +88,10 @@ export function SecuritySettings() {
           <p className="muted">12자 이상. 다시 실행할 때 비밀번호가 필요합니다.</p>
           <div className="security-options">
             {([["main", "메인 화면 자동 잠금"], ["timetable", "시간표 잠금"], ["grades", "학점 메뉴 잠금"]] as const).map(([key, label]) =>
-              <label className="security-option" key={key}><span>{label}</span><input type="checkbox" checked={policy[key]} onChange={event => setPolicy(previous => ({ ...previous, [key]: event.target.checked }))} /></label>)}
+              <div className="setting-row security-option" key={key}>
+                <strong>{label}</strong>
+                <button type="button" role="switch" aria-label={label} aria-checked={policy[key]} className={`switch ${policy[key] ? "on" : ""}`} onClick={() => setPolicy(previous => ({ ...previous, [key]: !previous[key] }))}><i /></button>
+              </div>)}
           </div>
           {policy.main && <div className="security-time">
             <label>미사용 시간<select aria-label="미사용 시간" value={custom ? "custom" : String(policy.idle_minutes)} onChange={event => {
@@ -99,7 +102,7 @@ export function SecuritySettings() {
           </div>}
           <p className="security-warning">비밀번호를 잊으면 초기화해야 합니다. 초기화 시 저장 데이터가 삭제됩니다.</p>
           <p className="muted">암호화 자료는 1.6.0 이상에서 열 수 있습니다.</p>
-          <button className="button primary">{pending ? "암호화 처리 중" : configured ? "설정 저장" : "비밀번호 설정"}</button>
+          <div className="dialog-actions security-actions"><button type="submit" className="button primary">{pending ? "저장 중" : configured ? "설정 저장" : "비밀번호 설정"}</button></div>
         </fieldset>
       </form>
     </section>

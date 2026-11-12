@@ -3249,6 +3249,8 @@ body.reminder-surface {
   flex: 1;
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
   max-width: 830px;
 }
 .workspace main > #settings-pane-alarms:not([hidden]) {
