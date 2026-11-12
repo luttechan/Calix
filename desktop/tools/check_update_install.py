@@ -57,7 +57,7 @@ def main():
         raise RuntimeError(
             "Installer registry tests are restricted to disposable Windows CI runners"
         )
-    setup = ROOT / "desktop/.build/packages/Calix-1.6.1-Setup-x64.exe"
+    setup = ROOT / "desktop/.build/packages/Calix-1.6.11-Setup-x64.exe"
     expected = ROOT / "desktop/src-tauri/target/release/calix-desktop.exe"
     # NSIS changes the Tauri marker when embedding the UI into its payload.
     expected_ui = expected.read_bytes().replace(
@@ -86,7 +86,7 @@ def main():
             winreg.HKEY_CURRENT_USER, UNINSTALL, 0, winreg.KEY_SET_VALUE
         ) as key:
             # Same-version passive reinstall exercises the old uninstaller path.
-            winreg.SetValueEx(key, "DisplayVersion", 0, winreg.REG_SZ, "1.6.1")
+            winreg.SetValueEx(key, "DisplayVersion", 0, winreg.REG_SZ, "1.6.11")
         data = Path(os.environ["APPDATA"]) / "LutteLaurent/Calix"
         data.mkdir(parents=True, exist_ok=True)
         sentinel = data / "installer-preserve-check.txt"

@@ -6,6 +6,27 @@ import json
 from datetime import datetime, timedelta, time as day_time
 from .models import KST
 
+DEFAULT_COMMENTS = dict(heading="지금, 한 가지에 집중", focus_end="집중을 마쳤습니다. 잠시 쉬세요.", break_end="휴식을 마쳤습니다.")
+
+
+def validate_comments(value):
+    if not isinstance(value, dict) or set(value) != set(DEFAULT_COMMENTS):
+        raise ValueError("집중 문구를 확인하세요.")
+    result = {}
+    for name in DEFAULT_COMMENTS:
+        text = value[name]
+        if not isinstance(text, str) or len(text) > (80 if name == "heading" else 120) or any(ord(c) < 32 or 0xD800 <= ord(c) <= 0xDFFF for c in text):
+            raise ValueError("집중 문구를 확인하세요.")
+        result[name] = text.strip()
+    return result
+
+
+def read_comments(store):
+    try:
+        return validate_comments(json.loads(store.get_meta("focus_comments", "null")))
+    except (ValueError, TypeError):
+        return DEFAULT_COMMENTS.copy()
+
 
 class FocusClock:
     def __init__(self, store):
@@ -91,6 +112,7 @@ class FocusClock:
         )
         return dict(
             running=self.running,
+            session_id=self.key,
             mode=self.mode,
             phase=self.phase,
             round=self.round,
@@ -100,14 +122,18 @@ class FocusClock:
             short=self.short // 60,
             long=self.long // 60,
             finished=self.mode != "free" and self.elapsed >= limit,
+            comments=read_comments(self.store()),
         )
 
     def command(self, p):
         action = p.get("action")
-        if action not in ("start", "pause", "reset", "next", "configure"):
+        if action not in ("start", "pause", "reset", "next", "configure", "comments"):
             raise ValueError("집중 모드 명령을 확인하세요.")
         self.tick()
-        if action == "configure":
+        if action == "comments":
+            comments = validate_comments(p.get("comments"))
+            self.store().set_meta("focus_comments", json.dumps(comments, ensure_ascii=False))
+        elif action == "configure":
             if self.running or self.elapsed:
                 raise ValueError("현재 세션을 마친 뒤 변경하세요.")
             if p.get("mode") not in ("pomodoro", "free"):

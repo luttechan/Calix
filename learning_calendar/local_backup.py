@@ -21,6 +21,7 @@ def _rows(db, query):
 def write_backup(path, store, folder):
     folder = Path(folder)
     from .grades import initialize
+    from .focus import read_comments
     initialize(store)
     schedule = dict(
         owner=store.get_meta("canvas_user_id"),
@@ -42,6 +43,7 @@ def write_backup(path, store, folder):
         grades=_rows(store.db, "SELECT * FROM grade_items"),
         grade_scales=_rows(store.db, "SELECT * FROM grade_scales"),
         focus_sessions=_rows(store.db, "SELECT id,day,seconds FROM focus_sessions"),
+        focus_comments=read_comments(store),
         schedule=schedule,
         checklist=backup_state(store),
         journals=[],
@@ -178,6 +180,9 @@ def read_backup(path, owner="", password=None):
         ) not in (1, 2, 3, 4, 5, 6, 7):
             raise ValueError("지원하지 않는 백업입니다.")
         focus_ids = set()
+        if "focus_comments" in value:
+            from .focus import validate_comments
+            value["focus_comments"] = validate_comments(value["focus_comments"])
         for row in _list(value.get("focus_sessions", []), 100000):
             identifier = _string(row.get("id"), 64, False)
             if (
@@ -481,6 +486,8 @@ def restore_backup(value, store, folder):
                                 for r in value["focus_sessions"]
                             ],
                         )
+                    if "focus_comments" in value:
+                        db.execute("INSERT OR REPLACE INTO meta VALUES(?,?)", ("focus_comments", json.dumps(value["focus_comments"], ensure_ascii=False)))
                     db.execute("DELETE FROM event_types")
                     db.execute("DELETE FROM timetable")
                     for row in schedule["courses"]:

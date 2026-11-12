@@ -1,4 +1,8 @@
+export const DEFAULT_FOCUS_COMMENTS = { heading: "지금, 한 가지에 집중", focus_end: "집중을 마쳤습니다. 잠시 쉬세요.", break_end: "휴식을 마쳤습니다." };
+export type FocusComments = typeof DEFAULT_FOCUS_COMMENTS;
 export type FocusState = {
+  comments?: FocusComments;
+  session_id?: string;
   running: boolean;
   mode: "pomodoro" | "free";
   phase: "focus" | "break";
