@@ -644,7 +644,11 @@ export function SettingsPage() {
           </button>
         ))}
       </div>
-      {category === "security" && <SecuritySettings />}
+      {category === "security" && (
+        <div role="tabpanel" id="settings-pane-security" aria-labelledby="settings-tab-security">
+          <SecuritySettings />
+        </div>
+      )}
       {category === "menus" && (
         <div
           role="tabpanel"
