@@ -15,6 +15,8 @@ label { font-size: 14px; }
 input, select, textarea { line-height: 1.5; }
 textarea { word-break: normal; }
 small { line-height: 1.5; }
+.toast { overflow-wrap: anywhere; }
+.toast > svg, .toast > button { flex-shrink: 0; }
 .nav-label, .sidebar nav small, .creator small, .statusbar { font-size: 11px; }
 .brand small, .type-badge, .section-tabs small, .off-header small,
 .time-axis > span, .session-card small, .session-work > span,

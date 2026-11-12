@@ -122,7 +122,6 @@ export function GradesPage() {
           {grades.items.map(item => <GradeRow key={semester + item.id} item={item} grades={grades.grades} semester={semester} refresh={refresh} />)}
           {!grades.items.length && <div className="empty">시간표에 수업을 추가하거나 과목을 직접 입력하세요.</div>}
         </div>
-        <p className="muted">과목별 저장 버튼을 누르면 계산에 반영됩니다. 학교의 최종 성적과 차이가 있을 수 있습니다.</p>
         <details className="grade-sources"><summary>계산 기준</summary>
           <p>과목별 학점과 평점의 곱을 합산한 뒤 평점 산입 학점으로 나눕니다.</p>
           <a href="https://www.bufs.ac.kr/bbs/board.php?bo_table=university_rules&amp;wr_id=43" onClick={event => { event.preventDefault(); void rpc("app.open", { page: "grade45" }).catch(reason => notify(reason.message)); }}>4.5 기준 / 부산외대</a>{" / "}

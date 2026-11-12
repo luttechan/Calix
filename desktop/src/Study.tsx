@@ -1,10 +1,10 @@
 import { NumberField } from "./NumberField";
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { Pause, Play, RotateCcw, SkipForward, Timer, X } from "lucide-react";
+import { Pause, Play, RotateCcw, Settings, SkipForward, Timer, X } from "lucide-react";
 import { rpc, subscribe } from "./bridge";
-import { useCalix } from "./App";
+import { Modal, useCalix } from "./App";
 import { dateKey } from "./dates";
-import { focusSeconds, timerText, type FocusState } from "./focusState";
+import { DEFAULT_FOCUS_COMMENTS, focusSeconds, timerText, type FocusComments, type FocusState } from "./focusState";
 import type { EventItem } from "./types";
 
 let current: FocusState | null = null,
@@ -22,6 +22,7 @@ const publish = (s: FocusState) => {
   for (const f of watchers) f();
 };
 let request = 0;
+let notifiedSession = "";
 async function read() {
   const id = ++request;
   const s = await rpc<FocusState>("focus.state");
@@ -121,6 +122,28 @@ function Controls({ state }: { state: FocusState }) {
     </div>
   );
 }
+function FocusCommentSettings({ comments, onClose }: { comments: FocusComments; onClose: () => void }) {
+  const { notify } = useCalix();
+  const [draft, setDraft] = useState({ ...comments });
+  const [pending, setPending] = useState(false);
+  return <Modal title="집중 문구" onClose={onClose}>
+    <form className="focus-comment-form" onSubmit={event => {
+      event.preventDefault();
+      if (pending) return;
+      setPending(true);
+      void command("comments", { comments: draft }).then(() => { notify("저장됨"); onClose(); })
+        .catch(error => notify(String(error))).finally(() => setPending(false));
+    }}>
+      {([['heading', '집중 문구'], ['focus_end', '집중 완료'], ['break_end', '휴식 완료']] as const).map(([key, title]) =>
+        <label key={key}>{title}<input value={draft[key]} maxLength={key === 'heading' ? 80 : 120} onChange={event => setDraft(previous => ({ ...previous, [key]: event.target.value }))} /></label>)}
+      <div className="dialog-actions">
+        <button type="button" disabled={pending} onClick={() => setDraft({ ...DEFAULT_FOCUS_COMMENTS })}>기본값</button>
+        <button type="button" onClick={onClose}>취소</button>
+        <button type="submit" className="primary" disabled={pending}>저장</button>
+      </div>
+    </form>
+  </Modal>;
+}
 export function FocusDock() {
   const state = useFocus(),
     [tick, setTick] = useState(0),
@@ -150,16 +173,18 @@ export function FocusDock() {
   useEffect(() => {
     if (state?.running && state.mode !== "free" && seconds === 0) {
       void read()
-        .then(() =>
-          notify(
-            state.phase === "focus"
-              ? "집중을 마쳤습니다. 잠시 쉬세요."
-              : "휴식을 마쳤습니다.",
-          ),
-        )
         .catch(() => {});
     }
   }, [seconds, state?.running]);
+  useEffect(() => {
+    if (!state?.finished || state.mode === "free") return;
+    const session = `${state.session_id ?? ''}:${state.phase}:${state.round}`;
+    if (notifiedSession === session) return;
+    notifiedSession = session;
+    const comments = state.comments ?? DEFAULT_FOCUS_COMMENTS;
+    const message = state.phase === "focus" ? comments.focus_end : comments.break_end;
+    if (message) notify(message);
+  }, [state?.finished, state?.session_id, state?.phase, state?.round, state?.comments]);
   void tick;
   if (!state || (!state.running && !state.elapsed && !state.round)) return null;
   return (
@@ -228,6 +253,8 @@ export function StudyPage() {
     [long, setLong] = useState(15),
     [totals, setTotals] = useState<{ day: string; seconds: number }[]>([]),
     [offset, setOffset] = useState(0);
+  const [commentSettings, setCommentSettings] = useState(false);
+  const comments = state?.comments ?? DEFAULT_FOCUS_COMMENTS;
   useEffect(() => {
     if (state) {
       setMode(state.mode);
@@ -319,7 +346,6 @@ export function StudyPage() {
             {Math.floor(seconds / 60)}
             <small>분</small>
           </strong>
-          <small>Calix 집중 모드 기록</small>
         </article>
       </div>
       <div className="study-columns">
@@ -327,9 +353,10 @@ export function StudyPage() {
           <div className="focus-brand">
             <img src="/assets/icons/calix.svg" alt="Calix" />
             <span>FOCUS</span>
+            <button className="icon-button focus-settings" type="button" title="집중 문구 설정" aria-label="집중 문구 설정" disabled={!state} onClick={() => setCommentSettings(true)}><Settings size={18} /></button>
           </div>
           <Tomato />
-          <h2>지금, 한 가지에 집중</h2>
+          {comments.heading && <h2>{comments.heading}</h2>}
           <div className="segmented">
             <button
               aria-pressed={mode === "pomodoro"}
@@ -371,11 +398,9 @@ export function StudyPage() {
               </label>
             ))}
           </div>
-          {mode === "pomodoro" && (
+          {mode === "pomodoro" && !!state?.round && (
             <p className="muted">
-              {state?.round
-                ? `${(state.round % 4) + 1} / 4 세션`
-                : "네 번 집중한 뒤 긴 휴식"}
+              {(state.round % 4) + 1} / 4 세션
             </p>
           )}
           {(!state || (!state.running && !state.elapsed && !state.round)) && (
@@ -412,9 +437,9 @@ export function StudyPage() {
               );
             })}
           </div>
-          <p className="muted">수강·제출률은 이번 주 마감 일정 기준입니다.</p>
         </section>
       </div>
+      {commentSettings && <FocusCommentSettings comments={comments} onClose={() => setCommentSettings(false)} />}
     </section>
   );
 }
