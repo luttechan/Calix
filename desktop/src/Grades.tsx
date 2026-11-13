@@ -549,6 +549,7 @@ export function GradesPage() {
             P는 취득 학점에 포함됩니다. P와 NP는 평점평균에서 제외됩니다.
           </p>
           <form
+            id="grade-form"
             ref={form}
             className="grades-form"
             noValidate
@@ -621,47 +622,48 @@ export function GradesPage() {
                 )}
               </div>
             </fieldset>
-            <div className="grade-savebar">
-              <span role="status">
-                {pending ? "저장 중" : count ? `변경 ${count}건` : "저장됨"}
-              </span>
-              {sheet.deleted.length > 0 && (
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => {
-                    const item = sheet.deleted[sheet.deleted.length - 1];
-                    update({
-                      ...sheet,
-                      items: [...sheet.items, item],
-                      deleted: sheet.deleted.slice(0, -1),
-                    });
-                  }}
-                >
-                  <Undo2 size={16} />
-                  삭제 취소
-                </button>
-              )}
-              {count > 0 && (
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => setDiscard(true)}
-                >
-                  변경 취소
-                </button>
-              )}
-              <button
-                className="primary"
-                type="submit"
-                disabled={pending || !count}
-                title="전체 저장 (Ctrl+S)"
-              >
-                <Save size={16} />
-                {pending ? "저장 중" : "전체 저장"}
-              </button>
-            </div>
           </form>
+          <div className="grade-savebar">
+            <span role="status">
+              {pending ? "저장 중" : count ? `변경 ${count}건` : "저장됨"}
+            </span>
+            {sheet.deleted.length > 0 && (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => {
+                  const item = sheet.deleted[sheet.deleted.length - 1];
+                  update({
+                    ...sheet,
+                    items: [...sheet.items, item],
+                    deleted: sheet.deleted.slice(0, -1),
+                  });
+                }}
+              >
+                <Undo2 size={16} />
+                삭제 취소
+              </button>
+            )}
+            {count > 0 && (
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => setDiscard(true)}
+              >
+                변경 취소
+              </button>
+            )}
+            <button
+              className="primary"
+              type="submit"
+              form="grade-form"
+              disabled={pending || !count}
+              title="전체 저장 (Ctrl+S)"
+            >
+              <Save size={16} />
+              {pending ? "저장 중" : "전체 저장"}
+            </button>
+          </div>
           <details className="grade-sources">
             <summary>계산 기준</summary>
             <p>
