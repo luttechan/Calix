@@ -13,7 +13,7 @@
 .grade-policy { font-size: 13px; color: var(--muted); margin-block: 18px; }
 .grade-sources { font-size: 12px; color: var(--muted); margin-top: 12px; }
 .grade-table { border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: var(--surface); }
-.grade-row, .grade-table-head { display: grid; grid-template-columns: minmax(150px, 1fr) 80px 110px 88px 142px; align-items: center; gap: 12px; padding: 12px 16px; }
+.grade-row, .grade-table-head { display: grid; grid-template-columns: minmax(150px, 1fr) 80px 110px 88px 100px; align-items: start; gap: 12px; padding: 12px 16px; }
 .grade-table-head { color: var(--muted); font-size: 12px; background: color-mix(in srgb, var(--accent) 5%, var(--surface)); }
 .grade-row { border-top: 1px solid var(--line); }
 .grade-row.excluded { background: color-mix(in srgb, var(--muted) 6%, var(--surface)); }
@@ -23,15 +23,28 @@
 .grade-course-input { display: flex; align-items: center; gap: 5px; min-width: 0; }
 .grade-course input { text-overflow: ellipsis; }
 .grade-course svg { flex-shrink: 0; color: var(--accent); }
-.grade-actions { display: grid; grid-template-columns: minmax(0, 1fr) 36px 36px; align-items: center; gap: 6px; min-width: 0; min-height: 42px; }
+.grade-actions { display: grid; grid-template-columns: minmax(0, 1fr) 36px; align-items: center; gap: 6px; min-width: 0; min-height: 42px; }
 .grade-exclude { display: flex; flex-direction: row; align-items: center; gap: 5px; font-size: 12px; margin: 0; white-space: nowrap; }
 .grade-exclude input { flex-shrink: 0; width: 16px; padding: 0; margin: 0; }
 .grade-actions button { flex-shrink: 0; }
-.grade-delete { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px; border-radius: 10px; background: var(--accent-soft); }
-.grade-delete span { flex: 1; min-width: 160px; }
-.grade-add { display: flex; gap: 10px; margin-bottom: 14px; }
-.grade-add input { flex: 1; min-width: 0; }
-.grade-add button { flex-shrink: 0; }
+.grades-form, .grade-edit-fields { min-width: 0; }
+.grade-edit-fields { margin: 0; padding: 0; border: 0; }
+.grade-row.modified { box-shadow: inset 3px 0 var(--accent); }
+.grade-table-head button { justify-content: flex-start; min-height: 20px; border: 0; padding: 0; background: transparent; color: inherit; font: inherit; border-radius: 3px; }
+.grade-search { display: flex; align-items: center; gap: 10px; padding: 8px 12px; margin-bottom: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.grade-search input { padding: 3px 0; border: 0; background: transparent; box-shadow: none; }
+.grade-search > span { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.grade-savebar { position: sticky; bottom: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: 0 -5px 22px #20152b08; }
+.grade-savebar > span { margin-right: auto; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.grades-page { --grade-error: #ad354c; }
+:root[data-theme="dark"] .grades-page { --grade-error: #f0a9bb; }
+.grade-field-error { color: var(--grade-error); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.grade-row [aria-invalid="true"] { border-color: var(--grade-error); box-shadow: 0 0 0 1px var(--grade-error); }
+.grade-error-banner { padding: 14px 16px; margin-bottom: 14px; border: 1px solid var(--grade-error); border-radius: 12px; color: var(--grade-error); background: var(--surface); font-size: 13px; }
+.grade-error-banner > button { margin-left: 12px; }
+.grade-error-banner ul { margin: 8px 0 0; padding-left: 18px; }
+.grade-error-banner li button { padding: 2px 0; min-height: 24px; background: transparent; border: 0; color: inherit; text-align: left; text-decoration: underline; }
+.grade-source-link { margin-right: 8px; padding: 4px 0; min-height: 24px; border: 0; background: transparent; color: var(--muted); font-size: 12px; text-decoration: underline; }
 .unlock-view { width: min(100%, 360px); padding: 32px 16px; margin: 8vh auto; text-align: center; }
 .unlock-view h1 { font-size: 25px; margin: 18px 0 24px; }
 .unlock-view form, .security-settings form { display: grid; gap: 14px; }
@@ -52,9 +65,9 @@
 .security-app-lock { position: fixed; inset: 0; overflow: auto; background: var(--bg); color: var(--ink); }
 @container (max-width: 780px) {
   .grade-table-head { display: none; }
-  .grade-row { grid-template-columns: repeat(3, minmax(0, 1fr)) 142px; gap: 14px; padding: 16px; }
+  .grade-row { grid-template-columns: repeat(3, minmax(0, 1fr)) 100px; gap: 14px; padding: 16px; }
   .grade-course { grid-column: 1 / -1; }
-  .grade-actions { align-self: end; }
+  .grade-actions { align-self: start; padding-top: 25px; min-height: 67px; }
   .grade-field-label { display: block; }
   .grade-course > .grade-field-label { display: none; }
   .grade-summary { grid-template-columns: repeat(2, minmax(0,1fr)); }

@@ -1,6 +1,9 @@
 """Semester-linked, credit-weighted grade calculations."""
 from decimal import Decimal, ROUND_HALF_UP
 import math
+import hashlib
+import json
+import re
 from uuid import uuid4
 
 SCALES = {
@@ -82,13 +85,69 @@ def read(store, semester):
     row = store.db.execute("SELECT scale FROM grade_scales WHERE semester=?", (semester,)).fetchone()
     scale = row[0] if row else "4.5"
     items = rows(store, semester)
-    return dict(semester=semester, scale=scale, grades=[*SCALES[scale], "P", "NP"],
+    persisted = [dict(row) for row in store.db.execute("SELECT * FROM grade_items WHERE semester=? ORDER BY id", (semester,))]
+    revision = hashlib.sha256(json.dumps(dict(profile=str(store.path.resolve()), semester=semester, scale=scale, items=persisted), sort_keys=True, ensure_ascii=True).encode()).hexdigest()
+    return dict(semester=semester, scale=scale, revision=revision, grades=[*SCALES[scale], "P", "NP"],
                 items=items, summary=summary(items, scale))
+
+
+def save_all(store, semester, params):
+    items, deleted, scale = params.get("items"), params.get("deleted", []), params.get("scale")
+    if not isinstance(items, list) or len(items) > 1000 or not isinstance(deleted, list) or len(deleted) > 1000 or not isinstance(scale, str) or scale not in SCALES:
+        raise ValueError("저장할 성적을 확인하세요.")
+    if any(not isinstance(identifier, str) for identifier in deleted) or len(set(deleted)) != len(deleted):
+        raise ValueError("삭제할 과목을 확인하세요.")
+    db = store.db
+    db.execute("BEGIN IMMEDIATE")
+    try:
+        current = read(store, semester)
+        if params.get("revision") != current["revision"]:
+            raise ValueError("저장된 성적이 변경되었습니다. 다시 불러오세요.")
+        existing = {item["id"]: item for item in current["items"]}
+        normalized, seen = [], set()
+        for item in items:
+            if not isinstance(item, dict):
+                raise ValueError("과목 정보를 확인하세요.")
+            identifier = item.get("id")
+            if not isinstance(identifier, str) or identifier in seen or identifier in deleted:
+                raise ValueError("중복된 과목을 확인하세요.")
+            seen.add(identifier)
+            previous = existing.get(identifier)
+            if previous is None and re.fullmatch(r"manual:[a-f0-9]{32}", identifier) is None:
+                raise ValueError("수업을 다시 선택하세요.")
+            title = previous["title"] if previous and previous["linked"] else item.get("title")
+            credits, grade, category, excluded = (item.get(key) for key in ("credits", "grade", "category", "excluded"))
+            if not isinstance(title, str) or not title.strip() or len(title) > 200 or any(ord(c) < 32 or 0xD800 <= ord(c) <= 0xDFFF for c in title):
+                raise ValueError("과목명을 입력하세요.")
+            if type(credits) not in (int, float) or not math.isfinite(credits) or not 0 <= credits <= 30 or credits * 2 != int(credits * 2):
+                raise ValueError("학점은 0~30 사이에서 0.5 단위로 입력하세요.")
+            if grade not in ("", "P", "NP", *SCALES[scale]):
+                raise ValueError("현재 기준에 맞는 성적을 선택하세요.")
+            if category not in ("전공", "교양", "일반") or type(excluded) is not bool:
+                raise ValueError("수업 분류를 확인하세요.")
+            normalized.append((semester, identifier, title.strip(), credits, grade, category, int(excluded)))
+        for identifier in deleted:
+            if identifier not in existing or existing[identifier]["linked"]:
+                raise ValueError("시간표 수업은 계산 제외를 사용하세요.")
+        # A scale change must not strand a previously saved grade in an invalid scale.
+        if any(item["id"] not in seen and item["id"] not in deleted and item["grade"] not in ("", "P", "NP", *SCALES[scale]) for item in current["items"]):
+            raise ValueError("현재 기준에 맞는 성적을 선택하세요.")
+        db.executemany("DELETE FROM grade_items WHERE semester=? AND id=?", [(semester, identifier) for identifier in deleted])
+        db.executemany("INSERT OR REPLACE INTO grade_items VALUES(?,?,?,?,?,?,?)", normalized)
+        db.execute("INSERT OR REPLACE INTO grade_scales VALUES(?,?)", (semester, scale))
+        result = read(store, semester)
+        db.commit()
+        return result
+    except BaseException:
+        db.rollback()
+        raise
 
 
 def dispatch(store, method, params):
     initialize(store)
     semester = params.get("semester", store.timetable_config()["main"])
+    if method == "grades.save_all":
+        return save_all(store, semester, params)
     current = read(store, semester)
     if method == "grades.read":
         return current
