@@ -431,9 +431,13 @@ export function GradesPage() {
               aria-label="평점 기준"
               value={sheet.scale}
               disabled={pending}
-              onChange={(event) =>
-                update({ ...sheet, scale: event.target.value })
-              }
+              onChange={(event) => {
+                const next = { ...sheet, scale: event.target.value };
+                update(next);
+                setErrors((previous) =>
+                  Object.keys(previous).length ? validateSheet(next) : previous,
+                );
+              }}
             >
               {["4.5", "4.3", "4.0"].map((scale) => (
                 <option key={scale}>{scale}</option>
