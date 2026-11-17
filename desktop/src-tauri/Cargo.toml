@@ -1,6 +1,6 @@
 [package]
 name = "calix-desktop"
-version = "1.6.13"
+version = "1.6.20"
 description = "Calix"
 authors = ["JINYEONG OH"]
 edition = "2021"

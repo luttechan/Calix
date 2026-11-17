@@ -113,9 +113,6 @@ export function Modal({
         e.preventDefault();
         onClose();
       }}
-      onClick={(e) => {
-        if (e.target === ref.current) onClose();
-      }}
     >
       <header>
         <h2>{title}</h2>
@@ -263,6 +260,7 @@ export function App() {
   const [data, setData] = useState<Snapshot | null>(null),
     [error, setError] = useState(""),
     [page, setPage] = useState<Page>("home"),
+    [shortcuts, setShortcuts] = useState(false),
     [selected, setSelected] = useState<string | null>(null),
     [addDate, setAddDate] = useState<string | null>(null),
     [toast, setToast] = useState(""),
@@ -556,6 +554,24 @@ export function App() {
     }
   };
 
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (!data || data.security?.locked || event.repeat || event.isComposing || document.querySelector('dialog[open]')) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
+      const key = event.key.toLowerCase();
+      if (key === "?") { event.preventDefault(); setShortcuts(true); return; }
+      if (!event.altKey || event.ctrlKey || event.metaKey) return;
+      if (key === "n") { event.preventDefault(); setAddDate(dateKey()); }
+      if (key === "r") { event.preventDefault(); document.querySelector<HTMLButtonElement>('[aria-label="동기화"], [aria-label="동기화 중단"]')?.click(); }
+      if (key === "l") { event.preventDefault(); void lockScreen(); }
+      const pages: Page[] = ["home", "calendar", "assignments", "videos", "timetable", "grades"];
+      if (/^[1-6]$/.test(key)) { event.preventDefault(); void navigate(pages[Number(key)-1]); }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  });
+
   const sorted = useMemo(
     () =>
       data
@@ -745,6 +761,7 @@ export function App() {
               title={busy ? "동기화 중단" : "동기화"}
               aria-label={busy ? "동기화 중단" : "동기화"}
               onClick={() => {
+                if (!busy && !loggedIn) { notify("학교 로그인 후 동기화하세요."); return; }
                 const cancelling = busy;
                 if (!cancelling) setBusy(true);
                 rpc(cancelling ? "sync.cancel" : "sync").catch((e) => {
@@ -998,9 +1015,13 @@ export function App() {
                 ? `최근 동기화 ${dueText(data.lastSync)}`
                 : "동기화 기록 없음"}
           </span>
+          <button className="quiet" title="단축키 (?)" onClick={() => setShortcuts(true)}>단축키</button>
           <span className="status-version">{`v${appVersion}`}</span>
         </footer>
       </div>
+      {shortcuts && <Modal title="단축키" onClose={() => setShortcuts(false)}>
+        <dl className="shortcut-list">{[["Alt + N", "일정 추가"], ["Alt + R", "동기화 / 중단"], ["Alt + L", "화면 잠금"], ["Alt + 1~6", "홈 / 달력 / 과제 / 영상 / 시간표 / 학점"], ["Ctrl + K", "일정 검색"], ["?", "단축키 안내"]].map(([key, label]) => <div key={key}><dt><kbd>{key}</kbd></dt><dd>{label}</dd></div>)}</dl>
+      </Modal>}
       <SyncNotice
         sound={Boolean(
           data?.preferences.reminders.enabled &&

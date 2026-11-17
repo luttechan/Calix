@@ -3685,3 +3685,7 @@ body.reminder-surface {
   border: 1px solid color-mix(in srgb, var(--muted) 34%, transparent);
   border-radius: 6px;
 }
+
+.shortcut-list { display:grid; gap:16px; margin:12px 0; }
+.shortcut-list > div { display:grid; grid-template-columns:110px 1fr; gap:16px; align-items:start; }
+.shortcut-list dd { margin:0; line-height:1.6; }

@@ -81,13 +81,22 @@ def test_account_changes_are_blocked_while_collection_runs(service, method):
     assert instance.collector is not None
 
 
-def test_sync_waits_for_existing_login_validation(service):
+def test_sync_requires_confirmed_login(service):
     instance, output = service
     instance.restore_token = "restore-in-progress"
     instance.handle(dict(id=1, method="sync", params={}))
-    assert instance.pending_sync
+    assert not instance.pending_sync
     assert not any(row.get("event") == "auth-required" for row in output)
-    assert any(row.get("event") == "sync-state" and row["busy"] for row in output)
+    assert '학교 로그인' in next(row for row in output if row.get('id') == 1)['error']
+
+@pytest.mark.parametrize('interactive', [True, False])
+def test_login_syncs_only_after_interactive_authentication(service, monkeypatch, interactive):
+    instance, output = service
+    calls = []
+    instance.restore_token = 'current'
+    monkeypatch.setattr(instance, 'start_collector', lambda: calls.append(True))
+    assert instance.accept_browser_identity(dict(owner='7', courses=[dict(id=2, name='Course')], interactive=interactive, token='current'))
+    assert calls == ([True] if interactive else [])
 
 
 def test_busy_stays_true_until_both_workers_finish(service):

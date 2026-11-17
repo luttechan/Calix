@@ -480,7 +480,7 @@ def main():
                 interactive=params.get("interactive") is True,
             )
             self.notify("data-changed")
-            if self.pending_sync:
+            if self.pending_sync or params.get("interactive") is True:
                 self.pending_sync = False
                 self.start_collector()
             return True
@@ -491,10 +491,7 @@ def main():
             if self.task or self.collector or self.pending_sync or self.restart_sync:
                 raise ValueError("동기화 중입니다.")
             if not self.logged_in:
-                self.pending_sync = True
-                if not self.restore_token:
-                    self.notify("auth-required")
-                return
+                raise ValueError("학교 로그인 후 동기화하세요.")
             self.start_collector()
 
         def stop_sync(self, restart=False):
