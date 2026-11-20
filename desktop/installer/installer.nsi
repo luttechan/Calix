@@ -252,14 +252,6 @@ Function PageReinstall
   ${OrIf} $UpdateMode = 1
     Abort
   ${EndIf}
-  ${If} $CalixPreviousLocation == ""
-  ${AndIf} $WixMode = 0
-  ${AndIf} $CalixHasExistingData = 0
-    ; A previous version may have been archived with no active installation.
-    IfFileExists "$LOCALAPPDATA\Calix*\uninstall.previous" +2
-      Abort
-  ${EndIf}
-
   !insertmacro MUI_HEADER_TEXT "Calix 설치" "이전 버전과 데이터 처리 방법을 선택하세요."
   nsDialogs::Create 1018
   Pop $R4
@@ -1162,15 +1154,18 @@ Function CalixMigrateRetainedVersions
       StrCpy $CalixPinnedSource $CalixRetainedPath
       Call CalixRetargetTaskbarPins
       ${If} $CalixPurgeRetained = 1
-        Delete "$CalixRetainedPath\${MAINBINARYNAME}.exe"
-        Delete "$CalixRetainedPath\calix-engine.exe"
-        ${IfNot} ${FileExists} "$CalixRetainedPath\${MAINBINARYNAME}.exe"
-        ${AndIfNot} ${FileExists} "$CalixRetainedPath\calix-engine.exe"
+        ${If} ${FileExists} "$CalixRetainedPath\${MAINBINARYNAME}.exe"
+        ${OrIf} ${FileExists} "$CalixRetainedPath\calix-engine.exe"
           Push "$CalixRetainedPath\_internal"
           Call CalixRemoveTree
           ${IfNot} ${FileExists} "$CalixRetainedPath\_internal"
-            Delete "$CalixRetainedPath\uninstall.previous"
-            RMDir "$CalixRetainedPath"
+            Delete "$CalixRetainedPath\${MAINBINARYNAME}.exe"
+            Delete "$CalixRetainedPath\calix-engine.exe"
+            ${IfNot} ${FileExists} "$CalixRetainedPath\${MAINBINARYNAME}.exe"
+            ${AndIfNot} ${FileExists} "$CalixRetainedPath\calix-engine.exe"
+              Delete "$CalixRetainedPath\uninstall.previous"
+              RMDir "$CalixRetainedPath"
+            ${EndIf}
           ${EndIf}
         ${EndIf}
         ${If} ${FileExists} "$CalixRetainedPath\uninstall.previous"
