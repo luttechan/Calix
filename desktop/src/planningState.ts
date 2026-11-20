@@ -23,36 +23,6 @@ export function busyDates(events: EventItem[], now: Date) {
     .filter(([, items]) => items.length >= 3)
     .sort((a, b) => a[0].localeCompare(b[0]));
 }
-export function freeSlots(
-  sessions: Session[],
-  offDays: number[],
-  duration: number,
-) {
-  const minute = (text: string) => {
-    const [h, m] = text.split(":").map(Number);
-    return h * 60 + m;
-  };
-  const result: { day: number; start: number; end: number }[] = [];
-  for (let day = 0; day < 7; day++) {
-    const blocks = offDays.includes(day)
-      ? []
-      : sessions
-          .filter((s) => s.day === day && !s.is_online)
-          .map((s) => [
-            Math.max(540, minute(s.start_time)),
-            Math.min(1080, minute(s.end_time)),
-          ])
-          .filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b) && b > a)
-          .sort((a, b) => a[0] - b[0]);
-    let cursor = 540;
-    for (const [start, end] of [...blocks, [1080, 1080]]) {
-      if (start - cursor >= duration)
-        result.push({ day, start: cursor, end: start });
-      cursor = Math.max(cursor, end);
-    }
-  }
-  return result;
-}
 export function sessionLanes(sessions: Session[]) {
   const output = new Map<number, { lane: number; count: number }>();
   for (let day = 0; day < 7; day++) {

@@ -620,8 +620,8 @@ export function GradesPage() {
                 {!visible.length && (
                   <div className="empty">
                     {sheet.items.length
-                      ? "검색 결과가 없습니다."
-                      : "시간표에 수업을 추가하거나 과목을 직접 입력하세요."}
+                      ? "검색 결과 없음"
+                      : "등록된 과목 없음"}
                   </div>
                 )}
               </div>
