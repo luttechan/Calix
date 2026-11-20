@@ -10,9 +10,10 @@ import tempfile
 repo = os.environ['GH_REPO']
 source = os.environ['SOURCE']
 endpoint = f'repos/{repo}/releases/452901539'
-previous = '48375cd6e582070da0ffea1801149085b0141dfb'
+previous = '483a36e9e913dbf6e1e35c20f209d597cd869557'
 notes = ('- Dev Lab 테마 팔레트 편집\n'
-         '- 오류음과 동기화 완료음 10종. 기본음은 First Light\n'
+         '- 오류음과 동기화 완료음 Notification 1–10\n'
+         '- 달력 연도, 월 이동 및 드롭다운 디자인 통일\n'
          '- 시간표 요일 정렬 및 수업 상세 정리\n'
          '- Windows 작업표시줄 버전 명칭 표시\n'
          '- 안내 문구 정리')
@@ -25,7 +26,7 @@ def gh(*args):
 
 def release():
     value = json.loads(gh('api', endpoint))
-    assert value['draft'] and value['tag_name'] in ('v1.6.4', 'untagged-265c5f15ee8095ebb8d8')
+    assert value['draft'] and (value['tag_name'] == 'v1.6.4' or value['tag_name'].startswith('untagged-'))
     return value
 
 

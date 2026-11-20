@@ -60,6 +60,14 @@ export function ChecklistPage() {
   const pageCount = Math.max(1, Math.ceil(rows.length / 25)),
     currentPage = Math.min(listPage, pageCount - 1),
     visibleRows = rows.slice(currentPage * 25, currentPage * 25 + 25);
+  const suggestions = useMemo(() => {
+    const unique = (values: string[]) => [...new Set(values.filter(Boolean))];
+    return {
+      category: unique([...data.tasks.map((task) => task.category), ...data.courses.map((course) => course.name)]),
+      role: unique([...data.tasks.map((task) => task.role), "작성", "자료 조사", "발표", "검토"]),
+      professor: unique([...data.tasks.map((task) => task.professor), ...data.sessions.map((session) => session.professor)]),
+    };
+  }, [data.tasks, data.courses, data.sessions]);
   const save = (task: Task, field: string, value: unknown) => {
     if (task[field as keyof Task] !== value)
       void mutate("checklist.save", { id: task.id, field, value }).catch(
@@ -220,7 +228,7 @@ export function ChecklistPage() {
                               : "담당 교수"
                         }
                         value={task[field]}
-                        list={`choices-${field}`}
+                        suggestions={suggestions[field]}
                         maxLength={field === "professor" ? 120 : 100}
                         onCommit={(value) => save(task, field, value || "")}
                       />
@@ -283,24 +291,6 @@ export function ChecklistPage() {
           </div>
         )}
       </section>
-      {(["category", "role", "professor"] as const).map((field) => (
-        <datalist id={`choices-${field}`} key={field}>
-          {Array.from(
-            new Set([
-              ...data.tasks.map((t) => t[field]),
-              ...(field === "category"
-                ? data.courses.map((c) => c.name)
-                : field === "role"
-                  ? ["작성", "자료 조사", "발표", "검토"]
-                  : data.sessions.map((s) => s.professor)),
-            ]),
-          )
-            .filter(Boolean)
-            .map((value) => (
-              <option key={value} value={value} />
-            ))}
-        </datalist>
-      ))}
       {batch && <BatchImport onClose={() => setBatch(false)} />}
       {remove && (
         <Modal title="정말 삭제하시겠습니까?" onClose={() => setRemove(null)}>

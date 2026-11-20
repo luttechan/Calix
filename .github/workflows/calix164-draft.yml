@@ -14,9 +14,9 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: luttechan/Calix
-      SOURCE: 483a36e9e913dbf6e1e35c20f209d597cd869557
-      RUN: '44776434794'
-      ARTIFACT: '14651690212'
+      SOURCE: ee7c867277dcf425a4cc2f39f0529e630169e73b
+      RUN: '44781170294'
+      ARTIFACT: '14653170811'
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
       - name: Verify Windows build and packages
@@ -26,7 +26,7 @@ jobs:
           gh api "repos/$GH_REPO/actions/runs/$RUN" > run.json
           jq -e --arg sha "$SOURCE" '.conclusion == "success" and .head_sha == $sha and .head_repository.full_name == "luttechan/Calix"' run.json
           gh api "repos/$GH_REPO/actions/artifacts/$ARTIFACT" > artifact.json
-          jq -e --arg sha "$SOURCE" '.expired == false and .workflow_run.head_sha == $sha and .digest == "sha256:38bdd494b11111cb8173000f165eaec7455155a67e3fbb54566e7f106011de61"' artifact.json
+          jq -e --arg sha "$SOURCE" '.expired == false and .workflow_run.head_sha == $sha and .digest == "sha256:f92d1c3682449d779f427fa26b3c212ff6cfafbebd877d5884a84b4ed33ac16f"' artifact.json
           gh run download "$RUN" --name Calix-1.6.4-development-Windows-x64 --dir packages
           cd packages
           test "$(find . -maxdepth 1 -type f | wc -l)" -eq 3

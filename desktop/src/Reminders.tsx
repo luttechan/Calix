@@ -7,11 +7,6 @@ import { alarmNames } from "./alarmNames";
 import { defaultSyncTrack, syncCuePath } from "./syncCue";
 import type { ReminderSettings } from "./types";
 
-const syncCueNames = [
-  "First Light", "Quiet Signal", "Silver Thread", "Soft Landing", "Clear Skies",
-  "Daybreak", "Afterglow", "Blue Hour", "Open Horizon", "Last Light",
-];
-
 export function ReminderSettingsPanel({ active = true }: { active?: boolean }) {
   const { data, mutate, notify } = useCalix();
   const [form, setForm] = useState<ReminderSettings>(
@@ -360,7 +355,7 @@ export function ReminderSettingsPanel({ active = true }: { active?: boolean }) {
               <div>
                 <strong>동기화 완료음</strong>
                 <select aria-label="동기화 완료음" value={syncTrack} disabled={!form.sound} onChange={(event) => change("sync_track", event.target.value)}>
-                  {syncTracks.map((track) => <option value={String(track)} key={track}>{syncCueNames[track - 1]}{track === 1 ? " (기본)" : ""}</option>)}
+                  {syncTracks.map((track) => <option value={String(track)} key={track}>Notification {track}</option>)}
                 </select>
               </div>
               <button type="button" aria-label="동기화 완료음 미리 듣기" disabled={!form.sound} onClick={() => testSound(syncPath)}>

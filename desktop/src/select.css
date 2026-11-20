@@ -1,0 +1,136 @@
+select:not([multiple]) {
+  min-block-size: 38px;
+  padding: 7px 11px;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: var(--ui-field);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+select:not([multiple]):hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
+  background: var(--ui-hover);
+}
+select:not([multiple]):disabled { cursor: default; }
+select:not([multiple]):focus-visible,
+select:not([multiple]):open {
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+@supports (appearance: base-select) {
+  select:not([multiple]),
+  select:not([multiple])::picker(select) { appearance: base-select; }
+
+  select:not([multiple]) { gap: 10px; overflow: hidden; }
+  select::picker-icon {
+    content: "";
+    position: relative;
+    inset-block-start: -2px;
+    inline-size: 7px;
+    block-size: 7px;
+    margin-inline: auto 3px;
+    border-inline-end: 1.5px solid currentColor;
+    border-block-end: 1.5px solid currentColor;
+    color: var(--muted);
+    rotate: 45deg;
+    flex: none;
+    transition: rotate 0.15s ease;
+  }
+  select:open::picker-icon { rotate: 225deg; color: var(--accent); }
+
+  select:not([multiple])::picker(select) {
+    min-inline-size: min(anchor-size(width), calc(100dvw - 24px));
+    max-inline-size: min(34rem, calc(100dvw - 24px));
+    max-block-size: min(20rem, 52dvh);
+    margin-block: 5px;
+    padding: 5px;
+    border: 1px solid var(--ui-border);
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: 0 12px 32px #17142130;
+    scrollbar-width: thin;
+    overscroll-behavior: contain;
+  }
+  select.calendar-month::picker(select) { max-block-size: min(27rem, 68dvh); }
+  select:not([multiple]) option {
+    gap: 12px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  select:not([multiple]) option::checkmark {
+    order: 1;
+    margin-inline-start: auto;
+    color: var(--accent);
+  }
+  select:not([multiple]) option:checked {
+    background: var(--accent-soft);
+    color: var(--ink);
+    font-weight: 650;
+  }
+}
+
+.cell-suggestions {
+  padding: 5px;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 12px 32px #17142130;
+  scrollbar-width: thin;
+  overscroll-behavior: contain;
+}
+select:not([multiple]) option,
+.cell-suggestions [role="option"] {
+  min-block-size: 34px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 7px;
+  font-size: 13px;
+  line-height: 1.45;
+  cursor: pointer;
+}
+select:not([multiple]) option:hover:not(:disabled),
+select:not([multiple]) option:focus-visible,
+.cell-suggestions [aria-selected="true"] { background: var(--ui-hover); }
+
+.calendar-navigation .icon-button { flex: none; }
+.calendar-jump {
+  display: grid;
+  grid-template-columns: minmax(98px, auto) minmax(68px, auto);
+  align-items: center;
+  gap: 6px;
+}
+.calendar-jump select { font-weight: 630; }
+
+.checklist-table .inline-status {
+  min-block-size: 34px;
+  border-inline-start: 3px solid var(--status-color, var(--ui-border));
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.cell-suggestion-editor { anchor-name: var(--cell-anchor); }
+.cell-suggestions {
+  position: fixed;
+  position-anchor: var(--cell-anchor);
+  position-area: block-end span-inline-end;
+  position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
+  inset: auto;
+  margin: 5px 0;
+  min-inline-size: min(11rem, 80dvw);
+  inline-size: clamp(11rem, anchor-size(width, 11rem), 23rem);
+  max-block-size: min(16rem, 45dvh);
+  overflow: auto;
+}
+.cell-suggestions [role="option"] {
+  display: block;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  select::picker-icon { transition: none; }
+}
