@@ -6,6 +6,8 @@ import json
 import re
 from uuid import uuid4
 
+ROSTERS = "grade_canvas_rosters_v1"
+
 SCALES = {
     "4.5": {"A+": 4.5, "A": 4.0, "B+": 3.5, "B": 3.0, "C+": 2.5, "C": 2.0, "D+": 1.5, "D": 1.0, "F": 0},
     "4.3": {"A+": 4.3, "A": 4.0, "A-": 3.7, "B+": 3.3, "B": 3.0, "B-": 2.7, "C+": 2.3, "C": 2.0, "C-": 1.7, "D+": 1.3, "D": 1.0, "D-": 0.7, "F": 0},
@@ -25,30 +27,100 @@ def initialize(store):
     """)
 
 
+def course_rosters(store):
+    try:
+        value = json.loads(store.get_meta(ROSTERS, "{}"))
+    except (TypeError, ValueError):
+        return {}
+    if not isinstance(value, dict):
+        return {}
+    return {
+        name: [cid for cid in ids if type(cid) is int and 0 < cid < 2**63]
+        for name, ids in value.items() if isinstance(ids, list)
+    }
+
+
+def record_canvas_roster(store, courses):
+    if not courses:
+        return
+    semester = store.timetable_config()["main"]
+    rosters = course_rosters(store)
+    elsewhere = {cid for name, ids in rosters.items() if name != semester for cid in ids}
+    rosters[semester] = sorted(set(rosters.get(semester, ())) | {course.id for course in courses if course.id not in elsewhere})
+    store.set_meta(ROSTERS, json.dumps(rosters, ensure_ascii=False), _commit=False)
+
+
+def course_name_key(value):
+    return " ".join(value.casefold().split())
+
+
+def canvas_grade_title(value):
+    return " ".join(value.split())[:200]
+
+
 def rows(store, semester):
     saved = {row["id"]: dict(row) for row in store.db.execute(
         "SELECT * FROM grade_items WHERE semester=?", (semester,))}
-    sessions = store.timetable(all_terms=True)
-    courses = {course.id: course.name for course in store.courses()}
-    custom = {}
-    for session in sessions:
-        if session["semester"] == semester and not session["course_id"]:
-            key = session["title"].strip().casefold()
-            custom[key] = min(custom.get(key, session["id"]), session["id"])
-    linked = {}
-    for session in sessions:
-        if session["semester"] != semester:
-            continue
-        course_id = session["course_id"]
-        # Course IDs represent one course even when it has multiple time slots.
-        identifier = "course:" + str(course_id) if course_id else "session:" + str(custom[session["title"].strip().casefold()])
-        linked.setdefault(identifier, session["title"] or courses.get(course_id, "수업"))
+    courses = {course.id: canvas_grade_title(course.name) for course in store.courses()}
+    rosters = course_rosters(store)
+    linked = rosters.get(semester, [])
+    # Older versions only saved the list of extracted courses, without a roster per semester.
+    if not rosters and semester == store.timetable_config()["main"]:
+        linked = list(courses)
+    other_names = {course_name_key(item["title"]) for key, item in saved.items() if not key.startswith("course:")}
     result = []
-    for identifier, title in linked.items():
+    for course_id in dict.fromkeys(linked):
+        title = courses.get(course_id)
+        identifier = f"course:{course_id}"
+        if not title or (identifier not in saved and course_name_key(title) in other_names):
+            continue
         item = saved.pop(identifier, dict(id=identifier, credits=0, grade="", category="일반", excluded=0))
         result.append(dict(item, title=title, linked=True))
     result.extend(dict(item, linked=False) for item in saved.values())
     return result
+
+
+def import_courses(store, semester, params):
+    ids = params.get("course_ids")
+    if (not isinstance(ids, list) or not 1 <= len(ids) <= 1000
+        or any(type(cid) is not int or not 0 < cid < 2**63 for cid in ids)):
+        raise ValueError("가져올 과목을 선택하세요.")
+    with store.db:
+        current = read(store, semester)
+        courses = {course.id: canvas_grade_title(course.name) for course in store.courses()}
+        if any(cid not in courses for cid in ids):
+            raise ValueError("동기화한 과목 목록을 다시 확인하세요.")
+        existing = {item["id"] for item in current["items"]}
+        existing_names = {course_name_key(item["title"]) for item in current["items"] if not item["id"].startswith("course:")}
+        added = [
+            (semester, f"course:{cid}", courses[cid]) for cid in dict.fromkeys(ids)
+            if courses[cid] and f"course:{cid}" not in existing and course_name_key(courses[cid]) not in existing_names
+        ]
+        store.db.executemany("INSERT OR IGNORE INTO grade_items(semester,id,title) VALUES(?,?,?)", added)
+    return read(store, semester)
+
+
+def reset(store, semester, params):
+    scope = params.get("scope")
+    if scope not in ("semester", "all"):
+        raise ValueError("초기화 범위를 확인하세요.")
+    db = store.db
+    db.execute("BEGIN IMMEDIATE")
+    try:
+        if read(store, semester)["revision"] != params.get("revision"):
+            raise ValueError("저장된 성적이 변경되었습니다. 다시 불러오세요.")
+        if scope == "all":
+            db.execute("DELETE FROM grade_items")
+            db.execute("DELETE FROM grade_scales")
+        else:
+            db.execute("DELETE FROM grade_items WHERE semester=?", (semester,))
+            db.execute("DELETE FROM grade_scales WHERE semester=?", (semester,))
+        result = read(store, semester)
+        db.commit()
+        return result
+    except BaseException:
+        db.rollback()
+        raise
 
 
 def summary(items, scale):
@@ -128,7 +200,7 @@ def save_all(store, semester, params):
             normalized.append((semester, identifier, title.strip(), credits, grade, category, int(excluded)))
         for identifier in deleted:
             if identifier not in existing or existing[identifier]["linked"]:
-                raise ValueError("시간표 수업은 계산 제외를 사용하세요.")
+                raise ValueError("자동 연결 과목은 계산 제외를 사용하세요.")
         # A scale change must not strand a previously saved grade in an invalid scale.
         if any(item["id"] not in seen and item["id"] not in deleted and item["grade"] not in ("", "P", "NP", *SCALES[scale]) for item in current["items"]):
             raise ValueError("현재 기준에 맞는 성적을 선택하세요.")
@@ -148,6 +220,10 @@ def dispatch(store, method, params):
     semester = params.get("semester", store.timetable_config()["main"])
     if method == "grades.save_all":
         return save_all(store, semester, params)
+    if method == "grades.import_courses":
+        return import_courses(store, semester, params)
+    if method == "grades.reset":
+        return reset(store, semester, params)
     current = read(store, semester)
     if method == "grades.read":
         return current
@@ -162,7 +238,7 @@ def dispatch(store, method, params):
     existing = next((row for row in current["items"] if row["id"] == identifier), None)
     if method == "grades.delete":
         if existing is None or existing["linked"]:
-            raise ValueError("시간표에 연결된 수업은 계산 제외를 사용하세요.")
+            raise ValueError("자동 연결 과목은 계산 제외를 사용하세요.")
         with store.db:
             store.db.execute("DELETE FROM grade_items WHERE semester=? AND id=?", (semester, identifier))
         return True

@@ -101,6 +101,12 @@ def update(store, operation, name, days=None):
             if "grade_items" in tables:
                 store.db.execute("UPDATE grade_items SET semester=? WHERE semester=?", (name, old))
                 store.db.execute("UPDATE grade_scales SET semester=? WHERE semester=?", (name, old))
+            from .grades import ROSTERS, course_rosters
+
+            rosters = course_rosters(store)
+            if old in rosters:
+                rosters[name] = rosters.pop(old)
+                store.set_meta(ROSTERS, json.dumps(rosters, ensure_ascii=False), _commit=False)
             store.set_meta(
                 "timetable_config", json.dumps(value, ensure_ascii=False), _commit=False
             )

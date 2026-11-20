@@ -764,4 +764,7 @@ class Store:
             self.db.execute(
                 "INSERT OR REPLACE INTO meta VALUES (?,?)", ("last_sync", now)
             )
+            from .grades import record_canvas_roster
+
+            record_canvas_roster(self, courses)
         return totals

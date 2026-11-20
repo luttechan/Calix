@@ -57,17 +57,59 @@ def test_invalid_credit_types_never_commit(api,value):
 def test_duplicate_ids_and_linked_deletions_are_rejected(api):
     item=row()
     with pytest.raises(ValueError):save(api,[item,item])
-    api.store.apply_batch([Course(901,"수업")],{})
-    api.store.add_timetable(901,0,"09:00","10:00",title="수업")
+    api.store.apply_batch([Course(901,"수업")],{(901,"assignment"):[]})
     current=api.dispatch("grades.read",{});linked=current["items"][0]
     with pytest.raises(ValueError):save(api,[],[linked["id"]])
     assert api.dispatch("grades.read",{})==current
 
-def test_new_timetable_rows_are_not_lost_by_saving_an_existing_draft(api):
+def test_new_canvas_courses_are_not_lost_by_saving_an_existing_draft(api):
     item=row();initial=save(api,[item])
-    api.store.apply_batch([Course(901,"수업")],{});api.store.add_timetable(901,0,"09:00","10:00",title="수업")
+    api.store.apply_batch([Course(901,"수업")],{(901,"assignment"):[]})
     result=save(api,[dict(item,credits=4)],revision=initial["revision"])
     assert len(result["items"])==2 and any(row["linked"] for row in result["items"])
+
+
+def test_canvas_roster_is_automatic_and_keeps_its_semester(api):
+    first = api.dispatch("timetable.term.configure", dict(year=2026, term=1))
+    second = api.dispatch("timetable.term.add", dict(year=2026, term=2))
+    api.store.apply_batch([Course(901, "Canvas 과목")], {(901, "assignment"): []})
+    api.store.add_timetable(0, 0, "09:00", "10:00", title="개인 시간표 블록")
+    assert [(item["id"], item["title"]) for item in api.dispatch("grades.read", {"semester": first})["items"]] == [("course:901", "Canvas 과목")]
+    api.dispatch("timetable.term.main", {"name": second})
+    api.store.apply_batch([Course(901, "Canvas 과목"), Course(902, "다음 학기")], {(902, "assignment"): []})
+    assert [item["id"] for item in api.dispatch("grades.read", {"semester": second})["items"]] == ["course:902"]
+    assert [item["id"] for item in api.dispatch("grades.read", {"semester": first})["items"]] == ["course:901"]
+
+
+def test_cached_courses_are_available_before_the_first_roster_sync(api):
+    with api.store.db:
+        api.store.db.execute("INSERT INTO courses(id,name) VALUES(901,'기존 Canvas 과목')")
+    items = api.dispatch("grades.read", {})["items"]
+    assert len(items) == 1 and items[0]["linked"] and items[0]["title"] == "기존 Canvas 과목"
+
+
+def test_grade_course_batch_and_reset_keep_existing_scopes_isolated(api):
+    first = api.dispatch("timetable.term.configure", dict(year=2026, term=1))
+    second = api.dispatch("timetable.term.add", dict(year=2026, term=2))
+    api.store.apply_batch([Course(901,"수업 A"), Course(902,"수업 B")], {(901,"assignment"):[]})
+    first_row = api.dispatch("grades.read", {"semester": first})["items"][0]
+    api.dispatch("grades.save", {"semester": first, "id": first_row["id"], "credits": 3, "grade": "A"})
+    api.dispatch("grades.save", {"semester": second, "title": "수업 A", "credits": 3, "grade": "B"})
+    with pytest.raises(ValueError):
+        api.dispatch("grades.import_courses", {"semester": second, "course_ids": [902, 999]})
+    args = {"semester": second, "course_ids": [901, 902, 902]}
+    added = api.dispatch("grades.import_courses", args)
+    assert {item["title"]: item["grade"] for item in added["items"]} == {"수업 A": "B", "수업 B": ""}
+    assert api.dispatch("grades.import_courses", args) == added
+    with pytest.raises(ValueError):
+        api.dispatch("grades.reset", {"semester": second, "scope": "all", "revision": "stale"})
+    blank = api.dispatch("grades.reset", {"semester": second, "scope": "semester", "revision": added["revision"]})
+    assert blank["items"] == [] and blank["scale"] == "4.5"
+    first_data = api.dispatch("grades.read", {"semester": first})
+    assert first_data["items"][0]["grade"] == "A"
+    cleared = api.dispatch("grades.reset", {"semester": first, "scope": "all", "revision": first_data["revision"]})
+    assert len(cleared["items"]) == 2 and all(not row["grade"] for row in cleared["items"])
+    assert not api.store.db.execute("SELECT 1 FROM grade_items").fetchall()
 
 def test_bulk_save_still_requires_password(tmp_path):
     value=EngineAPI(tmp_path)

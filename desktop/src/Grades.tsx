@@ -3,6 +3,7 @@ import {
   ArrowDown,
   ArrowUp,
   Calculator,
+  Download,
   Link2,
   Plus,
   Save,
@@ -71,7 +72,7 @@ const GradeRow = memo(function GradeRow({
       <label className="grade-course grade-field">
         <span className="grade-field-label">과목</span>
         <span className="grade-course-input">
-          {item.linked && <Link2 size={14} aria-label="시간표 연결" />}
+          {item.linked && <Link2 size={14} aria-label="Canvas 연결" />}
           <input
             {...attrs("title")}
             aria-label={`${item.title || "새 과목"} 과목명`}
@@ -167,7 +168,9 @@ const GradeRow = memo(function GradeRow({
 
 export function GradesPage() {
   const { data, notify, leave, soundError } = useCalix();
-  const [semester, setSemester] = useState(data.mainTerm),
+  const [semester, setSemester] = useState(
+      data.mainTerm || data.timetableTerms[0]?.name || "",
+    ),
     [sheet, setSheet] = useState<GradeSheet | null>(null),
     [loading, setLoading] = useState(true),
     [pending, setPending] = useState(false);
@@ -180,6 +183,8 @@ export function GradesPage() {
   }, [error, soundError]);
   const [remove, setRemove] = useState<string | null>(null),
     [discard, setDiscard] = useState(false),
+    [importIds, setImportIds] = useState<Set<number> | null>(null),
+    [reset, setReset] = useState<"semester" | "all" | null>(null),
     [order, setOrder] = useState<string[]>([]),
     [sort, setSort] = useState<{
       field: "title" | "credits" | "grade" | "category";
@@ -196,14 +201,24 @@ export function GradesPage() {
     setSheet(next);
   }, []);
   const count = sheet ? changeCount(sheet) : 0;
-  const stamp = JSON.stringify(
-    data.sessions.map((item) => [
-      item.id,
-      item.semester,
-      item.course_id,
-      item.title,
-    ]),
-  );
+  const courseStamp = JSON.stringify([
+    data.lastSync,
+    data.mainTerm,
+    data.courses,
+  ]);
+  const importChoices = useMemo(() => {
+    const ids = new Set(sheet?.items.map((item) => item.id));
+    const names = new Set(
+      sheet?.items
+        .filter((item) => !item.id.startsWith("course:"))
+        .map((item) => item.title.trim().replace(/\s+/g, " ").toLowerCase()),
+    );
+    return data.courses.filter(
+      (course) =>
+        !ids.has(`course:${course.id}`) &&
+        !names.has(course.name.trim().replace(/\s+/g, " ").toLowerCase()),
+    );
+  }, [data.courses, sheet?.items]);
   const load = useCallback(
     async (term: string) => {
       const id = ++request.current;
@@ -234,6 +249,11 @@ export function GradesPage() {
     [update],
   );
   useEffect(() => {
+    if (!data.timetableTerms.some((term) => term.name === semester)) {
+      const next = data.mainTerm || data.timetableTerms[0]?.name;
+      if (next && next !== semester) setSemester(next);
+      return;
+    }
     mounted.current = true;
     return () => {
       mounted.current = false;
@@ -250,7 +270,7 @@ export function GradesPage() {
     return () => {
       ++request.current;
     };
-  }, [semester, stamp, load]);
+  }, [semester, courseStamp, load]);
   const focusField = (id: string, key: GradeField) => {
     setQuery("");
     requestAnimationFrame(() => {
@@ -311,6 +331,66 @@ export function GradesPage() {
     return task;
   };
   saveRef.current = save;
+  const changeCourses = async (operation: "import" | "reset") => {
+    if (job.current || !latest.current) return;
+    if (operation === "import") {
+      try {
+        await save(true);
+      } catch {
+        setImportIds(null);
+        return;
+      }
+    }
+    const current = latest.current;
+    if (!current || job.current) return;
+    setPending(true);
+    setError("");
+    const task = (async () => {
+      try {
+        const result = await rpc<GradeData>(
+          operation === "import" ? "grades.import_courses" : "grades.reset",
+          {
+            semester: current.base.semester,
+            ...(operation === "import"
+              ? { course_ids: [...(importIds ?? [])] }
+              : {
+                  scope: reset,
+                  revision: current.base.revision,
+                }),
+          },
+        );
+        if (!mounted.current) return;
+        update(createSheet(result));
+        setErrors({});
+        setQuery("");
+        setOrder([]);
+        setSort(null);
+        setFocus("");
+        if (operation === "import") {
+          const existing = new Set(current.items.map((item) => item.id));
+          const added = result.items.filter(
+            (item) => !existing.has(item.id),
+          ).length;
+          notify(
+            added
+              ? `과목 ${added}개를 가져왔습니다.`
+              : "추가할 과목이 없습니다.",
+          );
+        } else notify("학점 기록을 초기화했습니다.");
+      } catch (reason) {
+        if (mounted.current) setError((reason as Error).message);
+      } finally {
+        job.current = null;
+        if (mounted.current) {
+          setPending(false);
+          setImportIds(null);
+          setReset(null);
+        }
+      }
+    })();
+    job.current = task;
+    return task;
+  };
   useEffect(() => {
     const guard = () => saveRef.current(true);
     leave.current = guard;
@@ -449,41 +529,50 @@ export function GradesPage() {
             </select>
           </label>
         )}
-        <button
-          className="button primary"
-          type="button"
-          disabled={!sheet || pending}
-          onClick={() => {
-            if (!sheet) return;
-            const id = "manual:" + crypto.randomUUID().replaceAll("-", "");
-            setQuery("");
-            setOrder([]);
-            setSort(null);
-            setFocus(id);
-            update({
-              ...sheet,
-              items: [
-                ...sheet.items,
-                {
-                  id,
-                  title: "",
-                  credits: "3",
-                  grade: "",
-                  category: "일반",
-                  excluded: 0,
-                  linked: false,
-                },
-              ],
-            });
-          }}
-        >
-          <Plus size={16} />
-          과목 추가
-        </button>
+        <div className="grade-toolbar-actions">
+          <button
+            type="button"
+            className="button primary"
+            disabled={!sheet || pending || !importChoices.length}
+            onClick={() =>
+              setImportIds(new Set(importChoices.map((course) => course.id)))
+            }
+          >
+            <Download size={16} aria-hidden="true" /> 과목 일괄 가져오기
+          </button>
+          <button
+            className="button"
+            type="button"
+            disabled={!sheet || pending}
+            onClick={() => {
+              if (!sheet) return;
+              const id = "manual:" + crypto.randomUUID().replaceAll("-", "");
+              setQuery("");
+              setOrder([]);
+              setSort(null);
+              setFocus(id);
+              update({
+                ...sheet,
+                items: [
+                  ...sheet.items,
+                  {
+                    id,
+                    title: "",
+                    credits: "3",
+                    grade: "",
+                    category: "일반",
+                    excluded: 0,
+                    linked: false,
+                  },
+                ],
+              });
+            }}
+          >
+            <Plus size={16} />
+            과목 추가
+          </button>
+        </div>
       </div>
-      {!data.timetableConfigured && (
-        <p className="muted">시간표에서 학기를 설정하세요.</p>
-      )}
       {error && (
         <div className="grade-error-banner" role="alert">
           <span>{error}</span>
@@ -553,9 +642,7 @@ export function GradesPage() {
               </strong>
             </article>
           </div>
-          <p className="grade-policy">
-            P는 취득 학점에만 반영합니다.
-          </p>
+          <p className="grade-policy">P는 취득 학점에만 반영합니다.</p>
           <form
             id="grade-form"
             ref={form}
@@ -623,9 +710,7 @@ export function GradesPage() {
                 ))}
                 {!visible.length && (
                   <div className="empty">
-                    {sheet.items.length
-                      ? "검색 결과 없음"
-                      : "등록된 과목 없음"}
+                    {sheet.items.length ? "검색 결과 없음" : "등록된 과목 없음"}
                   </div>
                 )}
               </div>
@@ -698,6 +783,22 @@ export function GradesPage() {
               </button>
             ))}
           </details>
+          <div className="grade-reset-actions" aria-label="학점 기록 초기화">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => setReset("semester")}
+            >
+              학기 초기화
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => setReset("all")}
+            >
+              전체 초기화
+            </button>
+          </div>
         </>
       )}
       {remove && (
@@ -758,6 +859,100 @@ export function GradesPage() {
               }}
             >
               변경 취소
+            </button>
+          </div>
+        </Modal>
+      )}
+      {importIds && (
+        <Modal
+          title="과목 일괄 가져오기"
+          className="grade-import-dialog"
+          onClose={() => {
+            if (!pending) setImportIds(null);
+          }}
+        >
+          <div className="grade-import-list" aria-label="Canvas 과목">
+            {importChoices.map((course) => (
+              <label key={course.id}>
+                <input
+                  type="checkbox"
+                  checked={importIds.has(course.id)}
+                  disabled={pending}
+                  onChange={(event) => {
+                    const next = new Set(importIds);
+                    if (event.target.checked) next.add(course.id);
+                    else next.delete(course.id);
+                    setImportIds(next);
+                  }}
+                />
+                <span>{course.name}</span>
+              </label>
+            ))}
+          </div>
+          <div className="dialog-actions">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() =>
+                setImportIds(
+                  importIds.size === importChoices.length
+                    ? new Set()
+                    : new Set(importChoices.map((course) => course.id)),
+                )
+              }
+            >
+              {importIds.size === importChoices.length
+                ? "전체 해제"
+                : "전체 선택"}
+            </button>
+            <span />
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => setImportIds(null)}
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              className="primary"
+              disabled={!importIds.size || pending}
+              onClick={() => void changeCourses("import")}
+            >
+              {importIds.size}개 가져오기
+            </button>
+          </div>
+        </Modal>
+      )}
+      {reset && (
+        <Modal
+          title={
+            reset === "all" ? "전체 학점 기록 초기화" : "학기 학점 기록 초기화"
+          }
+          onClose={() => {
+            if (!pending) setReset(null);
+          }}
+        >
+          <p>
+            {reset === "all" ? "모든 학기" : semester}의 입력한 성적과 평점
+            기준을 초기화합니다.
+          </p>
+          <p className="muted">자동 연결 과목은 빈 성적으로 표시됩니다.</p>
+          <div className="dialog-actions grade-confirm-actions">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => setReset(null)}
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              className="danger-button"
+              disabled={pending}
+              onClick={() => void changeCourses("reset")}
+            >
+              초기화
             </button>
           </div>
         </Modal>

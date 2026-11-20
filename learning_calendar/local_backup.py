@@ -20,7 +20,7 @@ def _rows(db, query):
 
 def write_backup(path, store, folder):
     folder = Path(folder)
-    from .grades import initialize
+    from .grades import course_rosters, initialize
     from .focus import read_comments
     initialize(store)
     schedule = dict(
@@ -42,6 +42,7 @@ def write_backup(path, store, folder):
         version=7,
         grades=_rows(store.db, "SELECT * FROM grade_items"),
         grade_scales=_rows(store.db, "SELECT * FROM grade_scales"),
+        grade_canvas_rosters=course_rosters(store),
         focus_sessions=_rows(store.db, "SELECT id,day,seconds FROM focus_sessions"),
         focus_comments=read_comments(store),
         schedule=schedule,
@@ -357,6 +358,16 @@ def read_backup(path, owner="", password=None):
                 secret_ids.add(key)
         from .grades import SCALES
         import math
+        rosters = value.get("grade_canvas_rosters", {})
+        if not isinstance(rosters, dict) or len(rosters) > 100:
+            raise ValueError("학기별 Canvas 과목을 확인하세요.")
+        for term, ids in rosters.items():
+            _string(term, 40, False)
+            if term_names is not None and term not in term_names:
+                raise ValueError("Canvas 과목의 학기를 확인하세요.")
+            for course_id in _list(ids, 5000):
+                if type(course_id) is not int or course_id not in courses:
+                    raise ValueError("복원할 Canvas 과목을 확인하세요.")
         seen = set()
         for row in _list(value.get("grades", []), 10000):
             term = _string(row["semester"], 120, False)
@@ -403,7 +414,7 @@ def restore_backup(value, store, folder):
         {row["id"]: row for row in store.event_types()} if preserved is not None else {}
     )
     # All SQL is fixed and parameterized. No imported database/schema is executed.
-    from .grades import initialize
+    from .grades import ROSTERS, initialize
     initialize(store)
     db = store.db
     sqlite3.attach(db, folder / "journals.db", "diary_restore")
@@ -422,6 +433,8 @@ def restore_backup(value, store, folder):
                         db.execute("DELETE FROM grade_scales")
                         db.executemany("INSERT INTO grade_scales VALUES(?,?)",
                             [(row["semester"], row["scale"]) for row in value.get("grade_scales", [])])
+                    if "grade_canvas_rosters" in value:
+                        store.set_meta(ROSTERS, json.dumps(value["grade_canvas_rosters"], ensure_ascii=False), _commit=False)
                     if "checklist" in value:
                         from .checklist_store import restore_state
 
