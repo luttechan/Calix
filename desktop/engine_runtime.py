@@ -111,10 +111,12 @@ def main():
             self.input = None
             self.reported_busy = None
             self.reminders_ready = False
+            self.startup_reminder_pending = True
             self.sync_reminder_token = None
+            self.released_sync_reminder_token = None
             self.reminder_timer = QTimer(self)
             self.reminder_timer.setInterval(30000)
-            self.reminder_timer.timeout.connect(lambda: self.check_reminders("timer"))
+            self.reminder_timer.timeout.connect(self.check_reminders)
             self.reminder_timer.start()
             self.collection_timer = QTimer(self)
             self.collection_timer.setSingleShot(True)
@@ -324,17 +326,11 @@ def main():
                     self.stop_sync()
                     result = True
                 elif method == "reminders.sync-ready":
-                    if (
-                        params.get("token") == self.sync_reminder_token
-                        and self.sync_reminder_token
-                    ):
-                        self.sync_reminder_token = None
-                        self.check_reminders("sync")
+                    self.release_sync_reminder(params.get("token"))
                     result = True
                 elif method == "reminders.ready":
-                    if not self.reminders_ready:
-                        self.reminders_ready = True
-                        self.check_reminders("startup")
+                    self.reminders_ready = True
+                    self.check_reminders()
                     result = True
                 elif method == "sync.force":
                     self.stop_sync(restart=True)
@@ -595,19 +591,34 @@ def main():
             self.task.start()
             return True
 
-        def check_reminders(self, trigger):
+        def release_sync_reminder(self, token):
+            if token and token == self.sync_reminder_token:
+                self.released_sync_reminder_token = token
+                self.check_reminders()
+
+        def check_reminders(self):
+            sync_token = self.sync_reminder_token
             if (
                 self.closing
                 or not self.reminders_ready
-                or self.sync_reminder_token
                 or self.task
                 or self.collector
+                or (sync_token and sync_token != self.released_sync_reminder_token)
+                or api.security.state()["locked"]
             ):
                 return
             from learning_calendar.reminders import check
 
+            trigger = "startup" if self.startup_reminder_pending else "timer"
+            if sync_token:
+                trigger = "sync"
             try:
                 payload = check(api, trigger)
+                if sync_token:
+                    self.sync_reminder_token = None
+                    self.released_sync_reminder_token = None
+                if trigger == "startup" or payload:
+                    self.startup_reminder_pending = False
                 if payload:
                     self.notify("reminder", payload=payload)
             except Exception as error:
@@ -619,12 +630,7 @@ def main():
             token = secrets.token_hex(16)
             self.sync_reminder_token = token
 
-            def fallback():
-                if self.sync_reminder_token == token:
-                    self.sync_reminder_token = None
-                    self.check_reminders("sync")
-
-            QTimer.singleShot(20000, fallback)
+            QTimer.singleShot(20000, lambda: self.release_sync_reminder(token))
             self.notify(
                 "sync-complete",
                 reminderToken=token,
@@ -654,6 +660,8 @@ def main():
             self.publish_busy()
             if self.closing:
                 self.finish_shutdown()
+            else:
+                self.check_reminders()
 
         def shutdown(self):
             if self.closing:

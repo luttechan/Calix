@@ -518,9 +518,9 @@ export function App() {
     data?.preferences.theme_palette,
   ]);
   useEffect(() => {
-    if (isTauri() && data?.preferences.onboarding_complete)
+    if (isTauri() && data?.preferences.onboarding_complete && !data.security?.locked)
       void rpc("reminders.ready").catch(() => {});
-  }, [data?.preferences.onboarding_complete]);
+  }, [data?.preferences.onboarding_complete, data?.security?.locked]);
   useEffect(() => {
     if (!isTauri()) return;
     let active = true;

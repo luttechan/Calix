@@ -76,7 +76,14 @@
 }
 .security-app-lock::after { background: linear-gradient(150deg, transparent 50%, color-mix(in srgb, var(--surface) 65%, transparent)); }
 .security-app-lock > * { z-index: 1; }
-.security-app-lock > .window-controls { position: relative; justify-content: flex-end; }
+.security-app-lock > .window-controls {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  flex: none;
+  justify-content: flex-end;
+  padding-inline: 8px;
+}
 .startup-unlock { position: relative; width: min(100% - 36px, 314px); padding: 18px 8px 26px; margin: auto; }
 .lock-clock { display: grid; gap: 4px; margin-bottom: clamp(22px, 5vh, 54px); animation: lock-enter .55s cubic-bezier(.2,.75,.3,1) both; }
 .lock-clock time { font-size: clamp(58px, 12vh, 112px); line-height: .97; font-weight: 650; letter-spacing: -.07em; font-variant-numeric: tabular-nums; }
