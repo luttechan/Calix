@@ -20,7 +20,7 @@ import { rpc } from "./bridge";
 import { dateKey } from "./dates";
 import type { Summary, Journal } from "./types";
 export function DiaryPage({ active = true }: { active?: boolean }) {
-  const { data, notify, leave, mutate } = useCalix();
+  const { data, notify, leave, mutate, soundError } = useCalix();
   const [secret, setSecret] = useState(false),
     [unlocked, setUnlocked] = useState(false),
     [initialized, setInitialized] = useState(false),
@@ -261,7 +261,7 @@ export function DiaryPage({ active = true }: { active?: boolean }) {
                   setUnlocked(true);
                   return reload(true);
                 })
-                .catch((e) => setError(e.message))
+                .catch((e) => { setError(e.message); soundError(); })
                 .finally(() => setBusy(false));
             }}
           >

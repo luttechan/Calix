@@ -3,11 +3,14 @@ import { isTauri, invoke } from "@tauri-apps/api/core";
 import { Modal } from "./App";
 import { rpc, subscribe } from "./bridge";
 type Row = { id: number; time: string; message: string };
-export function DeveloperConsole({ allowed }: { allowed: boolean }) {
+export function DeveloperConsole({ allowed, onError }: { allowed: boolean; onError: () => void }) {
   const [open, setOpen] = useState(false),
     [enabled, setEnabled] = useState(false),
     [rows, setRows] = useState<Row[]>([]),
     [error, setError] = useState("");
+  useEffect(() => {
+    if (open && error) onError();
+  }, [error, onError, open]);
   const [busy, setBusy] = useState(false),
     [requesting, setRequesting] = useState(false),
     [force, setForce] = useState(false);

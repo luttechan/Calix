@@ -166,7 +166,7 @@ const GradeRow = memo(function GradeRow({
 });
 
 export function GradesPage() {
-  const { data, notify, leave } = useCalix();
+  const { data, notify, leave, soundError } = useCalix();
   const [semester, setSemester] = useState(data.mainTerm),
     [sheet, setSheet] = useState<GradeSheet | null>(null),
     [loading, setLoading] = useState(true),
@@ -175,6 +175,9 @@ export function GradesPage() {
     [errors, setErrors] = useState<GradeErrors>({}),
     [query, setQuery] = useState(""),
     [focus, setFocus] = useState("");
+  useEffect(() => {
+    if (error) soundError();
+  }, [error, soundError]);
   const [remove, setRemove] = useState<string | null>(null),
     [discard, setDiscard] = useState(false),
     [order, setOrder] = useState<string[]>([]),
@@ -269,6 +272,7 @@ export function GradesPage() {
     const first = Object.entries(invalid)[0];
     if (first) {
       focusField(first[0], Object.keys(first[1])[0] as GradeField);
+      soundError();
       throw new Error("입력을 확인하세요.");
     }
     setPending(true);

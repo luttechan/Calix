@@ -6,7 +6,7 @@ import { paletteTokens, paletteValues, validPaletteColor } from "./themePalette"
 import type { PaletteColor, ThemePalette } from "./types";
 
 export function DeveloperLab() {
-  const { data, mutate, notify } = useCalix();
+  const { data, mutate, notify, soundError } = useCalix();
   const request = useRef(0);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -44,7 +44,10 @@ export function DeveloperLab() {
       samples.sort((a, b) => a - b);
       setResult(`Median ${samples[2].toFixed(1)} ms · Max ${samples[4].toFixed(1)} ms`);
     } catch {
-      if (id === request.current) setResult("Engine unavailable.");
+      if (id === request.current) {
+        setResult("Engine unavailable.");
+        soundError();
+      }
     } finally {
       if (id === request.current) setRunning(false);
     }

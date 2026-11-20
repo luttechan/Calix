@@ -125,7 +125,7 @@ class EngineAPI:
                 holidays={}, specialDates={}, lastSync="", syncSummary="",
                 security=state,
                 preferences=dict(theme=theme, theme_palette=palette, glass=True,
-                                 reminders={}, nickname="", greeting="{닉네임}님, 오셨군요!",
+                                 reminders=self.settings.get("reminders", {}), nickname="", greeting="{닉네임}님, 오셨군요!",
                                  onboarding_complete=True, attendance_visible=False, attendance_sync=False,
                                  developer_mode=False, font_mode=self.settings.get("font_mode", "pretendard"),
                                  catholic=False, birthday=False, avatar=""),

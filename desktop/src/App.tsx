@@ -680,7 +680,7 @@ export function App() {
   return (
     <div className="app-shell">
       <SecurityMonitor state={data?.security} beforeLock={finishEditing} refresh={refresh} />
-      <DeveloperConsole allowed={Boolean(data?.preferences.developer_mode)} />
+      <DeveloperConsole allowed={Boolean(data?.preferences.developer_mode)} onError={soundError} />
       <aside className="sidebar">
         <a
           className="brand"

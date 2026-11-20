@@ -72,7 +72,7 @@ export function SecuritySettings() {
       <div className="settings-heading"><ShieldCheck size={20} /><h2>비밀번호와 잠금</h2>{configured && <span className="security-status">암호화 사용 중</span>}</div>
       <form onSubmit={event => {
         event.preventDefault();
-        if (newPassword && newPassword !== confirm) { notify("새 비밀번호가 일치하지 않습니다."); return; }
+        if (newPassword && newPassword !== confirm) { notify("새 비밀번호가 일치하지 않습니다.", true); return; }
         setPending(true);
         void mutate(configured ? "security.configure" : "security.setup",
           configured ? { password, replacement: replacement || undefined, policy } : { password, policy })
