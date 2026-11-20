@@ -1484,13 +1484,17 @@ label textarea {
 }
 .settings-heading {
   display: flex;
-  gap: 11px;
+  gap: 10px;
   align-items: center;
   margin-bottom: 25px;
 }
 .settings-heading > svg {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
   color: var(--accent);
 }
+.settings-heading > h2 { margin: 0; font-size: 19px; font-weight: 650; line-height: 1.3; }
 .theme-picker {
   display: flex;
   gap: 20px;
@@ -2992,7 +2996,8 @@ body.reminder-surface {
   font-size: 12px;
 }
 .settings-categories {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   gap: 6px;
   max-width: 830px;
   margin: 0 0 22px;
@@ -3002,16 +3007,19 @@ body.reminder-surface {
   border-radius: 14px;
 }
 .settings-categories [role="tab"] {
-  flex: 1;
   min-width: 0;
+  flex-direction: column;
   justify-content: center;
-  padding: 11px 10px;
+  gap: 5px;
+  min-height: 54px;
+  padding: 6px 2px;
   border: 0;
   background: transparent;
-  white-space: nowrap;
   font-size: 13px;
   border-radius: 10px;
 }
+.settings-categories [role="tab"] svg { width: 16px; height: 16px; flex: none; }
+.settings-categories [role="tab"] span { text-align: center; word-break: keep-all; }
 .settings-categories [aria-selected="true"],
 .alarm-tabs [aria-selected="true"] {
   background: var(--accent-soft);
@@ -3032,10 +3040,7 @@ body.reminder-surface {
   gap: 20px;
   padding: 24px 26px 18px;
 }
-.alarm-panel-heading h2 {
-  margin: 0;
-  font-size: 19px;
-}
+.alarm-panel-heading .settings-heading { margin: 0; }
 .alarm-panel-heading p {
   font-size: 12px;
   color: var(--muted);
@@ -3220,9 +3225,11 @@ body.reminder-surface {
   color: var(--muted);
 }
 @media (max-width: 950px) {
+  .settings-categories { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .settings-categories [role="tab"] {
-    padding: 10px 7px;
-    font-size: 12px;
+    flex-direction: row;
+    min-height: 40px;
+    padding: 5px;
   }
   .alarm-panel-heading,
   .alarm-fields,
@@ -3241,10 +3248,7 @@ body.reminder-surface {
     grid-template-columns: 1fr;
   }
   .settings-categories {
-    flex-wrap: wrap;
-  }
-  .settings-categories [role="tab"] {
-    flex: 1 0 28%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -3491,30 +3495,28 @@ body.reminder-surface {
   letter-spacing: 0.04em;
 }
 .settings-categories .settings-tab-dev {
-  margin-left: auto;
   color: #cc4860;
 }
-.dev-panel {
-  max-width: 960px;
-  padding-block: 12px;
-}
-.dev-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 20px;
-}
-.dev-mode {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  font-size: 13px;
-}
+.dev-access { margin-bottom: 14px; }
+.dev-access .dev-heading { margin-bottom: 16px; }
+.dev-heading > .switch { margin-inline-start: auto; flex: 0 0 auto; }
 .dev-warning {
   color: #bd435a;
   font-size: 13px;
   margin: 16px 0 24px;
 }
+.dev-access .dev-access-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  padding: 11px 13px;
+  border: 1px solid color-mix(in srgb, #bd435a 24%, var(--line));
+  border-radius: 10px;
+  background: color-mix(in srgb, #bd435a 7%, var(--surface));
+  color: var(--ink);
+}
+.dev-access-warning > svg { flex: none; color: #bd435a; }
 .dev-tools {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3526,10 +3528,10 @@ body.reminder-surface {
   flex-direction: column;
   align-items: flex-start;
   text-align: left;
-  padding: 22px 38px 22px 22px;
-  gap: 9px;
+  padding: 16px 38px 16px 17px;
+  gap: 5px;
   border: 1px solid var(--line);
-  border-radius: 18px;
+  border-radius: 12px;
   background: var(--surface);
 }
 .dev-tools button strong {
@@ -3540,10 +3542,10 @@ body.reminder-surface {
   line-height: 1.6;
   opacity: 0.65;
 }
-.dev-tools button > b {
+.dev-tools button > svg {
   position: absolute;
   right: 18px;
-  top: 20px;
+  top: 17px;
   opacity: 0.45;
 }
 .dev-tools button[aria-pressed="true"] {
@@ -3574,9 +3576,7 @@ body.reminder-surface {
   }
 }
 
-.menu-settings h2 {
-  margin-bottom: 6px;
-}
+.menu-settings .settings-heading { margin-bottom: 6px; }
 .menu-option {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

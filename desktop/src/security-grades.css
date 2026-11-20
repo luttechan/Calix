@@ -49,7 +49,7 @@
 .unlock-view h1 { font-size: 25px; margin: 18px 0 24px; }
 .unlock-view form, .security-settings form { display: grid; gap: 14px; }
 .unlock-view label { text-align: left; }
-.unlock-view .button { width: 100%; justify-content: center; }
+.unlock-view > form > .button { width: 100%; justify-content: center; }
 .unlock-view .text-button { margin-top: 18px; font-size: 13px; }
 .security-symbol { display: inline-grid; place-items: center; width: 60px; height: 60px; border-radius: 21px; background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--accent); }
 .security-settings { width: 100%; margin-inline: 0; }
@@ -96,6 +96,22 @@
 .startup-unlock form { gap: 10px; animation: lock-enter .5s .16s cubic-bezier(.2,.75,.3,1) both; }
 .startup-unlock label { margin: 0; }
 .startup-unlock .text-button { margin-top: 12px; }
+.lock-reset-dialog.modal { width: min(432px, calc(100vw - 32px)); }
+.lock-reset-warning {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  padding: 13px 14px;
+  border: 1px solid color-mix(in srgb, #bc3254 23%, var(--line));
+  border-radius: 12px;
+  background: color-mix(in srgb, #bc3254 8%, var(--surface));
+}
+.lock-reset-warning > svg { color: #bb3554; }
+.lock-reset-warning p { margin: 4px 0 0; color: var(--muted); }
+.lock-reset-field { margin-top: 16px; }
+.lock-reset-actions.dialog-actions { justify-content: flex-end; margin-top: 18px; }
+.lock-reset-actions button { min-width: 82px; }
 @keyframes lock-enter { from { opacity: 0; transform: translateY(18px) scale(.985); } to { opacity: 1; transform: none; } }
 @keyframes lock-ambient { from { transform: translate(-2%, -2%) scale(1); } to { transform: translate(2%, 2%) scale(1.07); } }
 @keyframes lock-verify { to { box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 30%, transparent), 0 14px 36px #22172a25; } }

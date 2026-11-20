@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { LockKeyhole, ShieldCheck, UserRound } from "lucide-react";
+import { LockKeyhole, ShieldCheck, TriangleAlert, UserRound } from "lucide-react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { Modal, useCalix } from "./App";
 import { rpc } from "./bridge";
@@ -24,16 +24,43 @@ function LockClock() {
   return <div className="lock-clock"><time dateTime={now.toISOString()}>{lockTime.format(now)}</time><span>{lockDate.format(now)}</span></div>;
 }
 
+function LockedResetDialog({ onClose }: { onClose: () => void }) {
+  const { mutate, notify } = useCalix();
+  const [confirmation, setConfirmation] = useState("");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  const close = () => { if (!pending) onClose(); };
+  return <Modal title="데이터 초기화" className="lock-reset-dialog" onClose={close}>
+    <div className="lock-reset-warning" id="lock-reset-warning">
+      <TriangleAlert size={19} aria-hidden="true" />
+      <div><strong>삭제한 데이터는 복구할 수 없습니다.</strong><p>일정, 시간표, 학점, 일기와 비밀번호가 삭제됩니다.</p></div>
+    </div>
+    <label className="lock-reset-field">
+      계속하려면 ‘초기화’를 입력하세요.
+      <input autoFocus aria-label="초기화 확인 문구" aria-describedby="lock-reset-warning" autoComplete="off" maxLength={32} value={confirmation} disabled={pending} onChange={event => setConfirmation(event.target.value)} />
+    </label>
+    {error && <p role="alert" className="danger">{error}</p>}
+    <div className="dialog-actions lock-reset-actions">
+      <button type="button" disabled={pending} onClick={close}>취소</button>
+      <button type="button" className="danger-button" disabled={confirmation !== "초기화" || pending} onClick={() => {
+        setPending(true);
+        setError("");
+        void mutate("data.reset", { confirmation }).then(() => { onClose(); notify("초기화됨"); })
+          .catch((reason: Error) => setError(reason.message)).finally(() => setPending(false));
+      }}>{pending ? "초기화 중" : "초기화"}</button>
+    </div>
+  </Modal>;
+}
+
 export function UnlockView({ scope = "main" }: { scope?: "main" | "timetable" | "grades" }) {
-  const { data, mutate, notify } = useCalix();
+  const { data, mutate } = useCalix();
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [reset, setReset] = useState(false);
-  const [confirmation, setConfirmation] = useState("");
   const title = scope === "main" ? "Calix 잠금" : scope === "timetable" ? "시간표 잠금" : "학점 메뉴 잠금";
   const main = scope === "main";
-  return (
+  return <>
     <section className={`unlock-view${main ? " startup-unlock" : ""}`} aria-labelledby="unlock-title">
       {main ? <><LockClock /><div className="lock-profile" data-checking={pending}>
         <div className="lock-avatar">{data.preferences.avatar ? <img src={data.preferences.avatar} alt="" /> : <UserRound size={48} aria-hidden="true" />}</div>
@@ -50,17 +77,10 @@ export function UnlockView({ scope = "main" }: { scope?: "main" | "timetable" | 
         {error && <p role="alert">{error}</p>}
         <button className="button primary" disabled={pending}>{pending ? "확인 중" : "잠금 해제"}</button>
       </form>
-      {scope === "main" && <button type="button" className="text-button" onClick={() => setReset(true)}>비밀번호를 잊으셨나요?</button>}
-      {reset && <Modal title="모든 데이터를 초기화하시겠습니까?" onClose={() => setReset(false)}>
-        <p>일정, 시간표, 학점, 일기와 비밀번호를 삭제합니다. 복구할 수 없습니다.</p>
-        <label>확인 문구<input aria-label="초기화 확인 문구" placeholder="초기화" value={confirmation} onChange={event => setConfirmation(event.target.value)} /></label>
-        <div className="dialog-actions"><button onClick={() => setReset(false)}>취소</button><button className="button danger" disabled={confirmation !== "초기화" || pending} onClick={() => {
-          setPending(true);
-          void mutate("data.reset", { confirmation: "초기화" }).then(() => notify("초기화됨")).catch(() => {}).finally(() => setPending(false));
-        }}>초기화</button></div>
-      </Modal>}
+      {scope === "main" && <button type="button" className="text-button" disabled={pending} onClick={() => setReset(true)}>비밀번호를 잊으셨나요?</button>}
     </section>
-  );
+    {reset && <LockedResetDialog onClose={() => setReset(false)} />}
+  </>;
 }
 
 export function ProtectedSection({ scope, children }: { scope: "timetable" | "grades"; children: ReactNode }) {
@@ -89,7 +109,7 @@ export function SecuritySettings() {
   const [custom, setCustom] = useState(![1, 5, 10, 15, 30, 60].includes(policy.idle_minutes));
   return (
     <section className="glass settings-panel security-settings">
-      <div className="settings-heading"><ShieldCheck size={20} /><h2>비밀번호와 잠금</h2>{configured && <span className="security-status">암호화 사용 중</span>}</div>
+      <div className="settings-heading"><ShieldCheck aria-hidden="true" /><h2>비밀번호와 잠금</h2>{configured && <span className="security-status">암호화 사용 중</span>}</div>
       <form onSubmit={event => {
         event.preventDefault();
         if (newPassword && newPassword !== confirm) { notify("새 비밀번호가 일치하지 않습니다.", true); return; }

@@ -802,7 +802,7 @@ export function App() {
               title={busy ? "동기화 중단" : "동기화"}
               aria-label={busy ? "동기화 중단" : "동기화"}
               onClick={() => {
-                if (!busy && !loggedIn) { notify("학교 로그인 후 동기화하세요."); return; }
+                if (!busy && !loggedIn) { notify("학교 로그인 후 동기화하세요.", true); return; }
                 const cancelling = busy;
                 if (!cancelling) setBusy(true);
                 rpc(cancelling ? "sync.cancel" : "sync").catch((e) => {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { ArrowUpRight, Terminal, TriangleAlert } from "lucide-react";
 import { Modal, useCalix } from "./App";
 import { rpc } from "./bridge";
 import { DeveloperLab } from "./DeveloperLab";
@@ -194,29 +195,28 @@ export function DevPanel({ active }: { active: boolean }) {
   ] as const;
   return (
     <section className="dev-panel" lang="en">
-      <div className="dev-heading">
-        <div>
-          <p className="eyebrow">Developer tools</p>
-          <h2>Dev</h2>
-        </div>
-        <label className="dev-mode">
-          <input
-            type="checkbox"
-            checked={developerMode}
+      <section className="glass settings-panel dev-access">
+        <div className="settings-heading dev-heading">
+          <Terminal aria-hidden="true" />
+          <h2>Developer Mode</h2>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={developerMode}
+            aria-label="Developer Mode"
+            className={`switch${developerMode ? " on" : ""}`}
             disabled={pending || maintenance}
-            onChange={(event) => {
-              const value = event.target.checked;
-              if (value) setEnableWarning(true);
-              else void applyMode(false);
+            onClick={() => {
+              if (developerMode) void applyMode(false);
+              else setEnableWarning(true);
             }}
-          />
-          Developer Mode
-        </label>
-      </div>
-      <p className="dev-warning">
-        Developer tools can cause critical errors, data loss, or an unusable
-        database. Not recommended for general use.
-      </p>
+          ><i aria-hidden="true" /></button>
+        </div>
+        <p className="dev-warning dev-access-warning">
+          <TriangleAlert size={17} aria-hidden="true" />
+          <span>Developer tools can cause data loss or leave Calix unusable.</span>
+        </p>
+      </section>
       {unlocked && (
         <div className="dev-tools">
           {tools.map(([name, description, action]) => (
@@ -233,7 +233,7 @@ export function DevPanel({ active }: { active: boolean }) {
                 {name === "Performance Monitor" && monitoring ? " / Live" : ""}
               </strong>
               <span>{description}</span>
-              <b aria-hidden="true">↗</b>
+              <ArrowUpRight size={16} aria-hidden="true" />
             </button>
           ))}
         </div>

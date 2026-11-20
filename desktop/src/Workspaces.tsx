@@ -8,6 +8,10 @@ import {
   CalendarDays,
   SlidersHorizontal,
   ArrowUpRight,
+  Bell,
+  ShieldCheck,
+  Terminal,
+  UserRound,
 } from "lucide-react";
 import { Modal, TypeBadge, useCalix } from "./App";
 import { rpc } from "./bridge";
@@ -540,14 +544,14 @@ export function SettingsPage() {
     [backupPassword, setBackupPassword] = useState(""),
     [fileBusy, setFileBusy] = useState(false);
   const categories = [
-    ["profile", "내 프로필"],
-    ["appearance", "화면"],
-    ["alarms", "알림과 소리"],
-    ["calendar", "일정"],
-    ["menus", "메뉴 활성화"],
-    ["security", "비밀번호와 잠금"],
-    ["app", "앱 관리"],
-    ["dev", "Dev"],
+    ["profile", "내 프로필", UserRound],
+    ["appearance", "화면", Palette],
+    ["alarms", "알림과 소리", Bell],
+    ["calendar", "일정", CalendarDays],
+    ["menus", "메뉴 활성화", SlidersHorizontal],
+    ["security", "비밀번호와 잠금", ShieldCheck],
+    ["app", "앱 관리", Download],
+    ["dev", "Dev", Terminal],
   ] as const;
   const [category, setCategory] = useState<string>("profile");
   const selectCategory = (id: string) => {
@@ -597,7 +601,7 @@ export function SettingsPage() {
         role="tablist"
         aria-label="설정 카테고리"
       >
-        {categories.map(([id, label], index) => (
+        {categories.map(([id, label, Icon], index) => (
           <button
             key={id}
             className={id === "dev" ? "settings-tab-dev" : undefined}
@@ -629,7 +633,8 @@ export function SettingsPage() {
               }
             }}
           >
-            {label}
+            <Icon aria-hidden="true" />
+            <span>{label}</span>
           </button>
         ))}
       </div>
@@ -645,7 +650,7 @@ export function SettingsPage() {
           aria-labelledby="settings-tab-menus"
         >
           <section className="glass settings-panel menu-settings">
-            <h2>출결</h2>
+            <div className="settings-heading"><SlidersHorizontal aria-hidden="true" /><h2>출결</h2></div>
             {([
               ["attendance_visible", "메뉴 표시", "사이드바에 출결 메뉴를 표시합니다."],
               ["attendance_sync", "출결 동기화", "다음 동기화부터 출결 기록을 가져옵니다."],
@@ -703,7 +708,7 @@ export function SettingsPage() {
       >
         <section className="glass settings-panel">
           <div className="settings-heading">
-            <Palette size={20} />
+            <Palette aria-hidden="true" />
             <h2>화면</h2>
           </div>
           <div className="theme-picker">
@@ -767,7 +772,7 @@ export function SettingsPage() {
       >
         <section className="glass settings-panel">
           <div className="settings-heading">
-            <CalendarDays size={20} />
+            <CalendarDays aria-hidden="true" />
             <h2>일정</h2>
           </div>
           <button className="settings-link" onClick={() => setType(true)}>
@@ -792,7 +797,7 @@ export function SettingsPage() {
       >
         <section className="glass settings-panel">
           <div className="settings-heading">
-            <Download size={20} />
+            <Download aria-hidden="true" />
             <h2>앱 관리</h2>
           </div>
           {[

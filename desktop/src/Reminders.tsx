@@ -1,7 +1,7 @@
 import { NumberField } from "./NumberField";
 import { useEffect, useRef, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { Volume2 } from "lucide-react";
+import { Bell, Volume2 } from "lucide-react";
 import { useCalix } from "./App";
 import { alarmNames } from "./alarmNames";
 import { defaultSyncTrack, syncCuePath } from "./syncCue";
@@ -105,7 +105,8 @@ export function ReminderSettingsPanel({ active = true }: { active?: boolean }) {
   return (
     <section className="glass settings-panel reminder-settings">
       <div className="alarm-panel-heading">
-        <div>
+        <div className="settings-heading">
+          <Bell aria-hidden="true" />
           <h2>알림과 소리</h2>
         </div>
         <label className="alarm-enable">

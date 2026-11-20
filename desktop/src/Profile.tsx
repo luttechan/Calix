@@ -203,7 +203,7 @@ export function ProfileSettings() {
   return (
     <>
       <section className="glass settings-panel profile-settings">
-        <h2>내 Calix</h2>
+        <div className="settings-heading"><UserRound aria-hidden="true" /><h2>내 프로필</h2></div>
         <div className="profile-photo-editor">
           <span className="profile-photo-preview">
             {avatar ? (
