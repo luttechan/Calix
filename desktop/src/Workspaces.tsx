@@ -261,7 +261,7 @@ export function ChecklistPage() {
               ))}
             </tbody>
           </table>
-          {!rows.length && <div className="empty">할 일이 없습니다.</div>}
+          {!rows.length && <div className="empty">할 일 없음</div>}
         </div>
         {pageCount > 1 && (
           <div className="pagination">
@@ -479,7 +479,7 @@ function BatchImport({ onClose }: { onClose: () => void }) {
             <small>{dueText(e.due_at)}</small>
           </label>
         ))}
-        {!rows.length && <div className="empty">가져올 일정이 없습니다.</div>}
+        {!rows.length && <div className="empty">가져올 일정 없음</div>}
       </div>
       {pageCount > 1 && (
         <div className="pagination">

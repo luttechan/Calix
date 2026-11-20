@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { useCalix } from "./App";
+import { TypeBadge, useCalix } from "./App";
+import { ChevronRight, Search } from "lucide-react";
 import type { EventItem } from "./types";
 import { deadlineGroup, orderByDeadline } from "./overviewState";
 import "./overview.css";
@@ -10,20 +11,23 @@ function Items({ items }: { items: EventItem[] }) {
     <div className="overview-items">
       {items.length ? (
         items.map((item) => (
-          <button key={item.key} onClick={() => openEvent(item.key)}>
-            <span
-              className="overview-type"
-              style={{ borderColor: item.type_color }}
-            >
-              {item.type_name ||
-                { assignment: "과제", movie: "영상" }[item.kind] ||
-                "일정"}
-            </span>
-            <span>
-              <strong>{item.title}</strong>
+          <button
+            className="overview-event"
+            key={item.key}
+            onClick={() => openEvent(item.key)}
+          >
+            <TypeBadge event={item} />
+            <span className="overview-event-copy">
+              <strong title={item.title}>{item.title}</strong>
               <small>{item.course_name}</small>
             </span>
-            <time>
+            <time
+              dateTime={
+                item.due_at && Number.isFinite(Date.parse(item.due_at))
+                  ? item.due_at
+                  : undefined
+              }
+            >
               {item.due_at && Number.isFinite(Date.parse(item.due_at))
                 ? new Date(item.due_at).toLocaleString("ko-KR", {
                     month: "numeric",
@@ -33,10 +37,15 @@ function Items({ items }: { items: EventItem[] }) {
                   })
                 : "기한 없음"}
             </time>
+            <ChevronRight
+              size={15}
+              className="overview-chevron"
+              aria-hidden="true"
+            />
           </button>
         ))
       ) : (
-        <p className="empty">일정이 없습니다.</p>
+        <p className="empty">일정 없음</p>
       )}
     </div>
   );
@@ -45,7 +54,8 @@ export function DeadlinePage() {
   const { data } = useCalix();
   const [now, setNow] = useState(() => new Date()),
     [query, setQuery] = useState(""),
-    [kind, setKind] = useState("all");
+    [kind, setKind] = useState("all"),
+    [planning, setPlanning] = useState(false);
   useEffect(() => {
     const update = () => setNow(new Date());
     const timer = setInterval(update, 30000);
@@ -70,32 +80,44 @@ export function DeadlinePage() {
     [data.events, kind, query],
   );
   return (
-    <section className="overview-page">
+    <section className="overview-page deadline-page">
       <header className="page-heading">
         <div>
-          <p className="eyebrow">DEADLINES</p>
           <h1>마감 보드</h1>
         </div>
-      </header>
-      <PlanningPanel now={now} />
-      <div className="overview-tools">
-        <input
-          aria-label="마감 일정 검색"
-          placeholder="일정·과목 검색"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <select
-          aria-label="일정 종류"
-          value={kind}
-          onChange={(e) => setKind(e.target.value)}
+        <button
+          type="button"
+          aria-expanded={planning}
+          aria-controls="deadline-planning"
+          onClick={() => setPlanning(!planning)}
         >
-          <option value="all">전체</option>
-          <option value="assignment">과제</option>
-          <option value="movie">영상</option>
-        </select>
+          학습 계획 <ChevronRight size={16} aria-hidden="true" />
+        </button>
+      </header>
+      <div id="deadline-planning" hidden={!planning}>
+        {planning && <PlanningPanel now={now} />}
       </div>
-      <div className="deadline-grid">
+      <div className="deadline-list">
+        <div className="deadline-filters">
+          <label className="deadline-search">
+            <Search size={16} aria-hidden="true" />
+            <input
+              aria-label="마감 일정 검색"
+              placeholder="일정·과목 검색"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </label>
+          <select
+            aria-label="일정 종류"
+            value={kind}
+            onChange={(e) => setKind(e.target.value)}
+          >
+            <option value="all">전체 유형</option>
+            <option value="assignment">과제</option>
+            <option value="movie">영상</option>
+          </select>
+        </div>
         {[
           ["overdue", "기한 경과"],
           ["today", "오늘"],
@@ -104,16 +126,24 @@ export function DeadlinePage() {
           ["undated", "기한 없음"],
         ].map(([id, label]) => {
           const selected = items.filter((e) => deadlineGroup(e, now) === id);
+          if (!selected.length) return null;
           return (
-            <article key={id} className={`overview-card ${id}`}>
+            <section key={id} className={`deadline-group ${id}`}>
               <h2>
                 {label}
                 <span>{selected.length}</span>
               </h2>
               <Items items={selected} />
-            </article>
+            </section>
           );
         })}
+        {!items.length && (
+          <p className="deadline-empty" role="status">
+            {query.trim() || kind !== "all"
+              ? "검색 결과 없음"
+              : "남은 일정 없음"}
+          </p>
+        )}
       </div>
     </section>
   );
@@ -147,7 +177,6 @@ export function CourseOverviewPage() {
     <section className="overview-page">
       <header className="page-heading">
         <div>
-          <p className="eyebrow">COURSES</p>
           <h1>과목별 현황</h1>
         </div>
       </header>
@@ -158,7 +187,7 @@ export function CourseOverviewPage() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <label>
+        <label className="overview-checkbox">
           <input
             type="checkbox"
             checked={onlyPending}
@@ -178,10 +207,10 @@ export function CourseOverviewPage() {
             <article className="overview-card" key={course.id}>
               <h2>{course.name}</h2>
               <div className="course-counts">
-                <span>
+                <span className="type-badge assignment">
                   과제 {pending.filter((e) => e.kind === "assignment").length}
                 </span>
-                <span>
+                <span className="type-badge movie">
                   영상 {pending.filter((e) => e.kind === "movie").length}
                 </span>
                 <span>
@@ -193,15 +222,17 @@ export function CourseOverviewPage() {
                 max={100}
                 value={percent}
               />
-              <details>
-                <summary>미완료 일정 {pending.length}개</summary>
-                <Items items={pending} />
-              </details>
+              {pending.length > 0 && (
+                <details>
+                  <summary>미완료 일정 {pending.length}개</summary>
+                  <Items items={pending} />
+                </details>
+              )}
             </article>
           );
         })}
       </div>
-      {!groups.length && <p className="empty">과목이 없습니다.</p>}
+      {!groups.length && <p className="empty">과목 없음</p>}
     </section>
   );
 }

@@ -148,7 +148,7 @@ export function AttendancePage() {
       {error && <p role="alert">{error}</p>}
       {rows.some((r) => r.stale) && (
         <p className="attendance-warning">
-          일부 출결은 이전 조회 결과입니다. 다시 동기화하세요.
+          일부 출결 갱신 필요
         </p>
       )}
       <div className="attendance-summary">
@@ -217,7 +217,7 @@ export function AttendancePage() {
         {!selected.length && (
           <div className="empty">
             <CalendarDays size={32} />
-            <p>{loading ? "출결을 불러오는 중" : "표시할 출결이 없습니다."}</p>
+            <p>{loading ? "출결을 불러오는 중" : "출결 기록 없음"}</p>
           </div>
         )}
       </div>

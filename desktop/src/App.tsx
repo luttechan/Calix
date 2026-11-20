@@ -197,7 +197,7 @@ export function EventRows({
           </span>
         </button>
       ))}
-      {!events.length && <div className="empty">일정이 없습니다.</div>}
+      {!events.length && <div className="empty">일정 없음</div>}
       {limit >= 50 && count > 1 && (
         <div className="pagination">
           <span>
@@ -685,6 +685,7 @@ export function App() {
               key={id}
               className={page === id ? "active" : ""}
               onClick={() => void navigate(id)}
+              aria-current={page === id ? "page" : undefined}
               title={title}
             >
               <Icon size={19} />
@@ -755,7 +756,7 @@ export function App() {
                       </span>
                     </button>
                   ))}
-                  {!found.length && <p>검색 결과가 없습니다.</p>}
+                  {!found.length && <p>검색 결과 없음</p>}
                 </div>
               )}
             </div>
@@ -960,7 +961,7 @@ export function App() {
                       ) : (
                         <div className="empty">
                           <Sun size={30} />
-                          <p>오늘 마감 일정이 없습니다.</p>
+                          <p>오늘 마감 없음</p>
                         </div>
                       )}
                       <div className="today-footer">
@@ -1279,7 +1280,7 @@ function EventListPage({
             </details>
           ))}
           {!filtered.length && (
-            <div className="glass empty">일정이 없습니다.</div>
+            <div className="glass empty">일정 없음</div>
           )}
         </div>
       )}
@@ -1590,7 +1591,7 @@ function EventDetails({
               )}
               {event.lms_data.feedback_available === false && (
                 <p className="muted">
-                  코멘트를 확인하지 못했습니다. 다시 동기화하세요.
+                  코멘트 확인 실패 · 다시 동기화
                 </p>
               )}
               {event.lms_data.rubric?.map((r, i) => (

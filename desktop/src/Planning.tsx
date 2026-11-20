@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useCalix } from "./App";
-import { studyPlan, busyDates, freeSlots } from "./planningState";
-import type { Session } from "./types";
+import { studyPlan, busyDates } from "./planningState";
 export function PlanningPanel({ now }: { now: Date }) {
   const { data, openEvent } = useCalix();
   const [budget, setBudget] = useState(60),
@@ -43,7 +42,7 @@ export function PlanningPanel({ now }: { now: Date }) {
           </label>
         </div>
         <p className="muted">
-          마감 순으로 {plan.length}개 · 예상 {plan.length * minutes}분
+          {plan.length}개 · 예상 {plan.length * minutes}분
         </p>
         <div className="overview-items">
           {plan.map((e, i) => (
@@ -56,7 +55,14 @@ export function PlanningPanel({ now }: { now: Date }) {
             </button>
           ))}
         </div>
-        {!plan.length && <p>{budget < minutes && studyPlan(data.events, now, minutes, minutes).length ? "학습 시간을 늘리거나 항목당 예상 시간을 줄이세요." : "계획할 일정이 없습니다."}</p>}
+        {!plan.length && (
+          <p>
+            {budget < minutes &&
+            studyPlan(data.events, now, minutes, minutes).length
+              ? "학습 시간 부족"
+              : "일정 없음"}
+          </p>
+        )}
       </article>
       <article className="overview-card">
         <h2>마감 밀집 경고</h2>
@@ -76,50 +82,9 @@ export function PlanningPanel({ now }: { now: Date }) {
             </details>
           ))
         ) : (
-          <p className="muted">3개 이상 겹치는 마감이 없습니다.</p>
+          <p className="muted">밀집 마감 없음</p>
         )}
       </article>
     </div>
-  );
-}
-export function FreeTimeFinder({
-  sessions,
-  offDays,
-}: {
-  sessions: Session[];
-  offDays: number[];
-}) {
-  const [duration, setDuration] = useState(60);
-  const slots = freeSlots(sessions, offDays, duration);
-  const clock = (n: number) =>
-    `${String(Math.floor(n / 60)).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
-  return (
-    <details className="overview-card free-time">
-      <summary>공강 찾기</summary>
-      <label>
-        필요한 시간
-        <select
-          aria-label="공강 길이"
-          value={duration}
-          onChange={(e) => setDuration(Number(e.target.value))}
-        >
-          {[30, 60, 90, 120, 180].map((n) => (
-            <option key={n} value={n}>
-              {n}분 이상
-            </option>
-          ))}
-        </select>
-      </label>
-      <p className="muted">선택한 학기 시간표 기준 · 09:00–18:00</p>
-      <div className="free-slots">
-        {slots.map((s) => (
-          <span key={`${s.day}-${s.start}`}>
-            <strong>{"월화수목금토일"[s.day]}</strong> {clock(s.start)}–
-            {clock(s.end)}
-          </span>
-        ))}
-      </div>
-      {!slots.length && <p>조건에 맞는 공강이 없습니다.</p>}
-    </details>
   );
 }

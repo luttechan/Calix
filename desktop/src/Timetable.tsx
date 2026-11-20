@@ -1,5 +1,4 @@
 import {sessionLanes} from "./planningState";
-import {FreeTimeFinder} from "./Planning";
 import { NumberField } from "./NumberField";
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Sun, Trash2, Monitor, ArrowUpRight } from "lucide-react";
@@ -178,10 +177,8 @@ export function TimetablePage() {
             </button>
           ))}
       </div>
-      {data.timetableConfigured && <FreeTimeFinder sessions={sessions} offDays={offDays}/>}
       {!data.timetableConfigured ? (
         <section className="glass empty">
-          <p>학기를 설정하세요.</p>
           <button className="primary" onClick={() => setTermDialog(true)}>
             학기 설정
           </button>
@@ -586,8 +583,8 @@ function SessionViewer({
               {!rows.length && (
                 <div className="empty">
                   {session.course_id > 0
-                    ? "일정이 없습니다."
-                    : "연결된 강의가 없습니다."}
+                    ? "일정 없음"
+                    : "연결된 강의 없음"}
                 </div>
               )}
             </section>

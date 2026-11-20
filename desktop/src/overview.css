@@ -47,9 +47,6 @@
   font-size: 13px;
   color: var(--muted);
 }
-.overview-card.overdue {
-  border-color: #b94b62;
-}
 .overview-items {
   display: grid;
   gap: 8px;
@@ -62,6 +59,28 @@
   align-items: center;
   background: var(--bg);
   min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.overview-items > .overview-event {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr) minmax(85px, auto) 15px;
+}
+.overview-event-copy {
+  min-width: 0;
+}
+.overview-event .type-badge {
+  justify-self: start;
+  white-space: normal;
+}
+.overview-event time {
+  text-align: right;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.overview-chevron {
+  color: var(--muted);
 }
 .overview-items strong {
   display: block;
@@ -77,13 +96,6 @@
   margin-left: auto;
   flex-shrink: 0;
   font-size: 12px;
-}
-.overview-type {
-  border: 1px solid;
-  border-radius: 6px;
-  padding: 3px 6px;
-  font-size: 11px;
-  flex-shrink: 0;
 }
 .course-counts {
   display: flex;
@@ -117,20 +129,94 @@
 }
 
 .planning-panel {
-  margin: 24px 0;
+  margin: 0 0 16px;
 }
-.free-time {
-  margin: 12px 0;
+.planning-panel .overview-tools {
+  margin: 0;
+  gap: 8px 12px;
 }
-.free-slots {
-  display: flex;
+.planning-panel .overview-tools label {
   flex-wrap: wrap;
-  gap: 10px;
 }
-.free-slots > span {
-  padding: 8px 12px;
-  border-radius: 10px;
+.deadline-page .page-heading {
+  margin-bottom: 18px;
+}
+.deadline-page .page-heading button[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+.deadline-list {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+}
+.deadline-filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.deadline-filters select {
+  width: auto;
+  flex-shrink: 0;
+}
+.deadline-search {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+.deadline-search svg {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+.deadline-search input {
+  min-width: 0;
+}
+.deadline-group {
+  padding: 0 14px 8px;
+}
+.deadline-group + .deadline-group {
+  border-top: 1px solid var(--line);
+}
+.deadline-group h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 4px;
+  font-size: 14px;
+}
+.deadline-group h2 span {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.deadline-group.overdue h2 {
+  color: #ad3d54;
+}
+:root[data-theme="dark"] .deadline-group.overdue h2 {
+  color: #ff9bab;
+}
+.deadline-group .overview-items {
+  gap: 0;
+}
+.deadline-group .overview-event {
+  background: transparent;
+  border-color: transparent;
+}
+.deadline-group .overview-event:hover {
   background: var(--accent-soft);
+}
+.deadline-group .overview-event + .overview-event {
+  border-top-color: var(--line);
+}
+.deadline-empty {
+  margin: 0;
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--muted);
 }
 .timetable-panel .week-headers {
   position: sticky;
@@ -149,4 +235,34 @@
 }
 .timetable-panel .session-card strong {
   overflow-wrap: anywhere;
+}
+
+.overview-event .overview-event-copy strong {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.overview-event-copy small {
+  overflow-wrap: anywhere;
+}
+.overview-tools label.overview-checkbox {
+  flex-direction: row;
+  justify-content: flex-start;
+  white-space: nowrap;
+}
+.overview-checkbox input {
+  margin: 0;
+}
+.overview-card progress {
+  appearance: none;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--line);
+}
+.overview-card progress::-webkit-progress-bar {
+  background: var(--line);
+}
+.overview-card progress::-webkit-progress-value {
+  background: var(--accent);
 }
