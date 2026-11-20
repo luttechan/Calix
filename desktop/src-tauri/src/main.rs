@@ -127,11 +127,11 @@ fn verify_taskbar_identity(app: &tauri::App, title: &str) -> Result<String, Stri
         .skip_taskbar(true)
         .build()
         .map_err(|error| error.to_string())?;
-    let result = probe.hwnd().map_err(|error| error.to_string()).and_then(|hwnd| {
+    // The hidden probe stays open until the self-check exits the application.
+    // Destroying the only window here could end the event loop before the WebView check starts.
+    probe.hwnd().map_err(|error| error.to_string()).and_then(|hwnd| {
         taskbar::verify_identity(windows::Win32::Foundation::HWND(hwnd.0), &app.config().identifier, title)
-    });
-    let _ = probe.destroy();
-    result
+    })
 }
 
 #[tauri::command]
