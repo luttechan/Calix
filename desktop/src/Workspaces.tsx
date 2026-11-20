@@ -604,7 +604,6 @@ export function SettingsPage() {
         {categories.map(([id, label, Icon], index) => (
           <button
             key={id}
-            className={id === "dev" ? "settings-tab-dev" : undefined}
             id={`settings-tab-${id}`}
             role="tab"
             aria-selected={category === id}
