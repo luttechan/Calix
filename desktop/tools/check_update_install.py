@@ -57,7 +57,7 @@ def main():
         raise RuntimeError(
             "Installer registry tests are restricted to disposable Windows CI runners"
         )
-    setup = ROOT / "desktop/.build/packages/Calix-1.6.20-Setup-x64.exe"
+    setup = ROOT / "desktop/.build/packages/Calix-1.6.30-Setup-x64.exe"
     expected = ROOT / "desktop/src-tauri/target/release/calix-desktop.exe"
     # NSIS changes the Tauri marker when embedding the UI into its payload.
     expected_ui = expected.read_bytes().replace(
@@ -86,7 +86,7 @@ def main():
             winreg.HKEY_CURRENT_USER, UNINSTALL, 0, winreg.KEY_SET_VALUE
         ) as key:
             # Same-version passive reinstall exercises the old uninstaller path.
-            winreg.SetValueEx(key, "DisplayVersion", 0, winreg.REG_SZ, "1.6.20")
+            winreg.SetValueEx(key, "DisplayVersion", 0, winreg.REG_SZ, "1.6.30")
         data = Path(os.environ["APPDATA"]) / "LutteLaurent/Calix"
         data.mkdir(parents=True, exist_ok=True)
         sentinel = data / "installer-preserve-check.txt"
@@ -128,6 +128,8 @@ def main():
         )
         if any(not path.is_file() or digest(path) != checksum for path, checksum in before.items()):
             raise RuntimeError("Setup modified user data")
+        obsolete_runtime.parent.mkdir(parents=True, exist_ok=True)
+        obsolete_runtime.write_bytes(b"obsolete runtime from before the in-app update")
         # Run the exact packaged --utility install path, including the parent wait
         # and PyInstaller DLL environment, without touching a real user's registry.
         with tempfile.TemporaryDirectory(prefix="Calix-update-") as update_folder:
@@ -208,6 +210,8 @@ def main():
                 or (target / "calix-desktop.exe").read_bytes() != expected_ui
             ):
                 raise RuntimeError("In-app same-version reinstall failed")
+            if obsolete_runtime.exists() or not unrelated.is_file():
+                raise RuntimeError("In-app update did not clean obsolete runtime files safely")
         for path in (sentinel, settings, profile):
             if not path.is_file() or digest(path) != before[path]:
                 raise RuntimeError("Update modified user data")

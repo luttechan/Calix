@@ -351,13 +351,31 @@ Function CalixRemovePreviousInstallation
     ; https://nsis.sourceforge.io/Docs/Chapter3.html#:~:text=path%20contains%20spaces.-,3.2.3%20Examples,-installer.exe%20/NCRC
     ${If} $WixMode = 0
     ${AndIf} $4 != ""
+      ; The frozen update launcher exits just after starting Setup.
+      ; Give Windows time to release its executable before removing the runtime.
+      StrCpy $1 20
+      ${DoWhile} ${FileExists} "$4\calix-engine.exe"
+        Delete "$4\calix-engine.exe"
+        ${IfNot} ${FileExists} "$4\calix-engine.exe"
+          ${ExitDo}
+        ${EndIf}
+        IntOp $1 $1 - 1
+        ${If} $1 = 0
+          ${ExitDo}
+        ${EndIf}
+        Sleep 250
+      ${Loop}
+      ${If} ${FileExists} "$4\calix-engine.exe"
+        MessageBox MB_ICONEXCLAMATION "$(unableToUninstall)"
+        SetErrorLevel 2
+        Quit
+      ${EndIf}
       ; Old uninstallers only remove the files listed in their bundle.
       ; _internal is the packaged engine runtime. Leave other files alone.
       Push "$4\_internal"
       Call CalixRemoveTree
       Delete "$4\uninstall.exe"
       ${If} ${FileExists} "$4\_internal"
-      ${OrIf} ${FileExists} "$4\calix-engine.exe"
       ${OrIf} ${FileExists} "$4\uninstall.exe"
         MessageBox MB_ICONEXCLAMATION "$(unableToUninstall)"
         SetErrorLevel 2
@@ -657,6 +675,7 @@ SectionEnd
 Section Install
   ReadRegStr $CalixPreviousDisplayName SHCTX "${UNINSTKEY}" "DisplayName"
   Call FindWixInstall
+  StrCpy $WixMode 0
   ${If} $R6 != ""
     StrCpy $WixMode 1
   ${Else}
@@ -666,9 +685,9 @@ Section Install
   ${If} $ReinstallPageCheck = 3
     Call CalixChooseSideBySideLocation
   ${ElseIf} $WixMode = 1
-    Call CalixRemovePreviousInstallation
-  ${ElseIf} $UpdateMode <> 1
-  ${AndIf} $CalixPreviousLocation != ""
+  ${OrIf} $CalixPreviousLocation != ""
+    ; In-app updates must remove obsolete bundle files too. The old
+    ; uninstaller receives /UPDATE to preserve user data and shortcuts.
     Call CalixRemovePreviousInstallation
   ${EndIf}
   ${If} $ReinstallPageCheck = 2

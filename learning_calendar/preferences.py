@@ -80,7 +80,7 @@ def read_settings(path: str | Path) -> dict:
                 defaults["avatar"] = validate_avatar(settings.get("avatar", ""))
             except ValueError:
                 pass
-            if settings.get("theme") in ("pink", "sky", "mint", "purple", "dark"):
+            if settings.get("theme") in ("pink", "sky", "mint", "purple", "dark", "peach", "amber", "olive", "lavender"):
                 defaults["theme"] = settings["theme"]
             if settings.get("font_mode") in ("pretendard", "windows"):
                 defaults["font_mode"] = settings["font_mode"]

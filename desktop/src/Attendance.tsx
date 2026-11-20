@@ -24,7 +24,7 @@ const labels: Record<string, string> = {
   attendance: "출석",
   late: "지각",
   absent: "결석",
-  excused: "출석 인정",
+  excused: "공결",
   none: "미확인",
   unknown: "미확인",
 };
@@ -152,15 +152,13 @@ export function AttendancePage() {
         </p>
       )}
       <div className="attendance-summary">
-        {["attendance", "late", "absent", "none"].map((s) => (
-          <div className="glass" key={s}>
+        {["attendance", "excused", "late", "absent", "none"].map((s) => (
+          <div className={`glass attendance-total ${s}`} key={s}>
             <span>{labels[s]}</span>
             <strong>
               {
                 selected.filter((r) =>
-                  s === "attendance"
-                    ? ["attendance", "excused"].includes(r.status)
-                    : s === "none"
+                  s === "none"
                       ? ["none", "unknown"].includes(r.status)
                       : r.status === s,
                 ).length

@@ -4,6 +4,7 @@ export function useTimetableScale(
   end: number,
   reserved = 0,
   ready = true,
+  fixedUnit = 0,
 ) {
   const panel = useRef<HTMLElement>(null),
     [unit, setUnit] = useState(64);
@@ -18,7 +19,7 @@ export function useTimetableScale(
         const available =
           bottom - panel.current.getBoundingClientRect().top - 80 - reserved;
         const hours = Math.max(1, (end - start) / 60);
-        const next = Math.max(20, Math.min(64, available / hours));
+        const next = fixedUnit || Math.max(40, Math.min(64, available / hours));
         setUnit((previous) =>
           Math.abs(previous - next) > 0.2 ? next : previous,
         );
@@ -34,6 +35,6 @@ export function useTimetableScale(
       observer.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [start, end, reserved, ready]);
+  }, [start, end, reserved, ready, fixedUnit]);
   return { panel, unit, height: ((end - start) / 60) * unit };
 }
