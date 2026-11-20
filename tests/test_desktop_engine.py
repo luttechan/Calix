@@ -52,7 +52,7 @@ def test_sync_completion_sound_preferences(engine):
 
 
 def test_release_164_follows_legacy_revision_labels():
-    tags = ["1.6.2", "v1.6.30", "v1.6.31", "v1.6.32", "v1.6.4"]
+    tags = ["1.6.2", "v1.6.30", "v1.6.31", "v1.6.32", "v1.6.4", "v1.7.0"]
     assert sorted(tags, key=version_key) == tags
 
 
@@ -60,7 +60,7 @@ def test_bootstrap_json_never_loads_qt_widgets_or_private_diary(engine):
     data = engine.dispatch("bootstrap", {})
     json.dumps(data, ensure_ascii=False)
     assert (
-        data["version"] == "1.6.4"
+        data["version"] == "1.7.0"
         and len(data["events"]) == 2
         and not data["tasks"]
         and engine.vault is None
@@ -209,7 +209,7 @@ def test_stdio_round_trip_and_clean_exit_use_temporary_data(tmp_path):
     )
     assert result.returncode == 0, result.stderr
     messages = [json.loads(line) for line in result.stdout.splitlines()]
-    assert next(r for r in messages if r.get("id") == 1)["result"]["version"] == "1.6.4"
+    assert next(r for r in messages if r.get("id") == 1)["result"]["version"] == "1.7.0"
 
 
 def test_quit_exits_cleanly_while_host_keeps_stdin_open(tmp_path):
