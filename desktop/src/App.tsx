@@ -57,6 +57,7 @@ import { ProtectedSection, SecurityMonitor, UnlockView } from "./Security";
 import { UpdateDialog } from "./UpdateDialog";
 import { WindowControls } from "./WindowControls";
 import { rpc, subscribe, stopEngine } from "./bridge";
+import { DateField } from "./ChecklistDeadline";
 import {
   dateKey,
   dueText,
@@ -123,6 +124,7 @@ export function Modal({
       className={["modal", wide && "wide", className].filter(Boolean).join(" ")}
       onCancel={(e) => {
         e.preventDefault();
+        e.stopPropagation();
         onClose();
       }}
     >
@@ -1623,20 +1625,20 @@ function EventDetails({
             />
           </label>
           <div className="detail-due">
-            <CalendarDays size={17} />
             {event.manual ? (
-              <input
-                type="datetime-local"
-                aria-label="기한"
+              <DateField
+                label="기한"
                 value={due}
                 disabled={saving}
-                onChange={(e) => {
-                  setDue(e.target.value);
+                withTime
+                allowClear
+                onChange={(value) => {
+                  setDue(value);
                   setDirty(true);
                 }}
               />
             ) : (
-              dueText(event.due_at)
+              <><CalendarDays size={17} />{dueText(event.due_at)}</>
             )}
           </div>
           {event.kind === "assignment" && event.completed && event.lms_data && (
@@ -1887,11 +1889,7 @@ function AddEvent({
         </div>
         <label>
           기한
-          <input
-            type="datetime-local"
-            name="due"
-            defaultValue={`${initialDate}T23:59`}
-          />
+          <DateField label="기한" name="due" defaultValue={`${initialDate}T23:59`} withTime allowClear disabled={saving} />
         </label>
         <label>
           메모

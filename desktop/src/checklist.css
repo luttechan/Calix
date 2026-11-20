@@ -22,7 +22,12 @@
 .deadline-calendar-days [aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); font-weight: 700; opacity: 1; }
 .deadline-editor-fields { display: grid; grid-template-columns: minmax(0, 1fr) 61px 61px; gap: 8px; border-top: 1px solid var(--line); margin-top: 14px; padding-top: 12px; }
 .deadline-editor-fields label { margin: 0; gap: 4px; }
-.checklist-table .deadline-editor-fields input { min-height: 38px; padding: 7px 11px; border-color: var(--ui-border); background: var(--ui-field); }
+.deadline-editor .deadline-editor-fields input { min-height: 38px; padding: 7px 11px; border-color: var(--ui-border); background: var(--ui-field); font-size: 13px; }
+.deadline-editor-fields.date-only { grid-template-columns: minmax(0, 1fr); }
 .deadline-editor-fields input[aria-invalid="true"] { border-color: #b54157; }
 .deadline-actions { justify-content: end; }
 .deadline-actions .text-button { margin-inline-end: auto; }
+.date-field { width: 100%; min-height: 40px; justify-content: flex-start; gap: 9px; background: var(--ui-field); border-color: var(--ui-border); font-variant-numeric: tabular-nums; }
+.date-field svg { color: var(--accent); flex: none; }
+.date-field span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.detail-due .date-field, .journal-meta .date-field { width: auto; max-width: 100%; }

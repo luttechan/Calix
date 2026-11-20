@@ -16,7 +16,7 @@ import {
 import { Modal, TypeBadge, useCalix } from "./App";
 import { rpc } from "./bridge";
 import { InlineCell } from "./InlineCell";
-import { ChecklistDeadline } from "./ChecklistDeadline";
+import { ChecklistDeadline, DateField } from "./ChecklistDeadline";
 import { useChecklistWidths } from "./checklistWidths";
 import { isTauri, invoke } from "@tauri-apps/api/core";
 import { UpdateDialog } from "./UpdateDialog";
@@ -901,12 +901,7 @@ export function SettingsPage() {
           >
             <label>
               날짜
-              <input
-                type="date"
-                name="date"
-                defaultValue={dateKey()}
-                required
-              />
+              <DateField label="공휴일 날짜" name="date" defaultValue={dateKey()} />
             </label>
             <label>
               이름
@@ -959,7 +954,7 @@ export function SettingsPage() {
         </Modal>
       )}
       {special && (
-        <Modal title="특수 일정 등록" onClose={() => setSpecial(false)}>
+        <Modal title="특수 일정 등록" className="settings-choice-dialog" onClose={() => setSpecial(false)}>
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -972,24 +967,19 @@ export function SettingsPage() {
                 .catch(() => {});
             }}
           >
-            <label className="checkbox-label">
-              <input
-                name="catholic"
-                type="checkbox"
-                defaultChecked={data.preferences.catholic}
-              />
-              가톨릭 일정
-            </label>
-            <label className="checkbox-label">
-              <input
-                name="birthday"
-                type="checkbox"
-                defaultChecked={data.preferences.birthday}
-              />
-              ???
-            </label>
+            <div className="settings-choice-list">
+              <label className="menu-option">
+                <strong>가톨릭 일정</strong>
+                <input name="catholic" type="checkbox" role="switch" defaultChecked={data.preferences.catholic} />
+              </label>
+              <label className="menu-option">
+                <strong>???</strong>
+                <input name="birthday" type="checkbox" role="switch" defaultChecked={data.preferences.birthday} />
+              </label>
+            </div>
             <div className="dialog-actions">
               <span />
+              <button type="button" onClick={() => setSpecial(false)}>취소</button>
               <button className="primary">저장</button>
             </div>
           </form>

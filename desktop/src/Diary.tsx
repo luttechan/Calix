@@ -18,6 +18,7 @@ import {
 import { Modal, useCalix } from "./App";
 import { rpc } from "./bridge";
 import { dateKey } from "./dates";
+import { DateField } from "./ChecklistDeadline";
 import type { Summary, Journal } from "./types";
 export function DiaryPage({ active = true }: { active?: boolean }) {
   const { data, notify, leave, mutate, soundError } = useCalix();
@@ -324,13 +325,12 @@ export function DiaryPage({ active = true }: { active?: boolean }) {
           </aside>
           <div className="journal-paper">
             <div className="journal-meta">
-              <input
+              <DateField
                 disabled={busy}
-                aria-label="일기 날짜"
-                type="date"
+                label="일기 날짜"
                 value={date}
-                onChange={(e) => {
-                  setDate(e.target.value);
+                onChange={(value) => {
+                  setDate(value);
                   setDirty(true);
                   dirtyRef.current = true;
                 }}

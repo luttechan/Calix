@@ -3589,6 +3589,10 @@ body.reminder-surface {
 .menu-option small {
   display: block;
 }
+.settings-choice-dialog.modal { width: min(410px, calc(100vw - 32px)); }
+.settings-choice-list { border: 1px solid var(--line); border-radius: 12px; background: var(--ui-panel); }
+.settings-choice-list .menu-option { margin: 0; padding: 13px 15px; }
+.settings-choice-dialog .dialog-actions { margin-top: 16px; }
 .menu-option small {
   margin-top: 4px;
   color: var(--muted);

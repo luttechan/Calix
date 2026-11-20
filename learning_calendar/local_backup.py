@@ -365,7 +365,9 @@ def read_backup(path, owner="", password=None):
             _string(term, 40, False)
             if term_names is not None and term not in term_names:
                 raise ValueError("Canvas 과목의 학기를 확인하세요.")
-            for course_id in _list(ids, 5000):
+            if not isinstance(ids, list) or len(ids) > 5000:
+                raise ValueError("복원할 Canvas 과목 목록을 확인하세요.")
+            for course_id in ids:
                 if type(course_id) is not int or course_id not in courses:
                     raise ValueError("복원할 Canvas 과목을 확인하세요.")
         seen = set()
