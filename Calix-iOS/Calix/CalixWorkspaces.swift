@@ -4,6 +4,8 @@ struct CalixChecklist: View {
     let library: CalixLibrary
     @State private var editing: CalixTask?
     @State private var search = ""
+    @State private var importEvents = false
+    private let statuses = ["계획", "진행중", "검토중", "완료", "취소"]
 
     var body: some View {
         let visible = library.data.tasks.filter { search.isEmpty || $0.title.localizedCaseInsensitiveContains(search) }
@@ -12,15 +14,18 @@ struct CalixChecklist: View {
             ForEach(groups.keys.sorted(), id: \.self) { section in
                 Section(section) {
                     ForEach(groups[section, default: []]) { task in
-                        Button {
-                            library.update { data in
-                                if let index = data.tasks.firstIndex(where: { $0.id == task.id }) { data.tasks[index].done.toggle() }
-                            }
-                        } label: { Label(task.title, systemImage: task.done ? "checkmark.circle.fill" : "circle") }
-                            .swipeActions(edge: .leading) { Button("편집") { editing = task } }
-                            .swipeActions {
-                                Button("삭제", role: .destructive) { library.update { $0.tasks.removeAll { $0.id == task.id } } }
-                            }
+                        Button { editing = task } label: {
+                            Label {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(task.title).foregroundStyle(.primary)
+                                    Text(task.status ?? (task.done ? "완료" : "계획")).font(.caption).foregroundStyle(.secondary)
+                                }
+                            } icon: { Image(systemName: task.done ? "checkmark.circle.fill" : "circle") }
+                        }
+                        .swipeActions(edge: .leading) { Button(task.done ? "완료 취소" : "완료") { toggle(task) } }
+                        .swipeActions {
+                            Button("삭제", role: .destructive) { library.update { $0.tasks.removeAll { $0.id == task.id } } }
+                        }
                     }
                 }
             }
@@ -28,19 +33,64 @@ struct CalixChecklist: View {
         }
         .navigationTitle("체크리스트")
         .searchable(text: $search)
-        .toolbar { Button { editing = CalixTask() } label: { Label("할 일 추가", systemImage: "plus") } }
+        .toolbar {
+            Button { importEvents = true } label: { Label("일정에서 가져오기", systemImage: "square.and.arrow.down") }
+            Button { editing = CalixTask() } label: { Label("할 일 추가", systemImage: "plus") }
+        }
+        .sheet(isPresented: $importEvents) {
+            NavigationStack {
+                let sources = Set(library.data.tasks.compactMap(\.sourceID))
+                List {
+                    ForEach(library.data.events.filter { !sources.contains($0.id) }) { source in
+                        Button {
+                            library.update { data in
+                                if !data.tasks.contains(where: { $0.sourceID == source.id }) {
+                                    data.tasks.append(CalixTask(title: source.title, section: source.course.isEmpty ? "기본" : source.course,
+                                                                done: source.done, due: source.due, note: source.note, sourceID: source.id))
+                                }
+                            }
+                        } label: { Label(source.title, systemImage: source.kind.symbol) }
+                    }
+                }
+                .navigationTitle("일정에서 가져오기")
+                .toolbar { Button("닫기") { importEvents = false } }
+            }
+        }
         .sheet(item: $editing) { item in
             EditForm(title: "할 일", initial: item, valid: { !$0.title.trimmed.isEmpty }) { draft in
                 TextField("제목", text: draft.title)
                 TextField("목록 이름", text: draft.section)
-                Toggle("완료", isOn: draft.done)
+                Picker("상태", selection: Binding(get: { draft.wrappedValue.status ?? (draft.wrappedValue.done ? "완료" : "계획") }, set: { draft.wrappedValue.status = $0 })) {
+                    ForEach(statuses, id: \.self) { Text($0).tag($0) }
+                }
+                Toggle("마감 설정", isOn: Binding(get: { draft.wrappedValue.due != nil }, set: { draft.wrappedValue.due = $0 ? .now : nil }))
+                if draft.wrappedValue.due != nil {
+                    DatePicker("마감", selection: Binding(get: { draft.wrappedValue.due ?? .now }, set: { draft.wrappedValue.due = $0 }))
+                }
+                TextField("담당", text: optionalText(draft.role))
+                TextField("교수", text: optionalText(draft.instructor))
+                TextField("메모", text: optionalText(draft.note), axis: .vertical)
             } save: { item in
                 var item = item
                 item.title = item.title.trimmed
                 item.section = item.section.trimmed.isEmpty ? "기본" : item.section.trimmed
+                if let status = item.status { item.done = status == "완료" }
                 return library.update { $0.tasks.replace(item) }
             }
         }
+    }
+
+    private func toggle(_ task: CalixTask) {
+        library.update { data in
+            if let index = data.tasks.firstIndex(where: { $0.id == task.id }) {
+                data.tasks[index].done.toggle()
+                data.tasks[index].status = data.tasks[index].done ? "완료" : "계획"
+            }
+        }
+    }
+
+    private func optionalText(_ value: Binding<String?>) -> Binding<String> {
+        Binding(get: { value.wrappedValue ?? "" }, set: { value.wrappedValue = $0 })
     }
 }
 
@@ -182,22 +232,30 @@ struct CalixGrades: View {
 
     var body: some View {
         let selected = term ?? library.data.preferences.mainTerm
-        let scale = library.data.preferences.gradeScale
+        let scale = library.data.gradeScales?[selected] ?? library.data.preferences.gradeScale
         let items = library.data.grades.filter { $0.term == selected }
         let terms = Set(library.data.grades.map(\.term) + [selected, library.data.preferences.mainTerm]).sorted()
-        let credits = items.filter { gradePoints($0.mark, scale: scale) != nil }.reduce(0.0) { $0 + $1.credits }
-        let points = items.reduce(0.0) { $0 + (gradePoints($1.mark, scale: scale) ?? 0) * $1.credits }
+        let included = items.filter { $0.excluded != true }
+        let credits = included.filter { gradePoints($0.mark, scale: scale) != nil }.reduce(0.0) { $0 + $1.credits }
+        let points = included.reduce(0.0) { $0 + (gradePoints($1.mark, scale: scale) ?? 0) * $1.credits }
         Group {
             if authorized {
                 List {
                     Picker("학기", selection: Binding(get: { selected }, set: { term = $0 })) {
                         ForEach(terms, id: \.self) { Text($0).tag($0) }
                     }
-                    Picker("평점 기준", selection: Binding(get: { scale }, set: { value in library.update { $0.preferences.gradeScale = value } })) {
+                    Picker("평점 기준", selection: Binding(get: { scale }, set: { value in
+                        library.update {
+                            var scales = $0.gradeScales ?? [:]
+                            scales[selected] = value
+                            $0.gradeScales = scales
+                        }
+                    })) {
                         ForEach([4.5, 4.3, 4.0], id: \.self) { Text($0.formatted(.number.precision(.fractionLength(1)))).tag($0) }
                     }
                     LabeledContent("평균 평점", value: credits > 0 ? (points / credits).formatted(.number.precision(.fractionLength(2))) : "–")
-                    LabeledContent("등록 학점", value: items.reduce(0.0) { $0 + $1.credits }.formatted())
+                    LabeledContent("등록 학점", value: included.reduce(0.0) { $0 + $1.credits }.formatted())
+                    LabeledContent("취득 학점", value: included.filter { $0.mark == "P" || (gradePoints($0.mark, scale: scale) ?? 0) > 0 }.reduce(0.0) { $0 + $1.credits }.formatted())
                     ForEach(items.filter { search.isEmpty || $0.title.localizedCaseInsensitiveContains(search) }.sorted { $0.title < $1.title }) { item in
                         Button { editing = item } label: { LabeledContent(item.title, value: "\(item.mark) · \(item.credits.formatted())학점") }
                             .swipeActions { Button("삭제", role: .destructive) { library.update { $0.grades.removeAll { $0.id == item.id } } } }
@@ -216,8 +274,13 @@ struct CalixGrades: View {
                 TextField("과목", text: draft.title)
                 TextField("학기", text: draft.term)
                 Stepper("\(draft.wrappedValue.credits.formatted())학점", value: draft.credits, in: 0...30, step: 0.5)
+                Picker("분류", selection: Binding(get: { draft.wrappedValue.category ?? "일반" }, set: { draft.wrappedValue.category = $0 })) {
+                    ForEach(["일반", "교양", "전공"], id: \.self) { Text($0).tag($0) }
+                }
+                Toggle("평점에서 제외", isOn: Binding(get: { draft.wrappedValue.excluded == true }, set: { draft.wrappedValue.excluded = $0 }))
                 Picker("성적", selection: draft.mark) {
-                    ForEach(gradeMarks, id: \.self) { Text($0).tag($0) }
+                    Text("미입력").tag("")
+                    ForEach(gradeMarks.filter { scale != 4.5 || !$0.hasSuffix("-") || draft.wrappedValue.mark == $0 }, id: \.self) { Text($0).tag($0) }
                 }
             } save: { item in
                 var item = item

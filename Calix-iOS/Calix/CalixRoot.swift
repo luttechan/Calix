@@ -81,6 +81,19 @@ struct CalixHome: View {
                     if today.isEmpty && overdue.isEmpty { Text("오늘 확인할 일정이 없습니다.").foregroundStyle(.secondary) }
                     ForEach((overdue + today).prefix(5)) { EventLink(id: $0.id, library: library) }
                 }
+                Section {
+                    NavigationLink {
+                        CalixCanvas(library: library)
+                    } label: {
+                        Label {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(library.data.canvasID == nil ? "학교 계정 연결" : "학교 동기화")
+                                Text(library.data.lastSync.map { "최근 동기화 " + $0.formatted(.dateTime.month().day().hour().minute()) } ?? "Canvas 과제·영상·출결 가져오기")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                        } icon: { Image(systemName: "arrow.triangle.2.circlepath") }
+                    }
+                }
                 Section("다가오는 일정") {
                     if upcoming.isEmpty { Text("7일 이내 마감 일정이 없습니다.").foregroundStyle(.secondary) }
                     ForEach(upcoming.prefix(5)) { EventLink(id: $0.id, library: library) }
@@ -240,6 +253,11 @@ private struct EventDetails: View {
                 Button("삭제", role: .destructive) {
                     if library.update({ $0.events.removeAll { $0.id == id } }) { dismiss() }
                 }
+                if let series = event.seriesID {
+                    Button("반복 일정 전체 삭제", role: .destructive) {
+                        if library.update({ $0.events.removeAll { $0.seriesID == series } }) { dismiss() }
+                    }
+                }
             }
         }
     }
@@ -254,6 +272,8 @@ private struct EventDetails: View {
 struct EventEditor: View {
     let library: CalixLibrary
     @State var draft: CalixEvent
+    @State private var copies = 1
+    @State private var interval = 7
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -266,6 +286,16 @@ struct EventEditor: View {
                     Toggle("마감 설정", isOn: Binding(get: { draft.due != nil }, set: { draft.due = $0 ? .now : nil }))
                     if draft.due != nil {
                         DatePicker("마감", selection: Binding(get: { draft.due ?? .now }, set: { draft.due = $0 }))
+                        if !library.data.events.contains(where: { $0.id == draft.id }) {
+                            Stepper("반복 횟수 \(copies)회", value: $copies, in: 1...52)
+                            if copies > 1 {
+                                Picker("반복 간격", selection: $interval) {
+                                    Text("매일").tag(1)
+                                    Text("매주").tag(7)
+                                    Text("격주").tag(14)
+                                }
+                            }
+                        }
                     }
                 }
                 TextField("메모", text: $draft.note, axis: .vertical)
@@ -281,7 +311,18 @@ struct EventEditor: View {
                         if let index = data.events.firstIndex(where: { $0.id == draft.id }) {
                             if draft.remote { data.events[index].note = draft.note }
                             else { data.events[index] = draft }
-                        } else if !draft.remote { data.events.append(draft) }
+                        } else if !draft.remote {
+                            guard copies > 1, let date = draft.due else { data.events.append(draft); return }
+                            let series = UUID().uuidString
+                            for index in 0..<copies {
+                                guard let due = Calendar.current.date(byAdding: .day, value: index * interval, to: date) else { continue }
+                                var item = draft
+                                item.id = index == 0 ? draft.id : UUID().uuidString
+                                item.due = due
+                                item.seriesID = series
+                                data.events.append(item)
+                            }
+                        }
                     }) { dismiss() }
                 }.disabled(draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }

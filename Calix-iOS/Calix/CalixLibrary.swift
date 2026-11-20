@@ -18,6 +18,7 @@ struct CalixEvent: Codable, Identifiable, Equatable {
     var manualCompletion: Bool? = nil
     var url: URL? = nil
     var feedback: String? = nil
+    var seriesID: String? = nil
 }
 
 enum EventKind: String, Codable, CaseIterable, Identifiable {
@@ -39,6 +40,12 @@ struct CalixTask: Codable, Identifiable {
     var title = ""
     var section = "기본"
     var done = false
+    var status: String?
+    var due: Date?
+    var note: String?
+    var role: String?
+    var instructor: String?
+    var sourceID: String?
 }
 
 struct CalixLesson: Codable, Identifiable {
@@ -59,6 +66,8 @@ struct CalixGrade: Codable, Identifiable {
     var term = "기본 학기"
     var credits = 3.0
     var mark = "A"
+    var category: String?
+    var excluded: Bool?
 }
 
 struct CalixJournal: Codable, Identifiable {
@@ -131,6 +140,7 @@ struct CalixData: Codable {
     var tasks: [CalixTask] = []
     var lessons: [CalixLesson] = []
     var grades: [CalixGrade] = []
+    var gradeScales: [String: Double]?
     var journals: [CalixJournal] = []
     var focusHistory: [CalixFocusRecord] = []
     var focus: CalixFocus?

@@ -210,7 +210,7 @@ private struct CalixSettings: View {
             }
             Section("데이터 관리") {
                 Button("iOS 데이터 백업") { exportBackup() }
-                Button("iOS 백업 가져오기") { backupImport = true }
+                Button("Calix 백업 가져오기") { backupImport = true }
                 Button("기기 데이터 초기화", role: .destructive) { confirmReset = true }
             }
             Section("앱 정보") {
@@ -239,7 +239,7 @@ private struct CalixSettings: View {
             backupDocument = nil
             if case .failure = result { library.issue = "백업을 저장하지 못했습니다." }
         }
-        .fileImporter(isPresented: $backupImport, allowedContentTypes: [.json]) { result in restoreBackup(result) }
+        .fileImporter(isPresented: $backupImport, allowedContentTypes: [.data]) { result in restoreBackup(result) }
         .confirmationDialog("학교 계정에서 로그아웃할까요?", isPresented: $confirmSignOut, titleVisibility: .visible) {
             Button("로그아웃하고 학교 데이터 지우기", role: .destructive) {
                 if library.update({ data in
@@ -306,21 +306,40 @@ private struct CalixSettings: View {
             let accessible = url.startAccessingSecurityScopedResource()
             defer { if accessible { url.stopAccessingSecurityScopedResource() } }
             let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-            guard size > 0, size < 12_000_000 else { throw CocoaError(.fileReadCorruptFile) }
-            let imported = try JSONDecoder().decode(CalixData.self, from: Data(contentsOf: url))
+            guard size > 0, size < 32 * 1024 * 1024 else { throw CocoaError(.fileReadCorruptFile) }
+            let bytes = try Data(contentsOf: url)
+            let windows = url.pathExtension.lowercased() == "calix"
+            let imported = try windows ? DesktopBackup.read(bytes) : JSONDecoder().decode(CalixData.self, from: bytes)
             guard imported.version == 1, imported.lessons.allSatisfy({ (1...7).contains($0.weekday) && (0..<1440).contains($0.start) && (0..<1440).contains($0.end) && ($0.online || $0.start < $0.end) }) else {
                 throw CocoaError(.fileReadCorruptFile)
             }
-            library.update { data in
-                for var item in imported.events where !item.remote { item.url = nil; item.feedback = nil; data.events.replace(item) }
-                for item in imported.tasks { data.tasks.replace(item) }
-                for item in imported.lessons { data.lessons.replace(item) }
-                for item in imported.journals where !item.secret { data.journals.replace(item) }
-                for item in imported.focusHistory where item.seconds > 0 { data.focusHistory.replace(item) }
-                data.holidays.merge(imported.holidays) { _, latest in latest }
-                data.offDays.merge(imported.offDays) { _, latest in latest }
+            Task {
+                if windows && !imported.grades.isEmpty {
+                    guard await library.authenticate("백업의 학점 정보를 가져옵니다.") else { return }
+                }
+                if library.update({ data in
+                    for var item in imported.events where !item.remote { item.url = nil; item.feedback = nil; data.events.replace(item) }
+                    for item in imported.tasks { data.tasks.replace(item) }
+                    for item in imported.lessons { data.lessons.replace(item) }
+                    for item in imported.journals where !item.secret { data.journals.replace(item) }
+                    for item in imported.focusHistory where item.seconds > 0 { data.focusHistory.replace(item) }
+                    data.holidays.merge(imported.holidays) { _, latest in latest }
+                    data.offDays.merge(imported.offDays) { _, latest in latest }
+                    if windows {
+                        for item in imported.grades { data.grades.replace(item) }
+                        data.gradeScales = (data.gradeScales ?? [:]).merging(imported.gradeScales ?? [:]) { _, latest in latest }
+                    } else {
+                        data.preferences.nickname = imported.preferences.nickname
+                        data.preferences.homeMessage = imported.preferences.homeMessage
+                        data.preferences.theme = imported.preferences.theme
+                        data.preferences.focusMessage = imported.preferences.focusMessage
+                        data.preferences.focusDoneMessage = imported.preferences.focusDoneMessage
+                        if let avatar = imported.avatar, avatar.count < 1_000_000, UIImage(data: avatar) != nil { data.avatar = avatar }
+                    }
+                }) { library.issue = "기기 데이터에 백업을 병합했습니다." }
             }
-        } catch { library.issue = "Calix iOS 백업을 읽지 못했습니다." }
+        } catch DesktopBackup.Failure.encrypted { library.issue = "암호로 보호된 Windows 백업은 이 버전에서 열 수 없습니다." }
+        catch { library.issue = "Calix 백업을 읽지 못했습니다." }
     }
 }
 
