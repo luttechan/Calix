@@ -3,7 +3,11 @@ import SwiftUI
 struct CalixRoot: View {
     let library: CalixLibrary
     @Environment(\.scenePhase) private var phase
+    #if DEBUG
+    @State private var tab = CalixScreenshot.tab
+    #else
     @State private var tab = 0
+    #endif
 
     var body: some View {
         Group {

@@ -80,7 +80,7 @@
 		CA1100000000000000000011 = { isa = PBXBuildFile; fileRef = CA110000000000000000000E; };
 		CA1100000000000000000012 = {
 			isa = XCBuildConfiguration;
-			buildSettings = { SDKROOT = iphoneos; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; };
+			buildSettings = { SDKROOT = iphoneos; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG; };
 			name = Debug;
 		};
 		CA1100000000000000000013 = {

@@ -13,11 +13,11 @@ permissions:
 
 concurrency:
   group: calix-ios-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   simulator:
-    runs-on: macos-26
+    runs-on: macos-15
     timeout-minutes: 20
     defaults:
       run:
@@ -32,11 +32,15 @@ jobs:
         run: node --test tests/CanvasSync.test.cjs
 
       - name: Build with Xcode
+        id: build
         run: |
           xcodebuild -version
           xcodebuild -project Calix.xcodeproj -scheme Calix -configuration Debug \
             -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/Calix" \
             CODE_SIGNING_ALLOWED=NO build
+          mkdir -p "$RUNNER_TEMP/calix-artifacts"
+          ditto -c -k --keepParent "$RUNNER_TEMP/Calix/Build/Products/Debug-iphonesimulator/Calix.app" \
+            "$RUNNER_TEMP/calix-artifacts/Calix-iOS-Simulator.zip"
 
       - name: Launch on an iPhone simulator
         timeout-minutes: 10
@@ -46,19 +50,22 @@ jobs:
             [.devices | to_entries[] | select(.key | contains(".iOS-"))
              | (.key | split(".iOS-")[1] | split("-") | map(tonumber)) as $runtime
              | .value[] | select(.name | startswith("iPhone")) | {name, udid, runtime: $runtime}]
-            | sort_by([.runtime, .name == "iPhone 17"]) | last | .udid')
+            | sort_by([.name == "iPhone SE (3rd generation)", .runtime]) | last | .udid')
           echo "Selected simulator: $device"
           xcrun simctl boot "$device"
           xcrun simctl bootstatus "$device" -b
           xcrun simctl install "$device" "$app"
           bundle_id=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$app/Info.plist")
-          xcrun simctl launch "$device" "$bundle_id"
-          sleep 3
-          mkdir -p "$RUNNER_TEMP/calix-artifacts"
-          xcrun simctl io "$device" screenshot "$RUNNER_TEMP/calix-artifacts/Calix-iPhone.png"
-          ditto -c -k --keepParent "$app" "$RUNNER_TEMP/calix-artifacts/Calix-iOS-Simulator.zip"
+          xcrun simctl status_bar "$device" override --time '9:41' --dataNetwork wifi --wifiMode active --wifiBars 3 --batteryState unplugged --batteryLevel 100 || true
+          for page in home deadlines courses more; do
+            xcrun simctl terminate "$device" "$bundle_id" || true
+            xcrun simctl launch "$device" "$bundle_id" -calix-screenshot "$page"
+            sleep 3
+            xcrun simctl io "$device" screenshot "$RUNNER_TEMP/calix-artifacts/Calix-$page.png"
+          done
 
       - name: Upload simulator build and screenshot
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: Calix-iOS-Simulator

@@ -167,7 +167,12 @@ final class CalixLibrary {
     private let vault = CalixDisk()
     private var notificationUpdate: Task<Void, Never>?
 
-    init() { reload() }
+    init() {
+        #if DEBUG
+        if CalixScreenshot.page != nil { data = CalixScreenshot.seed(); return }
+        #endif
+        reload()
+    }
 
     func reload() {
         do {
@@ -185,6 +190,9 @@ final class CalixLibrary {
         guard !unavailable, !locked else { return false }
         var updated = data
         change(&updated)
+        #if DEBUG
+        if CalixScreenshot.page != nil { data = updated; return true }
+        #endif
         do {
             try vault.save(updated)
             let schedulesChanged = updated.events != data.events || updated.preferences.notify != data.preferences.notify ||
