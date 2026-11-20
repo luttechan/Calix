@@ -81,6 +81,11 @@ Var NoShortcutMode
 Var WixMode
 Var OldMainBinaryName
 Var CalixPreviousDisplayName
+Var CalixPinnedSource
+Var CalixPurgeCheckbox
+Var CalixPurgeRetained
+Var CalixRetainedParent
+Var CalixRetainedPath
 
 Name "${CALIXDISPLAYNAME}"
 BrandingText "${COPYRIGHT}"
@@ -250,7 +255,9 @@ Function PageReinstall
   ${If} $CalixPreviousLocation == ""
   ${AndIf} $WixMode = 0
   ${AndIf} $CalixHasExistingData = 0
-    Abort
+    ; A previous version may have been archived with no active installation.
+    IfFileExists "$LOCALAPPDATA\Calix*\uninstall.previous" +2
+      Abort
   ${EndIf}
 
   !insertmacro MUI_HEADER_TEXT "Calix 설치" "이전 버전과 데이터 처리 방법을 선택하세요."
@@ -281,11 +288,21 @@ Function PageReinstall
   ${Else}
     ${NSD_Check} $CalixPreserveOption
   ${EndIf}
+  ${NSD_CreateCheckbox} 0 115u 100% 14u "보관된 이전 버전도 정리"
+  Pop $CalixPurgeCheckbox
+  ${If} $CalixPurgeRetained = 1
+    ${NSD_Check} $CalixPurgeCheckbox
+  ${EndIf}
   nsDialogs::Show
 FunctionEnd
 
 Function PageLeaveReinstall
   StrCpy $ReinstallPageCheck 1
+  StrCpy $CalixPurgeRetained 0
+  ${NSD_GetState} $CalixPurgeCheckbox $0
+  ${If} $0 = ${BST_CHECKED}
+    StrCpy $CalixPurgeRetained 1
+  ${EndIf}
   ${NSD_GetState} $CalixResetOption $0
   ${If} $0 = ${BST_CHECKED}
     MessageBox MB_ICONEXCLAMATION|MB_YESNO|MB_DEFBUTTON2 "일정, 학점, 일기, 설정과 비밀번호가 삭제됩니다. 복구할 수 없습니다. 계속하시겠습니까?" IDYES calix_reset_confirmed
@@ -297,6 +314,7 @@ Function PageLeaveReinstall
   ${NSD_GetState} $CalixKeepOption $0
   ${If} $0 = ${BST_CHECKED}
     StrCpy $ReinstallPageCheck 3
+    StrCpy $CalixPurgeRetained 0
   ${EndIf}
 FunctionEnd
 
@@ -794,6 +812,19 @@ Section Install
   WriteRegDWORD SHCTX "${UNINSTKEY}" "NoModify" "1"
   WriteRegDWORD SHCTX "${UNINSTKEY}" "NoRepair" "1"
 
+  StrCpy $CalixPinnedSource $CalixPreviousLocation
+  Call CalixRetargetTaskbarPins
+  ${If} $CalixPurgeRetained = 1
+    ${GetParent} "$INSTDIR" $CalixRetainedParent
+    Call CalixPurgeRetainedVersions
+    ${If} $CalixPreviousLocation != ""
+      ${GetParent} "$CalixPreviousLocation" $CalixRetainedParent
+      Call CalixPurgeRetainedVersions
+    ${EndIf}
+    StrCpy $CalixRetainedParent "$LOCALAPPDATA"
+    Call CalixPurgeRetainedVersions
+  ${EndIf}
+
   ${GetSize} "$INSTDIR" "/M=uninstall.exe /S=0K /G=0" $0 $1 $2
   IntOp $0 $0 + ${ESTIMATEDSIZE}
   IntFmt $0 "0x%08X" $0
@@ -1072,6 +1103,85 @@ Function CalixChooseSideBySideLocation
     IntOp $1 $1 + 1
     StrCpy $INSTDIR "$0\Calix ${VERSION} ($1)"
   ${EndWhile}
+FunctionEnd
+
+Function CalixRetargetTaskbarPins
+  ${If} $CalixPinnedSource == ""
+    Return
+  ${EndIf}
+  Push $0
+  Push $1
+  Push $2
+  Push $3
+  StrCpy $0 "$APPDATA\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar"
+  ClearErrors
+  FindFirst $1 $2 "$0\*.lnk"
+  ${IfNot} ${Errors}
+    ${Do}
+      !insertmacro IsShortcutTarget "$0\$2" "$CalixPinnedSource\${MAINBINARYNAME}.exe"
+      Pop $3
+      ${If} $3 = 1
+        ClearErrors
+        CreateShortcut "$0\$2" "$INSTDIR\${MAINBINARYNAME}.exe" "" "$INSTDIR\${MAINBINARYNAME}.exe" 0 SW_SHOWNORMAL "" "${CALIXDISPLAYNAME}"
+        ${IfNot} ${Errors}
+          !insertmacro SetLnkAppUserModelId "$0\$2"
+          System::Call 'shell32::SHChangeNotify(i 0x2000, i 5, w "$0\$2", p 0)'
+        ${EndIf}
+      ${EndIf}
+      ClearErrors
+      FindNext $1 $2
+    ${LoopUntil} ${Errors}
+    FindClose $1
+  ${EndIf}
+  Pop $3
+  Pop $2
+  Pop $1
+  Pop $0
+FunctionEnd
+
+Function CalixPurgeRetainedVersions
+  ${If} $CalixRetainedParent == ""
+    Return
+  ${EndIf}
+  ClearErrors
+  FindFirst $6 $7 "$CalixRetainedParent\*"
+  ${If} ${Errors}
+    Return
+  ${EndIf}
+  ${Do}
+    GetFullPathName $CalixRetainedPath "$CalixRetainedParent\$7"
+    GetFullPathName $8 "$INSTDIR"
+    System::Call 'kernel32::GetFileAttributesW(w "$CalixRetainedPath") i .r9'
+    IntOp $9 $9 & 0x410
+    ${If} $7 != "."
+    ${AndIf} $7 != ".."
+    ${AndIf} $CalixRetainedPath != $8
+    ${AndIf} $9 = 0x10
+    ${AndIf} ${FileExists} "$CalixRetainedPath\uninstall.previous"
+    ${AndIfNot} ${FileExists} "$CalixRetainedPath\uninstall.exe"
+      ; Setup leaves this marker when the user chooses to keep a copy.
+      ; Never run that old uninstaller: it would modify the current registry.
+      StrCpy $CalixPinnedSource $CalixRetainedPath
+      Call CalixRetargetTaskbarPins
+      Delete "$CalixRetainedPath\${MAINBINARYNAME}.exe"
+      Delete "$CalixRetainedPath\calix-engine.exe"
+      ${IfNot} ${FileExists} "$CalixRetainedPath\${MAINBINARYNAME}.exe"
+      ${AndIfNot} ${FileExists} "$CalixRetainedPath\calix-engine.exe"
+        Push "$CalixRetainedPath\_internal"
+        Call CalixRemoveTree
+        ${IfNot} ${FileExists} "$CalixRetainedPath\_internal"
+          Delete "$CalixRetainedPath\uninstall.previous"
+          RMDir "$CalixRetainedPath"
+        ${EndIf}
+      ${EndIf}
+      ${If} ${FileExists} "$CalixRetainedPath\uninstall.previous"
+        DetailPrint "정리하지 못한 이전 버전: $CalixRetainedPath"
+      ${EndIf}
+    ${EndIf}
+    ClearErrors
+    FindNext $6 $7
+  ${LoopUntil} ${Errors}
+  FindClose $6
 FunctionEnd
 
 Function CalixResetSelectedData
