@@ -1319,6 +1319,11 @@ function EventListPage({
     </>
   );
 }
+const firstCalendarYear = 1900;
+const lastCalendarYear = 2200;
+const calendarYears = Array.from({ length: lastCalendarYear - firstCalendarYear + 1 }, (_, index) => firstCalendarYear + index);
+const calendarMonths = Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, "0"));
+
 function CalendarPage({
   events,
   onAdd,
@@ -1330,6 +1335,14 @@ function CalendarPage({
     [month, setMonth] = useState(dateKey().slice(0, 7)),
     [day, setDay] = useState(dateKey()),
     [kind, setKind] = useState("all");
+  const [year, monthNumber] = month.split("-");
+  const moveMonth = (next: string) => {
+    const [nextYear, nextMonth] = next.split("-").map(Number);
+    const lastDay = new Date(Date.UTC(nextYear, nextMonth, 0)).getUTCDate();
+    const nextDay = Math.min(lastDay, Number(day.slice(8)));
+    setMonth(next);
+    setDay(`${next}-${String(nextDay).padStart(2, "0")}`);
+  };
   const [dates, setDates] = useState({
     holidays: data.holidays,
     specialDates: data.specialDates,
@@ -1339,7 +1352,7 @@ function CalendarPage({
     rpc<{
       holidays: Record<string, string>;
       specialDates: Record<string, string>;
-    }>("calendar.year", { year: Number(month.slice(0, 4)) })
+    }>("calendar.year", { year: Number(year) })
       .then((value) => {
         if (active) setDates(value);
       })
@@ -1349,7 +1362,7 @@ function CalendarPage({
     return () => {
       active = false;
     };
-  }, [month.slice(0, 4), data.holidays, data.specialDates]);
+  }, [year, data.holidays, data.specialDates]);
   const buckets = useMemo(() => {
     const result = new Map<string, EventItem[]>();
     for (const e of events) {
@@ -1363,20 +1376,34 @@ function CalendarPage({
   }, [events, kind]);
   return (
     <>
-      <div className="page-heading">
-        <div>
-          <p className="eyebrow">나의 일정</p>
-          <h1>
-            {Number(month.slice(0, 4))}년 {Number(month.slice(5))}월
-          </h1>
-        </div>
-        <div className="toolbar">
+      <div className="page-heading calendar-heading">
+        <h1>달력</h1>
+        <div className="toolbar calendar-navigation">
           <button
             className="icon-button"
+            aria-label="이전 달"
             title="이전 달"
-            onClick={() => setMonth(shiftMonth(month, -1))}
+            disabled={month === `${firstCalendarYear}-01`}
+            onClick={() => moveMonth(shiftMonth(month, -1))}
           >
             <ChevronLeft size={19} />
+          </button>
+          <div className="calendar-jump">
+            <select aria-label="달력 연도" value={year} onChange={(event) => moveMonth(`${event.target.value}-${monthNumber}`)}>
+              {calendarYears.map((option) => <option key={option} value={option}>{option}년</option>)}
+            </select>
+            <select className="calendar-month" aria-label="달력 월" value={monthNumber} onChange={(event) => moveMonth(`${year}-${event.target.value}`)}>
+              {calendarMonths.map((option) => <option key={option} value={option}>{Number(option)}월</option>)}
+            </select>
+          </div>
+          <button
+            className="icon-button"
+            aria-label="다음 달"
+            title="다음 달"
+            disabled={month === `${lastCalendarYear}-12`}
+            onClick={() => moveMonth(shiftMonth(month, 1))}
+          >
+            <ChevronRight size={19} />
           </button>
           <button
             onClick={() => {
@@ -1385,13 +1412,6 @@ function CalendarPage({
             }}
           >
             오늘
-          </button>
-          <button
-            className="icon-button"
-            title="다음 달"
-            onClick={() => setMonth(shiftMonth(month, 1))}
-          >
-            <ChevronRight size={19} />
           </button>
         </div>
       </div>
