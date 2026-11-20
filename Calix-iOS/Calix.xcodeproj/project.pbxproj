@@ -36,7 +36,7 @@
 		};
 		CA1100000000000000000004 = {
 			isa = PBXGroup;
-			children = (CA110000000000000000000C, CA110000000000000000000D, CA110000000000000000000E, CA1100000000000000000007);
+			children = (CA110000000000000000000C, CA110000000000000000000D, CA110000000000000000000E, CA1100000000000000000019, CA110000000000000000001B, CA110000000000000000001D, CA110000000000000000001F, CA1100000000000000000021, CA1100000000000000000007);
 			path = Calix;
 			sourceTree = "<group>";
 		};
@@ -63,7 +63,7 @@
 		CA110000000000000000000A = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
-			files = (CA110000000000000000000F, CA1100000000000000000010, CA1100000000000000000011);
+			files = (CA110000000000000000000F, CA1100000000000000000010, CA1100000000000000000011, CA110000000000000000001A, CA110000000000000000001C, CA110000000000000000001E, CA1100000000000000000020);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		CA110000000000000000000B = {
@@ -74,7 +74,7 @@
 		};
 		CA110000000000000000000C = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalixApp.swift; sourceTree = "<group>"; };
 		CA110000000000000000000D = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalixSchedule.swift; sourceTree = "<group>"; };
-		CA110000000000000000000E = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalixView.swift; sourceTree = "<group>"; };
+		CA110000000000000000000E = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalixRoot.swift; sourceTree = "<group>"; };
 		CA110000000000000000000F = { isa = PBXBuildFile; fileRef = CA110000000000000000000C; };
 		CA1100000000000000000010 = { isa = PBXBuildFile; fileRef = CA110000000000000000000D; };
 		CA1100000000000000000011 = { isa = PBXBuildFile; fileRef = CA110000000000000000000E; };
@@ -103,11 +103,21 @@
 		CA1100000000000000000016 = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
-			files = (CA1100000000000000000017);
+			files = (CA1100000000000000000017, CA1100000000000000000022);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		CA1100000000000000000017 = { isa = PBXBuildFile; fileRef = CA1100000000000000000007; };
 		CA1100000000000000000018 = { isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Calix.xcconfig; sourceTree = SOURCE_ROOT; };
+		CA1100000000000000000019 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalixLibrary.swift; sourceTree = "<group>"; };
+		CA110000000000000000001A = { isa = PBXBuildFile; fileRef = CA1100000000000000000019; };
+		CA110000000000000000001B = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalixCanvas.swift; sourceTree = "<group>"; };
+		CA110000000000000000001C = { isa = PBXBuildFile; fileRef = CA110000000000000000001B; };
+		CA110000000000000000001D = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalixWorkspaces.swift; sourceTree = "<group>"; };
+		CA110000000000000000001E = { isa = PBXBuildFile; fileRef = CA110000000000000000001D; };
+		CA110000000000000000001F = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalixMore.swift; sourceTree = "<group>"; };
+		CA1100000000000000000020 = { isa = PBXBuildFile; fileRef = CA110000000000000000001F; };
+		CA1100000000000000000021 = { isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = CanvasSync.js; sourceTree = "<group>"; };
+		CA1100000000000000000022 = { isa = PBXBuildFile; fileRef = CA1100000000000000000021; };
 	};
 	rootObject = CA1100000000000000000001;
 }
