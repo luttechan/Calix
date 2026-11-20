@@ -179,6 +179,9 @@ final class CalixLibrary {
             try vault.save(updated)
             let schedulesChanged = updated.events != data.events || updated.preferences.notify != data.preferences.notify ||
                 updated.preferences.notifyMinutes != data.preferences.notifyMinutes || updated.preferences.notifySound != data.preferences.notifySound
+            if let focus = data.focus, updated.focus?.id != focus.id {
+                UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["calix.focus.\(focus.id)"])
+            }
             data = updated
             if schedulesChanged { refreshReminders() }
             return true
@@ -230,13 +233,11 @@ final class CalixLibrary {
     func stopFocus(at date: Date = .now) {
         guard let focus = data.focus else { return }
         let seconds = max(0, Int(date.timeIntervalSince(focus.started)))
-        if update({ draft in
+        update { draft in
             if seconds > 0 {
                 draft.focusHistory.append(CalixFocusRecord(id: focus.id, started: focus.started, seconds: seconds))
             }
             draft.focus = nil
-        }) {
-            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["calix.focus.\(focus.id)"])
         }
     }
 

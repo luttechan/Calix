@@ -108,29 +108,50 @@ if (expectedOwner && owner !== expectedOwner) throw Error("ACCOUNT_CHANGED");
 const courses = await list("/api/v1/courses?enrollment_type=student&enrollment_state=active&per_page=100");
 if (courses.length > 180) throw Error("COURSE_LIMIT");
 
+const readAssignments = async (base) => {
+    const query = "exclude_response_fields[]=description&override_assignment_dates=true&per_page=100";
+    try {
+        const result = await list(base + "/assignments?include[]=submission&" + query);
+        if (result.length) return result;
+        try {
+            const groups = await list(base + "/assignment_groups?include[]=assignments&" + query);
+            return groups.flatMap((group) => Array.isArray(group.assignments) ? group.assignments : []);
+        } catch { return result; }
+    } catch {
+        const groups = await list(base + "/assignment_groups?include[]=assignments&" + query);
+        return groups.flatMap((group) => Array.isArray(group.assignments) ? group.assignments : []);
+    }
+};
+
 const gather = async (row) => {
     const courseID = id(row?.id);
     if (!courseID) throw Error("INVALID_COURSE");
     const name = clip(row.name || row.course_code) || `과목 ${courseID}`;
     const base = `/api/v1/courses/${courseID}`;
     const learning = `/learningx/api/v1/courses/${courseID}`;
-    const [assigned, videos, attendance] = await Promise.allSettled([
-        list(base + "/assignments?include[]=submission&exclude_response_fields[]=description&override_assignment_dates=true&per_page=100"),
+    const [assigned, videos, attendance, submissions] = await Promise.allSettled([
+        readAssignments(base),
         request(learning + "/modules?include_detail=true", true).then((response) => readVideos(name, courseID, response.data)),
-        includeAttendance ? readAttendance(name, courseID, learning) : Promise.resolve(null)
+        includeAttendance ? readAttendance(name, courseID, learning) : Promise.resolve(null),
+        list(base + `/students/submissions?student_ids[]=${owner}&include[]=submission_comments&include[]=rubric_assessment&per_page=100`)
     ]);
+    const enriched = submissions.status === "fulfilled" ? new Map(submissions.value.filter((row) => id(row.user_id) === owner)
+        .map((row) => [id(row.assignment_id), row])) : new Map();
     const assignments = assigned.status === "fulfilled" ? assigned.value.flatMap((item) => {
         const assignmentID = id(item?.id);
         if (!assignmentID || !item.name || item.published === false) return [];
-        const submission = item.submission;
+        const submission = enriched.get(assignmentID) || item.submission;
         const workflow = clip(submission?.workflow_state, 40);
         const labels = [];
         if (submission?.missing) labels.push("미제출");
         if (submission?.late) labels.push("지각 제출");
         if (workflow === "graded") labels.push("채점 완료");
         else if (workflow === "submitted" || submission?.submitted_at) labels.push("제출 완료");
-        for (const comment of submission?.submission_comments || []) {
+        for (const comment of (Array.isArray(submission?.submission_comments) ? submission.submission_comments : [])) {
             if (comment?.comment) labels.push(clip(comment.comment, 2000));
+        }
+        for (const criterion of Object.values(submission?.rubric_assessment || {})) {
+            if (criterion?.comments) labels.push(clip(criterion.comments, 2000));
         }
         return [{ id: `canvas:${courseID}:assignment:${assignmentID}`, title: clip(item.name), course: name, kind: "과제",
             due: date(item.due_at), done: Boolean(submission?.submitted_at) || workflow === "submitted" || workflow === "graded",

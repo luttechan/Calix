@@ -1,4 +1,4 @@
-name: Calix iOS test build
+name: Calix iOS 0.1 validation
 
 on:
   push:
@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   simulator:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 20
     defaults:
       run:
@@ -28,6 +28,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Check Canvas and LearningX sync fixtures
+        run: node --test tests/CanvasSync.test.cjs
+
       - name: Build with Xcode
         run: |
           xcodebuild -version
@@ -36,11 +39,14 @@ jobs:
             CODE_SIGNING_ALLOWED=NO build
 
       - name: Launch on an iPhone simulator
+        timeout-minutes: 10
         run: |
           app="$RUNNER_TEMP/Calix/Build/Products/Debug-iphonesimulator/Calix.app"
           device=$(xcrun simctl list devices available --json | jq -er '
-            [.devices | to_entries[] | select(.key | contains(".iOS-")) | .value[]
-             | select(.name | startswith("iPhone"))] | last | .udid')
+            [.devices | to_entries[] | select(.key | contains(".iOS-"))
+             | (.key | split(".iOS-")[1] | split("-") | map(tonumber)) as $runtime
+             | .value[] | select(.name | startswith("iPhone")) | {name, udid, runtime: $runtime}]
+            | sort_by([.runtime, .name == "iPhone 17"]) | last | .udid')
           echo "Selected simulator: $device"
           xcrun simctl boot "$device"
           xcrun simctl bootstatus "$device" -b

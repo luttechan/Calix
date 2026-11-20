@@ -206,7 +206,7 @@ private struct CalixSettings: View {
             }
             Section("학교 계정") {
                 NavigationLink("학교 동기화") { CalixCanvas(library: library) }
-                if library.data.canvasID != nil { Button("로그아웃", role: .destructive) { confirmSignOut = true } }
+                Button("로그아웃", role: .destructive) { confirmSignOut = true }
             }
             Section("데이터 관리") {
                 Button("iOS 데이터 백업") { exportBackup() }

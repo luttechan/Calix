@@ -5,6 +5,7 @@ import WebKit
 final class CanvasBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     static let startURL = URL(string: "https://canvas.bufs.ac.kr/login")!
     let view: WKWebView
+    var onCampusPage: (() -> Void)?
 
     override init() {
         let config = WKWebViewConfiguration()
@@ -34,6 +35,12 @@ final class CanvasBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         return nil
     }
 
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        guard let url = webView.url, url.host == Self.startURL.host, Self.isCampus(url),
+              !url.path.hasPrefix("/login"), !url.path.hasPrefix("/logout") else { return }
+        onCampusPage?()
+    }
+
     static func clearSession() async {
         let store = WKWebsiteDataStore.default()
         await store.removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(), modifiedSince: .distantPast)
@@ -50,6 +57,7 @@ struct CalixCanvas: View {
     let library: CalixLibrary
     @State private var browser: CanvasBrowser?
     @State private var syncTask: Task<Void, Never>?
+    @State private var attemptedAutomaticSync = false
     @State private var message = "학교 계정으로 로그인한 뒤 동기화를 누르세요."
 
     var body: some View {
@@ -74,8 +82,23 @@ struct CalixCanvas: View {
         }
         .navigationTitle("학교 동기화")
         .navigationBarTitleDisplayMode(.inline)
-        .task { if browser == nil { browser = CanvasBrowser() } }
-        .onDisappear { cancel() }
+        .task {
+            if browser == nil {
+                let campus = CanvasBrowser()
+                campus.onCampusPage = {
+                    guard !attemptedAutomaticSync else { return }
+                    attemptedAutomaticSync = true
+                    sync()
+                }
+                browser = campus
+            }
+        }
+        .onDisappear {
+            browser?.onCampusPage = nil
+            cancel()
+            browser = nil
+            attemptedAutomaticSync = false
+        }
         .toolbar {
             Button("동기화") { sync() }.disabled(browser == nil || syncTask != nil)
         }
