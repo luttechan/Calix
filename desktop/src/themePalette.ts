@@ -12,7 +12,13 @@ export function validPaletteColor(value: string | undefined): value is string {
 }
 
 export function paletteValues(style: CSSStyleDeclaration) {
-  return Object.fromEntries(paletteTokens.map(([key, , token]) => [key, style.getPropertyValue(token).trim()])) as Record<PaletteColor, string>;
+  return Object.fromEntries(paletteTokens.map(([key, , token]) => {
+    const value = style.getPropertyValue(token).trim();
+    const color = /^#[0-9a-f]{3}$/i.test(value)
+      ? `#${[...value.slice(1)].map((digit) => digit.repeat(2)).join("")}`
+      : value;
+    return [key, color];
+  })) as Record<PaletteColor, string>;
 }
 
 export function applyThemePalette(root: HTMLElement, palette: ThemePalette = {}) {
