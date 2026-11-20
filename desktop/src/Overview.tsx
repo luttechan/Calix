@@ -107,7 +107,7 @@ export function DeadlinePage() {
             <Search size={16} aria-hidden="true" />
             <input
               aria-label="마감 일정 검색"
-              placeholder="일정·과목 검색"
+              placeholder="일정, 과목 검색"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />

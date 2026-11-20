@@ -859,7 +859,7 @@ export function App() {
             <div className="loading-state">
               {error ? (
                 <>
-                  <h2>연결을 확인하세요.</h2>
+                  <h2>연결 오류</h2>
                   <p>{error}</p>
                   <button
                     onClick={() =>
@@ -898,11 +898,6 @@ export function App() {
                           data.preferences.nickname || "나",
                         )}
                       </h1>
-                      <p className="welcome-note">
-                        {todayEvents.length
-                          ? `오늘 마감 일정 ${todayEvents.length}개`
-                          : "오늘 마감 일정 없음"}
-                      </p>
                     </div>
                     <div className="welcome-mark" aria-hidden="true">
                       <img src="/assets/icons/calix.svg" alt="" />
@@ -1631,7 +1626,7 @@ function EventDetails({
               )}
               {event.lms_data.feedback_available === false && (
                 <p className="muted">
-                  코멘트 확인 실패 · 다시 동기화
+                  코멘트 확인 실패, 다시 동기화
                 </p>
               )}
               {event.lms_data.rubric?.map((r, i) => (

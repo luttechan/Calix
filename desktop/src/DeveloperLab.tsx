@@ -42,7 +42,7 @@ export function DeveloperLab() {
         samples.push(performance.now() - start);
       }
       samples.sort((a, b) => a - b);
-      setResult(`Median ${samples[2].toFixed(1)} ms · Max ${samples[4].toFixed(1)} ms`);
+      setResult(`Median ${samples[2].toFixed(1)} ms, Max ${samples[4].toFixed(1)} ms`);
     } catch {
       if (id === request.current) {
         setResult("Engine unavailable.");

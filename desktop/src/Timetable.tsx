@@ -580,7 +580,7 @@ function SessionViewer({
           );
         })}
       </div> : <p className="session-events-empty" role="status">
-        {session.course_id <= 0 ? "연결된 강의 없음" : courseEvents.length === 0 ? "과제·영상 없음" : filter === "pending" ? "미완료 일정 없음" : "완료 일정 없음"}
+        {session.course_id <= 0 ? "연결된 강의 없음" : courseEvents.length === 0 ? "과제, 영상 없음" : filter === "pending" ? "미완료 일정 없음" : "완료 일정 없음"}
       </p>}
     </Modal>
   );

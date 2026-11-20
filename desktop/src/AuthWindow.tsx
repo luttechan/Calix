@@ -124,7 +124,7 @@ export function AuthWindow() {
             )}
             {!isTauri() && (
               <div className="auth-placeholder">
-                Windows 앱에서 학교 계정으로 로그인합니다.
+                학교 로그인은 Windows 앱에서 지원합니다.
               </div>
             )}
           </div>
@@ -132,7 +132,7 @@ export function AuthWindow() {
         <footer className="auth-footer">
           <div role="status" className={error ? "danger" : "muted"}>
             {error ||
-              (busy ? "로그인 확인 중" : "학교 로그인 후 완료를 누르세요.")}
+              (busy ? "로그인 확인 중" : "로그인 후 완료를 누르세요.")}
           </div>
           <button
             className="quiet"

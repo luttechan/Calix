@@ -482,7 +482,7 @@ export function GradesPage() {
         </button>
       </div>
       {!data.timetableConfigured && (
-        <p className="muted">시간표에서 학기를 설정하면 자동으로 연결됩니다.</p>
+        <p className="muted">시간표에서 학기를 설정하세요.</p>
       )}
       {error && (
         <div className="grade-error-banner" role="alert">
@@ -554,7 +554,7 @@ export function GradesPage() {
             </article>
           </div>
           <p className="grade-policy">
-            P는 취득 학점에 포함됩니다. P와 NP는 평점평균에서 제외됩니다.
+            P는 취득 학점에만 반영합니다.
           </p>
           <form
             id="grade-form"

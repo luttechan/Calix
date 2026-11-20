@@ -42,7 +42,7 @@ export function PlanningPanel({ now }: { now: Date }) {
           </label>
         </div>
         <p className="plan-summary muted" aria-live="polite">
-          {plan.length}개 · 예상 {plan.length * minutes}분
+          {plan.length}개, 예상 {plan.length * minutes}분
         </p>
         <div className="overview-items">
           {plan.map((e, i) => (
@@ -74,7 +74,7 @@ export function PlanningPanel({ now }: { now: Date }) {
           crowded.map(([day, items]) => (
             <details key={day}>
               <summary>
-                {day} · {items.length}개
+                {day}, {items.length}개
               </summary>
               <div className="overview-items">
                 {items.map((e) => (

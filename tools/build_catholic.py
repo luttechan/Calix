@@ -11,7 +11,7 @@ class Text(HTMLParser):
     def handle_starttag(self,tag,attrs):
         if tag=='br':self.parts.append(' ')
 def titles(raw):
-    parser=Text();parser.feed(raw);value=' '.join(''.join(parser.parts).split());value=value.replace('·',' / ')
+    parser=Text();parser.feed(raw);value=' '.join(''.join(parser.parts).split());value=value.replace('·',', ')
     if '전야' in value:return []
     value=re.sub(r'\[(?:백|홍|녹|자|흑|장미|금)\]\s*','',value)
     value=re.sub(r'\s+[-–]\s+.*$','',value)

@@ -48,7 +48,7 @@ export function ProtectedSection({ scope, children }: { scope: "timetable" | "gr
   const security = data.security;
   if (scope === "grades" && !security?.configured) {
     return <section className="grade-password-required">
-      <header className="page-heading"><div><h1>학점 메뉴</h1><p className="muted">비밀번호를 설정하면 학점 메뉴를 사용할 수 있습니다.</p></div></header>
+      <header className="page-heading"><div><h1>학점 메뉴</h1><p className="muted">학점 계산에는 비밀번호가 필요합니다.</p></div></header>
       <SecuritySettings />
     </section>;
   }
@@ -100,7 +100,7 @@ export function SecuritySettings() {
             }}>{[1, 5, 10, 15, 30, 60].map(minutes => <option key={minutes} value={minutes}>{minutes}분</option>)}<option value="custom">직접 입력</option></select></label>
             {custom && <label>분<NumberField aria-label="자동 잠금 분" min={1} max={1440} required value={policy.idle_minutes} onValueChange={value => setPolicy(previous => ({ ...previous, idle_minutes: value }))} /></label>}
           </div>}
-          <p className="security-warning">비밀번호를 잊으면 초기화해야 합니다. 초기화 시 저장 데이터가 삭제됩니다.</p>
+          <p className="security-warning">초기화하면 저장 데이터가 삭제됩니다.</p>
           <p className="muted">암호화 자료는 1.6.0 이상에서 열 수 있습니다.</p>
           <div className="dialog-actions security-actions"><button type="submit" className="button primary">{pending ? "저장 중" : configured ? "설정 저장" : "비밀번호 설정"}</button></div>
         </fieldset>

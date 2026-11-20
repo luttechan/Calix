@@ -85,11 +85,9 @@ export function Onboarding() {
             <img src="/assets/icons/calix.svg" alt="" />
           )}
         </div>
-        <p className="eyebrow">{step === 0 ? "반갑습니다" : "나만의 Calix"}</p>
-        <h1>{step === 0 ? "어떻게 불러드릴까요?" : "어떤 색이 좋으세요?"}</h1>
+        <h1>{step === 0 ? "닉네임 설정" : "테마 선택"}</h1>
         {step === 0 ? (
           <label className="setup-name">
-            닉네임
             <input
               aria-label="닉네임"
               autoFocus
@@ -102,8 +100,6 @@ export function Onboarding() {
             />
           </label>
         ) : (
-          <>
-            <p className="setup-greeting">{nickname.trim()}님, 오셨군요!</p>
             <div className="setup-themes">
               {themes.map(([id, label, color]) => (
                 <button
@@ -123,7 +119,6 @@ export function Onboarding() {
                 </button>
               ))}
             </div>
-          </>
         )}
         <div className="setup-actions">
           {step === 1 && (
@@ -275,7 +270,7 @@ export function ProfileSettings() {
             />
           </label>
           <p className="muted profile-placeholder">
-            {"{닉네임}"} 자리에 닉네임이 표시됩니다.
+            {"{닉네임}"} 은 닉네임으로 바뀝니다.
           </p>
           <div className="greeting-preview">
             {greeting.replaceAll("{닉네임}", nickname || "나")}

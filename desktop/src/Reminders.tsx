@@ -112,7 +112,6 @@ export function ReminderSettingsPanel({ active = true }: { active?: boolean }) {
       <div className="alarm-panel-heading">
         <div>
           <h2>알림과 소리</h2>
-          <p>Calix 실행 중에 알립니다.</p>
         </div>
         <label className="alarm-enable">
           <input

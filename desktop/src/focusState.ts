@@ -1,4 +1,4 @@
-export const DEFAULT_FOCUS_COMMENTS = { heading: "지금, 한 가지에 집중", focus_end: "집중을 마쳤습니다. 잠시 쉬세요.", break_end: "휴식을 마쳤습니다." };
+export const DEFAULT_FOCUS_COMMENTS = { heading: "집중 타이머", focus_end: "집중 종료", break_end: "휴식 종료" };
 export type FocusComments = typeof DEFAULT_FOCUS_COMMENTS;
 export type FocusState = {
   comments?: FocusComments;

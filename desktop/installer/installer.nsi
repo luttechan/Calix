@@ -261,9 +261,9 @@ Function PageReinstall
   ${If} $R4 == error
     Abort
   ${EndIf}
-  ${NSD_CreateRadioButton} 0 12u 100% 14u "데이터 유지 · 이전 버전 삭제"
+  ${NSD_CreateRadioButton} 0 12u 100% 14u "데이터 유지, 이전 버전 삭제"
   Pop $CalixPreserveOption
-  ${NSD_CreateRadioButton} 0 42u 100% 14u "데이터 초기화 · 새로 설치"
+  ${NSD_CreateRadioButton} 0 42u 100% 14u "데이터 초기화, 새로 설치"
   Pop $CalixResetOption
   ${NSD_CreateRadioButton} 0 72u 100% 14u "이전 버전도 보관"
   Pop $CalixKeepOption
