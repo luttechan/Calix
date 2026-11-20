@@ -16,6 +16,7 @@ DEFAULTS = dict(
     videos=True,
     sound=True,
     track="1",
+    sync_track="1",
     volume=0.6,
 )
 
@@ -43,6 +44,10 @@ def validate(value):
         str(n) for n in range(1, 11)
     }:
         raise ValueError("알람 음원을 선택하세요.")
+    if not isinstance(result["sync_track"], str) or result["sync_track"] not in {
+        str(n) for n in range(1, 11)
+    }:
+        raise ValueError("동기화 완료음을 선택하세요.")
     volume = result["volume"]
     if type(volume) not in (int, float) or not 0 <= volume <= 1:
         raise ValueError("음량을 확인하세요.")

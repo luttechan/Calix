@@ -74,6 +74,7 @@ export type ReminderSettings = {
   videos: boolean;
   sound: boolean;
   track: string;
+  sync_track?: string;
   volume: number;
 };
 export type ReminderPayload = {
@@ -90,12 +91,15 @@ export type ReminderPayload = {
     "key" | "title" | "course_name" | "kind" | "due_at"
   >[];
 };
+export type PaletteColor = "canvas" | "surface" | "accent" | "muted";
+export type ThemePalette = Partial<Record<PaletteColor, string>>;
 export type Preferences = {
   attendance_visible: boolean;
   attendance_sync: boolean;
   developer_mode: boolean;
   reminders: ReminderSettings;
   theme: "pink" | "sky" | "mint" | "purple" | "dark" | "peach" | "amber" | "olive" | "lavender";
+  theme_palette?: ThemePalette;
   glass: boolean;
   font_mode: string;
   catholic: boolean;

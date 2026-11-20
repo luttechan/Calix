@@ -19,6 +19,9 @@ def version_key(value):
         return (1, 5, 8, 1)
     if key[:3] == (1, 4, 21):
         return (1, 4, 2, 1)
+    if key[:2] == (1, 6) and key[2] in (11, 12, 13, 20, 30, 31, 32):
+        patch, revision = divmod(key[2], 10)
+        return (1, 6, patch, revision)
     return key
 
 

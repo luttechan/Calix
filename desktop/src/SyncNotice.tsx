@@ -1,15 +1,18 @@
 import { memo, useEffect, useRef, useState } from "react";
 import { Check, RefreshCw, TriangleAlert, X } from "lucide-react";
-import { playSyncCue } from "./syncCue";
+import { defaultSyncTrack, playSyncCue, syncCuePath } from "./syncCue";
+import { playErrorCue } from "./errorCue";
 import { rpc, subscribe } from "./bridge";
 import { syncNoticeState, type SyncNoticeState } from "./syncNoticeState";
 
 export const SyncNotice = memo(function SyncNotice({
   sound,
   volume,
+  track,
 }: {
   sound: boolean;
   volume: number;
+  track: string;
 }) {
   const [state, setState] = useState<SyncNoticeState | null>(null),
     [visible, setVisible] = useState(false),
@@ -17,10 +20,10 @@ export const SyncNotice = memo(function SyncNotice({
   const [details, setDetails] = useState(false);
   const cue = useRef<(() => void) | null>(null);
   const latest = useRef<SyncNoticeState | null>(null),
-    soundOptions = useRef({ sound, volume });
+    soundOptions = useRef({ sound, volume, track });
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null),
     exitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  soundOptions.current = { sound, volume };
+  soundOptions.current = { sound, volume, track };
   const dismiss = () => {
     if (timer.current) clearTimeout(timer.current);
     setLeaving(true);
@@ -41,14 +44,23 @@ export const SyncNotice = memo(function SyncNotice({
         if (event.event === "sync-complete") {
           cue.current?.();
           const token = event.reminderToken;
+          const { sound, volume, track } = soundOptions.current;
+          const path = syncCuePath(track);
           cue.current = playSyncCue(
-            soundOptions.current.sound,
-            soundOptions.current.volume,
+            sound,
+            volume,
             () => {
               if (typeof token === "string")
                 void rpc("reminders.sync-ready", { token }).catch(() => {});
             },
+            () => new Audio(path),
+            track === defaultSyncTrack ? undefined : () => new Audio(syncCuePath()),
           );
+        }
+        if (event.event === "sync-error") {
+          cue.current?.();
+          cue.current = null;
+          playErrorCue(soundOptions.current.sound, soundOptions.current.volume);
         }
         const previous = latest.current,
           next = syncNoticeState(previous, event);

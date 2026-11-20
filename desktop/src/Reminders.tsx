@@ -4,7 +4,13 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { Volume2 } from "lucide-react";
 import { useCalix } from "./App";
 import { alarmNames } from "./alarmNames";
+import { defaultSyncTrack, syncCuePath } from "./syncCue";
 import type { ReminderSettings } from "./types";
+
+const syncCueNames = [
+  "First Light", "Quiet Signal", "Silver Thread", "Soft Landing", "Clear Skies",
+  "Daybreak", "Afterglow", "Blue Hour", "Open Horizon", "Last Light",
+];
 
 export function ReminderSettingsPanel({ active = true }: { active?: boolean }) {
   const { data, mutate, notify } = useCalix();
@@ -16,18 +22,24 @@ export function ReminderSettingsPanel({ active = true }: { active?: boolean }) {
       tracks: [],
       critical: false,
     });
-  const [playing, setPlaying] = useState(false),
-    [testCritical, setTestCritical] = useState(false);
+  const [syncTracks, setSyncTracks] = useState<number[]>([1]);
+  const syncTrack = syncTracks.includes(Number(form.sync_track)) ? form.sync_track! : defaultSyncTrack;
+  const [playing, setPlaying] = useState("");
   const audio = useRef<HTMLAudioElement | null>(null);
-  useEffect(() => {
-    audio.current?.pause();
-    if (audio.current) {
-      audio.current.src = "";
-      audio.current.load();
-    }
+  const releasePreview = () => {
+    const current = audio.current;
     audio.current = null;
-    setPlaying(false);
-  }, [form.enabled, form.sound, form.track, form.volume]);
+    if (current) {
+      current.onended = null;
+      current.pause();
+      current.removeAttribute("src");
+      current.load();
+    }
+  };
+  useEffect(() => {
+    releasePreview();
+    setPlaying("");
+  }, [form.enabled, form.sound, form.track, syncTrack, form.volume, active]);
   const saved = JSON.stringify(data.preferences.reminders);
   const [section, setSection] = useState<"rules" | "sound">("rules");
   const [urgentCustom, setUrgentCustom] = useState(
@@ -43,14 +55,9 @@ export function ReminderSettingsPanel({ active = true }: { active?: boolean }) {
     setGeneralCustom(![0, 1, 3, 7].includes(value.general_days));
   }, [saved]);
   useEffect(() => {
-    audio.current?.pause();
-    if (audio.current) {
-      audio.current.src = "";
-      audio.current.load();
-    }
-    audio.current = null;
-    setPlaying(false);
-  }, [active, section]);
+    releasePreview();
+    setPlaying("");
+  }, [section]);
   useEffect(() => {
     let active = true;
     void fetch("/assets/alarm/catalog.json")
@@ -59,45 +66,46 @@ export function ReminderSettingsPanel({ active = true }: { active?: boolean }) {
         if (active) setCatalog(value);
       })
       .catch(() => {});
+    void fetch("/assets/sound/catalog.json")
+      .then((r) => r.json())
+      .then((value) => {
+        if (active && Array.isArray(value)) setSyncTracks([1, ...value.filter((n) => Number.isInteger(n) && n >= 2 && n <= 10)]);
+      })
+      .catch(() => {});
     return () => {
       active = false;
-      audio.current?.pause();
-      if (audio.current) {
-        audio.current.src = "";
-        audio.current.load();
-      }
-      audio.current = null;
+      releasePreview();
     };
   }, []);
   const change = <K extends keyof ReminderSettings>(
     key: K,
     value: ReminderSettings[K],
   ) => setForm((previous) => ({ ...previous, [key]: value }));
-  const testSound = (critical: boolean) => {
-    audio.current?.pause();
-    if (playing && testCritical === critical) {
-      setPlaying(false);
+  const testSound = (path: string) => {
+    releasePreview();
+    if (playing === path) {
+      setPlaying("");
       return;
     }
-    setTestCritical(critical);
-    const track = critical ? "crit" : form.track;
-    const next = new Audio(`/assets/alarm/${track}.mp3`);
+    setPlaying(path);
+    const next = new Audio(path);
     next.volume = form.volume;
     audio.current = next;
     next.onended = () => {
-      if (audio.current === next) setPlaying(false);
+      if (audio.current !== next) return;
+      releasePreview();
+      setPlaying("");
     };
-    void next
-      .play()
-      .then(() => {
-        if (audio.current === next) setPlaying(true);
-      })
-      .catch(() => {
+    void next.play().catch(() => {
         if (audio.current !== next) return;
-        setPlaying(false);
-        notify("음원을 재생하지 못했습니다.");
+        releasePreview();
+        setPlaying("");
+        notify("음원을 재생하지 못했습니다.", true);
       });
   };
+  const normalPath = `/assets/alarm/${form.track}.mp3`;
+  const urgentPath = "/assets/alarm/crit.mp3";
+  const syncPath = syncCuePath(syncTrack);
   const dirty = JSON.stringify(form) !== saved;
   return (
     <section className="glass settings-panel reminder-settings">
@@ -328,10 +336,10 @@ export function ReminderSettingsPanel({ active = true }: { active?: boolean }) {
                 type="button"
                 aria-label="일반 알람 미리 듣기"
                 disabled={!form.sound || !catalog.tracks.length}
-                onClick={() => testSound(false)}
+                onClick={() => testSound(normalPath)}
               >
                 <Volume2 size={16} />
-                {playing && !testCritical ? "중지" : "미리 듣기"}
+                {playing === normalPath ? "중지" : "미리 듣기"}
               </button>
             </div>
             <div className="alarm-track-row">
@@ -343,10 +351,21 @@ export function ReminderSettingsPanel({ active = true }: { active?: boolean }) {
                 type="button"
                 aria-label="긴급 알람 미리 듣기"
                 disabled={!form.sound || !catalog.critical}
-                onClick={() => testSound(true)}
+                onClick={() => testSound(urgentPath)}
               >
                 <Volume2 size={16} />
-                {playing && testCritical ? "중지" : "미리 듣기"}
+                {playing === urgentPath ? "중지" : "미리 듣기"}
+              </button>
+            </div>
+            <div className="alarm-track-row">
+              <div>
+                <strong>동기화 완료음</strong>
+                <select aria-label="동기화 완료음" value={syncTrack} disabled={!form.sound} onChange={(event) => change("sync_track", event.target.value)}>
+                  {syncTracks.map((track) => <option value={String(track)} key={track}>{syncCueNames[track - 1]}{track === 1 ? " (기본)" : ""}</option>)}
+                </select>
+              </div>
+              <button type="button" aria-label="동기화 완료음 미리 듣기" disabled={!form.sound} onClick={() => testSound(syncPath)}>
+                <Volume2 size={16} /> {playing === syncPath ? "중지" : "미리 듣기"}
               </button>
             </div>
             <label className="alarm-volume">

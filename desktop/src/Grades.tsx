@@ -416,7 +416,7 @@ export function GradesPage() {
                   setQuery("");
                   setErrors({});
                 })
-                .catch((reason) => notify(reason.message));
+                .catch((reason) => notify(reason.message, true));
             }}
           >
             {data.timetableTerms.map((term) => (
@@ -686,7 +686,7 @@ export function GradesPage() {
                 className="grade-source-link"
                 onClick={() =>
                   void rpc("app.open", { page }).catch((reason) =>
-                    notify(reason.message),
+                    notify(reason.message, true),
                   )
                 }
               >

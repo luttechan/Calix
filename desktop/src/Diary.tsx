@@ -138,7 +138,7 @@ export function DiaryPage({ active = true }: { active?: boolean }) {
             setEntries([]);
             setUnlocked(false);
           })
-          .catch((e) => notify(e.message));
+          .catch((e) => notify(e.message, true));
       }, 500);
     };
     const visibility = () => {
@@ -168,7 +168,7 @@ export function DiaryPage({ active = true }: { active?: boolean }) {
         setEntries([]);
       } else await reload(false);
     } catch (e) {
-      notify((e as Error).message);
+      notify((e as Error).message, true);
     }
   };
   const open = async (key: string) => {
@@ -196,7 +196,7 @@ export function DiaryPage({ active = true }: { active?: boolean }) {
       setDirty(false);
       dirtyRef.current = false;
     } catch (e) {
-      notify((e as Error).message);
+      notify((e as Error).message, true);
     } finally {
       setBusy(false);
     }
@@ -235,7 +235,7 @@ export function DiaryPage({ active = true }: { active?: boolean }) {
                     setDirty(true);
                     dirtyRef.current = true;
                   })
-                  .catch((e) => notify(e.message))
+                  .catch((e) => notify(e.message, true))
               }
             >
               <Plus size={17} />새 일기
@@ -302,7 +302,7 @@ export function DiaryPage({ active = true }: { active?: boolean }) {
                         setUnlocked(false);
                         setEntries([]);
                       })
-                      .catch((e) => notify(e.message))
+                      .catch((e) => notify(e.message, true))
                   }
                 >
                   <Lock size={15} />
@@ -395,7 +395,7 @@ export function DiaryPage({ active = true }: { active?: boolean }) {
                 onClick={() =>
                   void save()
                     .then(() => notify("일기 저장됨"))
-                    .catch((e) => notify(e.message))
+                    .catch((e) => notify(e.message, true))
                 }
               >
                 <Check size={15} />
@@ -421,7 +421,7 @@ export function DiaryPage({ active = true }: { active?: boolean }) {
                     setRemove(false);
                     return reload();
                   })
-                  .catch((e) => notify(e.message))
+                  .catch((e) => notify(e.message, true))
               }
             >
               삭제

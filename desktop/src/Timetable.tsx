@@ -56,7 +56,6 @@ export function TimetablePage() {
   // Leave room for a readable, clickable card even for short custom sessions.
   const minimumCardHeight = 24;
   const lanes = sessionLanes(scheduled, Math.ceil((minimumCardHeight / unit) * 60));
-  const weekColumns = `48px repeat(${days}, minmax(112px, 1fr))`;
   const workloads = useMemo(() => {
     const counts = new Map<number, { assignment: number; movie: number }>();
     for (const event of data.events) {
@@ -194,12 +193,10 @@ export function TimetablePage() {
           <section
             ref={panel}
             className={`glass timetable-panel ${online.length ? "with-online" : ""}`}
-            style={{ "--hour-unit": `${unit}px` } as React.CSSProperties}
+            style={{ "--hour-unit": `${unit}px`, "--week-days": days } as React.CSSProperties}
           >
-            <div
-              className="week-headers"
-              style={{ gridTemplateColumns: weekColumns, minWidth: 48 + days * 112 }}
-            >
+            <div className="week-grid">
+            <div className="week-headers">
               <span />
               {weekdays.slice(0, days).map((day, i) => (
                 <div
@@ -211,14 +208,7 @@ export function TimetablePage() {
                 </div>
               ))}
             </div>
-            <div
-              className="week-body"
-              style={{
-                gridTemplateColumns: weekColumns,
-                minWidth: 48 + days * 112,
-                height,
-              }}
-            >
+            <div className="week-body" style={{ height }}>
               <div className="time-axis">
                 {Array.from({ length: (end - start) / 60 }, (_, i) => (
                   <span key={i} style={{ top: i * unit }}>
@@ -287,6 +277,7 @@ export function TimetablePage() {
                   )}
                 </div>
               ))}
+            </div>
             </div>
           </section>
           {online.length > 0 && (

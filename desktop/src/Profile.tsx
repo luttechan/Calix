@@ -310,7 +310,7 @@ export function ResetSettings() {
       resetView();
       setReset(false);
     } catch (error) {
-      notify(String(error));
+      notify(String(error), true);
     } finally {
       setResetting(false);
     }

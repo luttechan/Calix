@@ -583,7 +583,7 @@ export function SettingsPage() {
         notify("백업됨");
       }
     } catch (error) {
-      notify(String(error));
+      notify(String(error), true);
     } finally {
       setFileBusy(false);
     }
@@ -833,7 +833,7 @@ export function SettingsPage() {
             className="settings-link"
             onClick={() =>
               void rpc("app.open", { page: "guide" }).catch((e) =>
-                notify(e.message),
+                notify(e.message, true),
               )
             }
           >

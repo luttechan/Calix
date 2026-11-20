@@ -29,7 +29,7 @@ const labels: Record<string, string> = {
   unknown: "미확인",
 };
 export function AttendancePage() {
-  const { data, notify } = useCalix();
+  const { data, notify, soundError } = useCalix();
   const [rows, setRows] = useState<AttendanceRow[]>([]),
     [loading, setLoading] = useState(true),
     [error, setError] = useState("");
@@ -51,7 +51,10 @@ export function AttendancePage() {
           }
         })
         .catch((e) => {
-          if (alive && sequence === id) setError(String(e));
+          if (alive && sequence === id) {
+            setError(String(e));
+            soundError();
+          }
         })
         .finally(() => {
           if (alive && sequence === id) setLoading(false);
@@ -102,7 +105,7 @@ export function AttendancePage() {
           <h1>출결 현황</h1>
         </div>
         <button
-          onClick={() => void rpc("sync").catch((e) => notify(String(e)))}
+          onClick={() => void rpc("sync").catch((e) => notify(String(e), true))}
         >
           <RefreshCw size={16} />
           동기화

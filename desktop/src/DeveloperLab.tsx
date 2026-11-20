@@ -1,17 +1,33 @@
 import { Activity, FlaskConical, Palette, Zap } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { Modal, useCalix } from "./App";
 import { rpc } from "./bridge";
-
-const tokens = [
-  ["Canvas", "--bg"], ["Surface", "--surface"], ["Accent", "--accent"],
-  ["Muted", "--muted"],
-] as const;
+import { paletteTokens, paletteValues, validPaletteColor } from "./themePalette";
+import type { PaletteColor, ThemePalette } from "./types";
 
 export function DeveloperLab() {
+  const { data, mutate, notify } = useCalix();
   const request = useRef(0);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<string | null>(null);
+  const [editor, setEditor] = useState<{ initial: Record<PaletteColor, string>; colors: Record<PaletteColor, string> } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
   useEffect(() => () => { request.current++; }, []);
+
+  async function savePalette(colors: ThemePalette) {
+    setSaving(true);
+    setSaveError("");
+    try {
+      await mutate("preferences.palette.save", { theme: data.preferences.theme, colors });
+      setEditor(null);
+      notify("Palette saved.");
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function measure() {
     const id = ++request.current;
@@ -51,17 +67,51 @@ export function DeveloperLab() {
         </article>
         <article>
           <h4><Palette size={16} aria-hidden="true" /> Theme palette</h4>
-          <p>Live colors from the active theme.</p>
           <ul className="dev-lab-palette">
-            {tokens.map(([name, token]) => (
+            {paletteTokens.map(([, name, token]) => (
               <li key={token}>
                 <span style={{ backgroundColor: `var(${token})` }} aria-hidden="true" />
                 {name}
               </li>
             ))}
           </ul>
+          <button type="button" className="dev-lab-action" onClick={() => {
+            const colors = paletteValues(getComputedStyle(document.documentElement));
+            setSaveError("");
+            setEditor({ initial: colors, colors });
+          }}>Edit colors</button>
         </article>
       </div>
+      {editor && (
+        <Modal title="Theme palette" closeLabel="Close" onClose={() => { if (!saving) setEditor(null); }}>
+          <form onSubmit={(event) => {
+            event.preventDefault();
+            if (saving || !Object.values(editor.colors).every(validPaletteColor)) return;
+            const overrides = { ...data.preferences.theme_palette };
+            for (const [key] of paletteTokens) {
+              if (editor.colors[key].toLowerCase() !== editor.initial[key].toLowerCase()) overrides[key] = editor.colors[key];
+            }
+            void savePalette(overrides);
+          }}>
+            <fieldset className="dev-palette-editor" disabled={saving}>
+              {paletteTokens.map(([key, label]) => {
+                const color = editor.colors[key];
+                const update = (value: string) => setEditor({ ...editor, colors: { ...editor.colors, [key]: value } });
+                return <div className="dev-palette-field" key={key}>
+                  <label htmlFor={`palette-${key}`}>{label}</label>
+                  <input type="color" id={`palette-${key}`} value={validPaletteColor(color) ? color.toLowerCase() : editor.initial[key]} onChange={(event) => update(event.target.value)} />
+                  <input aria-label={`${label} hex`} value={color} spellCheck={false} required maxLength={7} pattern="#[0-9a-fA-F]{6}" onChange={(event) => update(event.target.value)} />
+                </div>;
+              })}
+            </fieldset>
+            {saveError && <p role="alert" className="danger">{saveError}</p>}
+            <div className="dialog-actions">
+              <button type="button" disabled={saving || !Object.keys(data.preferences.theme_palette ?? {}).length} onClick={() => void savePalette({})}>Reset defaults</button>
+              <button type="submit" className="primary" disabled={saving}>Apply</button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </section>
   );
 }

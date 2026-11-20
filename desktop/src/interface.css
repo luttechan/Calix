@@ -188,11 +188,39 @@
 }
 .workspace main .timetable-panel,
 .workspace main .timetable-panel.with-online {
+  --week-header-size: 42px;
+  --week-axis: 48px;
+  --week-day-min: 112px;
   max-height: max(270px, calc(100dvh - 330px));
-  scroll-padding: 54px 8px 8px 58px;
+  padding: 0;
+  scroll-padding: var(--week-header-size) 0 0 var(--week-axis);
+}
+.timetable-panel .week-grid {
+  min-width: calc(var(--week-axis) + var(--week-days) * var(--week-day-min));
+}
+.timetable-panel .week-headers,
+.timetable-panel .week-body {
+  grid-template-columns: var(--week-axis) repeat(var(--week-days), minmax(var(--week-day-min), 1fr));
+  min-width: 0;
 }
 .timetable-panel .week-headers {
-  box-shadow: 0 1px var(--line);
+  align-items: stretch;
+  height: var(--week-header-size);
+  margin: 0;
+  border-bottom: 1px solid var(--line);
+}
+.timetable-panel .week-column,
+.timetable-panel .week-column.off-column,
+.timetable-panel .week-headers > div {
+  margin: 0;
+  border: 0;
+  border-left: 1px solid var(--line);
+  border-radius: 0;
+}
+.timetable-panel .week-headers > div { height: auto; }
+.timetable-panel .off-marker {
+  top: var(--week-header-size);
+  padding-top: 14px;
 }
 .timetable-panel .time-axis,
 .timetable-panel .week-headers > span:first-child {
@@ -200,9 +228,8 @@
   left: 0;
   z-index: 2;
   background: var(--surface);
+  box-shadow: inset -1px 0 var(--line);
 }
-.timetable-panel .time-axis { border-right: 1px solid var(--line); }
-.timetable-panel .week-headers > span:first-child { align-self: stretch; }
 .journal-list button {
   overflow-wrap: anywhere;
 }

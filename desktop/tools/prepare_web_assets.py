@@ -46,9 +46,22 @@ def main():
         json.dumps(dict(tracks=sorted(tracks), critical=(alarm / "crit.mp3").exists())),
         encoding="utf-8",
     )
-    sound=output/'sound'
+    sound = output / "sound"
     sound.mkdir(exist_ok=True)
-    shutil.copy2(ROOT/'asset/sound/notify.mp3',sound/'notify.mp3')
+    source_sound = ROOT / "asset/sound"
+    shutil.copy2(source_sound / "error.mp3", sound / "error.mp3")
+    if not (source_sound / "notify_1.mp3").is_file():
+        raise FileNotFoundError("Default sync cue missing: asset/sound/notify_1.mp3")
+    sync_tracks = []
+    for track in range(1, 11):
+        name = f"notify_{track}.mp3"
+        source = source_sound / name
+        if source.is_file():
+            shutil.copy2(source, sound / name)
+            sync_tracks.append(track)
+        else:
+            (sound / name).unlink(missing_ok=True)
+    (sound / "catalog.json").write_text(json.dumps(sync_tracks), encoding="utf-8")
     print("Local web fonts and assets ready")
 
 

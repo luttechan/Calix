@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { emitTo, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ArrowUpRight, Check, LoaderCircle, RefreshCw, X } from "lucide-react";
 
@@ -9,6 +9,9 @@ export function AuthWindow() {
     [loaded, setLoaded] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  useEffect(() => {
+    if (error && isTauri()) void emitTo("main", "auth:error-cue").catch(() => {});
+  }, [error]);
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     document.documentElement.dataset.theme = params.get("theme") || "pink";

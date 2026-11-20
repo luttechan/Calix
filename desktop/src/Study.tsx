@@ -77,7 +77,7 @@ function Tomato() {
 }
 function Controls({ state }: { state: FocusState }) {
   const { notify } = useCalix();
-  const run = (a: string) => void command(a).catch((e) => notify(String(e)));
+  const run = (a: string) => void command(a).catch((e) => notify(String(e), true));
   return (
     <div className="focus-controls">
       <button
@@ -132,7 +132,7 @@ function FocusCommentSettings({ comments, onClose }: { comments: FocusComments; 
       if (pending) return;
       setPending(true);
       void command("comments", { comments: draft }).then(() => { notify("저장됨"); onClose(); })
-        .catch(error => notify(String(error))).finally(() => setPending(false));
+        .catch(error => notify(String(error), true)).finally(() => setPending(false));
     }}>
       {([['heading', '집중 문구'], ['focus_end', '집중 완료'], ['break_end', '휴식 완료']] as const).map(([key, title]) =>
         <label key={key}>{title}<input value={draft[key]} maxLength={key === 'heading' ? 80 : 120} onChange={event => setDraft(previous => ({ ...previous, [key]: event.target.value }))} /></label>)}
@@ -409,7 +409,7 @@ export function StudyPage() {
               onClick={() =>
                 void command("configure", { mode, work, short, long })
                   .then(() => command("start"))
-                  .catch((e) => notify(String(e)))
+                  .catch((e) => notify(String(e), true))
               }
             >
               <Play size={18} />

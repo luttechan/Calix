@@ -1102,6 +1102,7 @@ label textarea {
   min-height: 16px;
   margin-left: 14px;
 }
+.toast-error { background: #782838; color: #fff; }
 .credit-profile {
   display: grid;
   justify-items: center;
@@ -3675,7 +3676,7 @@ body.reminder-surface {
   flex-wrap: wrap;
   gap: 8px;
   list-style: none;
-  margin: 0;
+  margin: 10px 0 12px;
   padding: 0;
 }
 .dev-lab-palette li { display: grid; gap: 4px; font-size: 11px; }
@@ -3685,6 +3686,23 @@ body.reminder-surface {
   border: 1px solid color-mix(in srgb, var(--muted) 34%, transparent);
   border-radius: 6px;
 }
+.dev-palette-editor {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 12px 0 4px;
+  padding: 0;
+  border: 0;
+}
+.dev-palette-field {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+}
+.dev-palette-field label { grid-column: 1 / -1; }
+.dev-palette-field input[type="color"] { width: 42px; height: 38px; padding: 4px; cursor: pointer; }
+.dev-palette-field input:not([type="color"]) { min-width: 0; font-variant-numeric: tabular-nums; }
 
 .shortcut-list { display:grid; gap:16px; margin:12px 0; }
 .shortcut-list > div { display:grid; grid-template-columns:110px 1fr; gap:16px; align-items:start; }

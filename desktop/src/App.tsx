@@ -48,6 +48,9 @@ import { listen } from "@tauri-apps/api/event";
 import { AttendancePage } from "./Attendance";
 import { StudyPage, FocusDock } from "./Study";
 import { SyncNotice } from "./SyncNotice";
+import { playErrorCue, stopErrorCue } from "./errorCue";
+import { applyThemePalette } from "./themePalette";
+import { defaultSyncTrack } from "./syncCue";
 import { DeadlinePage, CourseOverviewPage } from "./Overview";
 import { GradesPage } from "./Grades";
 import { ProtectedSection, SecurityMonitor, UnlockView } from "./Security";
@@ -79,7 +82,8 @@ type ContextValue = {
     method: string,
     params?: Record<string, unknown>,
   ) => Promise<unknown>;
-  notify: (message: string) => void;
+  notify: (message: string, error?: boolean) => void;
+  soundError: () => void;
   openEvent: (key: string) => void;
   leave: RefObject<(() => Promise<void>) | null>;
   draft: RefObject<(() => Promise<void>) | null>;
@@ -273,7 +277,7 @@ export function App() {
     [shortcuts, setShortcuts] = useState(false),
     [selected, setSelected] = useState<string | null>(null),
     [addDate, setAddDate] = useState<string | null>(null),
-    [toast, setToast] = useState(""),
+    [toast, setToast] = useState<{message: string; error: boolean} | null>(null),
     [query, setQuery] = useState(""),
     [busy, setBusy] = useState(false),
     [loggedIn, setLoggedIn] = useState(false),
@@ -289,14 +293,30 @@ export function App() {
     leave = useRef<(() => Promise<void>) | null>(null),
     searchRef = useRef<HTMLInputElement>(null),
     toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reminders = data?.preferences.reminders;
+  const errorSound = useRef({ enabled: true, volume: 0.6 });
+  errorSound.current = {
+    enabled: reminders?.enabled !== false && reminders?.sound !== false,
+    volume: reminders?.volume ?? 0.6,
+  };
+  const soundError = useCallback(() => {
+    playErrorCue(errorSound.current.enabled, errorSound.current.volume);
+  }, []);
   useEffect(() => {
     if (data || error) finishStartup();
   }, [data, error]);
-  const notify = useCallback((message: string) => {
-    setToast(message);
+  useEffect(() => {
+    if (error) soundError();
+  }, [error, soundError]);
+  useEffect(() => {
+    if (!errorSound.current.enabled || reminders?.volume === 0) stopErrorCue();
+  }, [reminders?.enabled, reminders?.sound, reminders?.volume]);
+  const notify = useCallback((message: string, error = false) => {
+    setToast({message, error});
+    if (error) soundError();
     if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(""), 4500);
-  }, []);
+    toastTimer.current = setTimeout(() => setToast(null), 4500);
+  }, [soundError]);
   const finishEditing = async () => {
     if (draft.current) await draft.current();
     if (leave.current) await leave.current();
@@ -332,13 +352,13 @@ export function App() {
       try {
         result = await rpc(method, params);
       } catch (e) {
-        notify((e as Error).message);
+        notify((e as Error).message, true);
         throw e;
       }
       try {
         await refresh();
       } catch {
-        notify("저장됨 / 목록을 다시 불러오지 못했습니다.");
+        notify("저장됨 / 목록을 다시 불러오지 못했습니다.", true);
       }
       return result;
     },
@@ -361,14 +381,14 @@ export function App() {
     const unsubscribe = subscribe((message) => {
       if (message.event === "reminder" && isTauri() && !privacyLocked.current) {
         void invoke("reminder_show", { payload: message.payload }).catch(
-          (error) => notify(String(error)),
+          (error) => notify(String(error), true),
         );
       }
       if (message.event === "data-changed") {
-        void refresh().catch((e) => notify(e.message));
+        void refresh().catch((e) => notify(e.message, true));
       }
       if (message.event === "auth-required" && !privacyLocked.current)
-        void openLogin().catch((error) => notify(String(error)));
+        void openLogin().catch((error) => notify(String(error), true));
       if (message.event === "sync-state") setBusy(Boolean(message.busy));
       if (message.event === "session-error" && isTauri())
         void invoke("auth_status", {
@@ -384,7 +404,7 @@ export function App() {
         void invoke("auth_status", { success: true, message: "" }).catch(
           () => {},
         );
-      if (message.event === "notice") notify(String(message.message));
+      if (message.event === "notice") notify(String(message.message), message.level === "error");
       if (
         message.event === "update-state" &&
         message.automatic === true &&
@@ -404,6 +424,7 @@ export function App() {
       alive = false;
       unsubscribe();
       if (toastTimer.current) clearTimeout(toastTimer.current);
+      stopErrorCue();
     };
   }, []);
   useEffect(() => {
@@ -442,10 +463,11 @@ export function App() {
     const cleanups: (() => void)[] = [];
     for (const [event, handler] of [
       ["app:exit-request", () => setExit(true)],
+      ["auth:error-cue", soundError],
       [
         "app:hidden",
         () => {
-          void finishEditing().catch((e) => notify(e.message));
+          void finishEditing().catch((e) => notify(e.message, true));
         },
       ],
       [
@@ -484,10 +506,12 @@ export function App() {
     document.documentElement.dataset.theme = data.preferences.theme;
     document.documentElement.dataset.glass = String(data.preferences.glass);
     document.documentElement.dataset.font = data.preferences.font_mode;
+    applyThemePalette(document.documentElement, data.preferences.theme_palette);
   }, [
     data?.preferences.theme,
     data?.preferences.glass,
     data?.preferences.font_mode,
+    data?.preferences.theme_palette,
   ]);
   useEffect(() => {
     if (isTauri() && data?.preferences.onboarding_complete)
@@ -509,7 +533,7 @@ export function App() {
               setAddDate(null);
               setPage("calendar");
             })
-            .catch((error) => notify(error.message));
+            .catch((error) => notify(error.message, true));
       }
     }).then((clean) => {
       if (active) stop = clean;
@@ -534,7 +558,7 @@ export function App() {
       setAddDate(null);
       if (request === navigationRequest.current) setPage(next);
     } catch (e) {
-      notify((e as Error).message);
+      notify((e as Error).message, true);
     }
   };
 
@@ -552,12 +576,12 @@ export function App() {
       setData(previous => previous ? { ...previous, security } : previous);
       setQuery(""); setSelected(null); setAddDate(null);
       setExit(false); setCredits(false); setStartupUpdate(false);
-      setInstall(false); setRestart(false); setToast("");
+      setInstall(false); setRestart(false); setToast(null);
       if (toastTimer.current) clearTimeout(toastTimer.current);
       if (isTauri()) await invoke("privacy_lock");
       await refresh();
     } catch (error) {
-      notify((error as Error).message);
+      notify((error as Error).message, true);
     } finally {
       lockRequest.current = false;
       setLocking(false);
@@ -622,6 +646,7 @@ export function App() {
             data: { ...data, version: appVersion },
             mutate,
             notify,
+            soundError,
             openEvent,
             leave,
             draft,
@@ -645,7 +670,7 @@ export function App() {
             },
           }
         : null,
-    [data, appVersion, mutate, notify, openEvent],
+    [data, appVersion, mutate, notify, openEvent, soundError],
   );
   if (data?.security?.locked && context) {
     return <Context.Provider value={context}>
@@ -777,7 +802,7 @@ export function App() {
                 if (!cancelling) setBusy(true);
                 rpc(cancelling ? "sync.cancel" : "sync").catch((e) => {
                   if (!cancelling) setBusy(false);
-                  notify(e.message);
+                  notify(e.message, true);
                 });
               }}
             >
@@ -792,7 +817,7 @@ export function App() {
                     await rpc("session.logout");
                     if (isTauri()) await invoke("auth_logout");
                   } else await openLogin();
-                })().catch((error) => notify(String(error)))
+                })().catch((error) => notify(String(error), true))
               }
             >
               {loggedIn ? <LogOut size={16} /> : <LogIn size={16} />}
@@ -1041,12 +1066,13 @@ export function App() {
           data?.preferences.reminders.sound,
         )}
         volume={data?.preferences.reminders.volume ?? 0.6}
+        track={data?.preferences.reminders.sync_track ?? defaultSyncTrack}
       />
       {toast && (
-        <div className="toast" role="status">
-          <Check size={17} />
-          {toast}
-          <button aria-label="알림 닫기" onClick={() => setToast("")}>
+        <div className={`toast${toast.error ? " toast-error" : ""}`} role={toast.error ? "alert" : "status"}>
+          {toast.error ? <X size={17} /> : <Check size={17} />}
+          {toast.message}
+          <button aria-label="알림 닫기" onClick={() => setToast(null)}>
             <X size={15} />
           </button>
         </div>
@@ -1095,7 +1121,7 @@ export function App() {
                 if (isTauri()) {
                   e.preventDefault();
                   void rpc("app.open", { page: "github" }).catch((error) =>
-                    notify(error.message),
+                    notify(error.message, true),
                   );
                 }
               }}
@@ -1110,7 +1136,7 @@ export function App() {
                 if (isTauri()) {
                   e.preventDefault();
                   void rpc("app.open", { page: "family" }).catch((error) =>
-                    notify(error.message),
+                    notify(error.message, true),
                   );
                 }
               }}
@@ -1169,7 +1195,7 @@ export function App() {
                     exitLock.current = false;
                     setExiting(false);
                   }
-                })().catch((e) => notify(e.message))
+                })().catch((e) => notify(e.message, true))
               }
             >
               {restart
@@ -1321,7 +1347,7 @@ function CalendarPage({
         if (active) setDates(value);
       })
       .catch((e) => {
-        if (active) notify(e.message);
+        if (active) notify(e.message, true);
       });
     return () => {
       active = false;
@@ -1683,7 +1709,7 @@ function EventDetails({
                 type="button"
                 onClick={() =>
                   rpc("event.open", { key: event.key }).catch((e) =>
-                    notify(e.message),
+                    notify(e.message, true),
                   )
                 }
               >

@@ -31,13 +31,17 @@ export function UpdateDialog({
   onClose: () => void;
   onInstall: () => void;
 }) {
-  const { notify, data } = useCalix(),
+  const { notify, data, soundError } = useCalix(),
     [state, setState] = useState<State>({
       phase: "checking",
       current: data.version,
       message: "업데이트 확인 중",
     }),
     keep = useRef(false);
+  const updateError = state.phase === "error" ? state.message : "";
+  useEffect(() => {
+    if (updateError) soundError();
+  }, [updateError, soundError]);
   useEffect(() => {
     let active = true;
     const unsubscribe = subscribe((message) => {
@@ -109,7 +113,7 @@ export function UpdateDialog({
           className="quiet"
           onClick={() =>
             void rpc("app.open", { page: "releases" }).catch((error) =>
-              notify(error.message),
+              notify(error.message, true),
             )
           }
         >
@@ -119,7 +123,7 @@ export function UpdateDialog({
         {!working && state.phase !== "ready" && (
           <button
             onClick={() =>
-              void rpc("update.check").catch((error) => notify(error.message))
+              void rpc("update.check").catch((error) => notify(error.message, true))
             }
           >
             <RefreshCw size={15} />
@@ -131,7 +135,7 @@ export function UpdateDialog({
             className="primary"
             onClick={() =>
               void rpc("update.download").catch((error) =>
-                notify(error.message),
+                notify(error.message, true),
               )
             }
           >

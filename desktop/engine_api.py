@@ -9,7 +9,7 @@ from learning_calendar.storage import Store
 from learning_calendar.models import KST
 from learning_calendar.checklist_store import ChecklistStore
 from learning_calendar.diary_store import DiaryStore
-from learning_calendar.preferences import read_settings, write_settings
+from learning_calendar.preferences import THEMES, read_settings, validate_theme_palette, write_settings
 from learning_calendar.holidays import HolidayCalendar
 
 
@@ -115,14 +115,16 @@ class EngineAPI:
 
     def bootstrap(self):
         state = self.security.state()
+        theme = self.settings.get("theme", "pink")
+        palette = self.settings.get("theme_palettes", {}).get(theme, {})
         if state["locked"]:
             return dict(
-                version="1.6.32", events=[], courses=[], types=[], sessions=[],
+                version="1.6.4", events=[], courses=[], types=[], sessions=[],
                 timetableTerms=[], mainTerm="", timetableConfigured=False,
                 sections=[], statuses=[], tasks=[], offDays=[], journals=[],
                 holidays={}, specialDates={}, lastSync="", syncSummary="",
                 security=state,
-                preferences=dict(theme=self.settings.get("theme", "pink"), glass=True,
+                preferences=dict(theme=theme, theme_palette=palette, glass=True,
                                  reminders={}, nickname="", greeting="{닉네임}님, 오셨군요!",
                                  onboarding_complete=True, attendance_visible=False, attendance_sync=False,
                                  developer_mode=False, font_mode=self.settings.get("font_mode", "pretendard"),
@@ -131,7 +133,7 @@ class EngineAPI:
         events = self.store.events()
         year = datetime.now(KST).year
         return dict(
-            version="1.6.32",
+            version="1.6.4",
             events=[asdict(e) for e in events],
             courses=[asdict(c) for c in self.store.courses()],
             types=self.store.event_types(),
@@ -167,6 +169,7 @@ class EngineAPI:
                         ("onboarding_complete", False),
                     ]
                 },
+                theme_palette=palette,
                 catholic=self.holidays.catholic_enabled,
                 birthday=self.holidays.birthday_enabled,
             ),
@@ -282,13 +285,7 @@ class EngineAPI:
                     or any(ord(c) < 32 and c != "\n" for c in value)
                 ):
                     raise ValueError("닉네임과 홈 문구를 확인하세요.")
-            if "\n" in nickname or theme not in (
-                "pink",
-                "sky",
-                "mint",
-                "purple",
-                "dark", "peach", "amber", "olive", "lavender",
-            ):
+            if "\n" in nickname or theme not in THEMES:
                 raise ValueError("닉네임과 테마를 확인하세요.")
             from learning_calendar.avatar import validate_avatar
 
@@ -534,6 +531,21 @@ class EngineAPI:
             self.settings["reminders"] = settings
             write_settings(self.settings_path, self.settings)
             return settings
+        if method == "preferences.palette.save":
+            if not self.settings.get("developer_mode"):
+                raise ValueError("Enable Developer Mode first.")
+            theme = p.get("theme")
+            if theme not in THEMES:
+                raise ValueError("Unknown theme.")
+            palette = validate_theme_palette(p.get("colors"))
+            palettes = dict(self.settings.get("theme_palettes", {}))
+            if palette:
+                palettes[theme] = palette
+            else:
+                palettes.pop(theme, None)
+            write_settings(self.settings_path, dict(self.settings, theme_palettes=palettes))
+            self.settings["theme_palettes"] = palettes
+            return palette
         if method == "preferences.save":
             developer_mode = p.get(
                 "developer_mode", self.settings.get("developer_mode", False)
@@ -550,7 +562,7 @@ class EngineAPI:
             glass = p.get("glass", self.settings.get("glass", True))
             mode = p.get("font_mode", self.settings.get("font_mode", "pretendard"))
             if (
-                theme not in ("pink", "sky", "mint", "purple", "dark", "peach", "amber", "olive", "lavender")
+                theme not in THEMES
                 or type(glass) is not bool
                 or mode not in ("pretendard", "windows")
             ):

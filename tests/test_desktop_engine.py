@@ -7,6 +7,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "desktop"))
 from engine_api import EngineAPI
 from learning_calendar.models import Course, Event
+from learning_calendar.preferences import read_settings
+from learning_calendar.updates import version_key
 
 
 @pytest.fixture
@@ -23,11 +25,42 @@ def engine(tmp_path):
     api.close()
 
 
+def test_developer_palette_validation_theme_switch_and_reload(engine):
+    edit = {"theme": "sky", "colors": {"accent": "#A1B2C3"}}
+    with pytest.raises(ValueError, match="Developer Mode"):
+        engine.dispatch("preferences.palette.save", edit)
+    engine.dispatch("preferences.save", {"developer_mode": True, "developer_acknowledged": True})
+    engine.dispatch("preferences.save", {"theme": "sky"})
+    engine.dispatch("preferences.palette.save", edit)
+    assert engine.bootstrap()["preferences"]["theme_palette"] == {"accent": "#a1b2c3"}
+    assert read_settings(engine.settings_path)["theme_palettes"] == {"sky": {"accent": "#a1b2c3"}}
+    with pytest.raises(ValueError, match="hex colors"):
+        engine.dispatch("preferences.palette.save", {"theme": "sky", "colors": {"--bg": "url(invalid)"}})
+    engine.dispatch("preferences.save", {"theme": "mint"})
+    assert not engine.bootstrap()["preferences"]["theme_palette"]
+    engine.dispatch("preferences.save", {"theme": "sky"})
+    engine.dispatch("preferences.palette.save", {"theme": "sky", "colors": {}})
+    assert not read_settings(engine.settings_path)["theme_palettes"]
+
+
+def test_sync_completion_sound_preferences(engine):
+    assert engine.bootstrap()["preferences"]["reminders"]["sync_track"] == "1"
+    engine.dispatch("reminders.save", {"sync_track": "10"})
+    assert read_settings(engine.settings_path)["reminders"]["sync_track"] == "10"
+    with pytest.raises(ValueError):
+        engine.dispatch("reminders.save", {"sync_track": "11"})
+
+
+def test_release_164_follows_legacy_revision_labels():
+    tags = ["1.6.2", "v1.6.30", "v1.6.31", "v1.6.32", "v1.6.4"]
+    assert sorted(tags, key=version_key) == tags
+
+
 def test_bootstrap_json_never_loads_qt_widgets_or_private_diary(engine):
     data = engine.dispatch("bootstrap", {})
     json.dumps(data, ensure_ascii=False)
     assert (
-        data["version"] == "1.6.32"
+        data["version"] == "1.6.4"
         and len(data["events"]) == 2
         and not data["tasks"]
         and engine.vault is None
@@ -176,7 +209,7 @@ def test_stdio_round_trip_and_clean_exit_use_temporary_data(tmp_path):
     )
     assert result.returncode == 0, result.stderr
     messages = [json.loads(line) for line in result.stdout.splitlines()]
-    assert next(r for r in messages if r.get("id") == 1)["result"]["version"] == "1.6.32"
+    assert next(r for r in messages if r.get("id") == 1)["result"]["version"] == "1.6.4"
 
 
 def test_quit_exits_cleanly_while_host_keeps_stdin_open(tmp_path):

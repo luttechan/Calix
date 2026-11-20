@@ -1,11 +1,23 @@
 from __future__ import annotations
 import json
+import re
 from pathlib import Path
 
 SERVICE = "Calix"
 LEGACY_SERVICE = "BUFS Learning Calendar"
 ACCOUNT_KEY = "__account_id__"
+THEMES = ("pink", "sky", "mint", "purple", "dark", "peach", "amber", "olive", "lavender")
+PALETTE_COLORS = {"canvas", "surface", "accent", "muted"}
 _credential_backend_ready = False
+
+
+def validate_theme_palette(value):
+    if not isinstance(value, dict) or value.keys() - PALETTE_COLORS or any(
+        not isinstance(color, str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", color)
+        for color in value.values()
+    ):
+        raise ValueError("Use six-digit hex colors.")
+    return {name: color.lower() for name, color in value.items()}
 
 
 def prepare_credentials():
@@ -32,6 +44,7 @@ def read_settings(path: str | Path) -> dict:
         "window_height": 840,
         "active_db": "learning.db",
         "theme": "sky",
+        "theme_palettes": {},
         "notifications": False,
         "glass": True,
         "developer_mode": False,
@@ -80,8 +93,16 @@ def read_settings(path: str | Path) -> dict:
                 defaults["avatar"] = validate_avatar(settings.get("avatar", ""))
             except ValueError:
                 pass
-            if settings.get("theme") in ("pink", "sky", "mint", "purple", "dark", "peach", "amber", "olive", "lavender"):
+            if settings.get("theme") in THEMES:
                 defaults["theme"] = settings["theme"]
+            palettes = settings.get("theme_palettes")
+            if isinstance(palettes, dict):
+                for name in THEMES:
+                    if name in palettes:
+                        try:
+                            defaults["theme_palettes"][name] = validate_theme_palette(palettes[name])
+                        except ValueError:
+                            pass
             if settings.get("font_mode") in ("pretendard", "windows"):
                 defaults["font_mode"] = settings["font_mode"]
             name = settings.get("active_db")
@@ -124,6 +145,7 @@ def write_settings(path: str | Path, settings: dict):
             "window_height",
             "active_db",
             "theme",
+            "theme_palettes",
             "notifications",
             "reminders",
             "attendance_visible",
