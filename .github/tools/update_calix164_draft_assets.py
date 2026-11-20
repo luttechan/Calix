@@ -25,7 +25,7 @@ def gh(*args):
 
 def release():
     value = json.loads(gh('api', endpoint))
-    assert value['draft'] and value['tag_name'] == 'v1.6.4'
+    assert value['draft'] and value['tag_name'] in ('v1.6.4', 'untagged-265c5f15ee8095ebb8d8')
     return value
 
 
@@ -58,7 +58,7 @@ with tempfile.TemporaryDirectory() as folder:
             shutil.copy2(Path('packages') / name, destination)
             uploads.append(str(destination))
     if uploads:
-        gh('release', 'upload', 'v1.6.4', *uploads)
+        gh('release', 'upload', release()['tag_name'], *uploads)
 
 current = assets()
 for name, digest in hashes.items():
@@ -72,9 +72,9 @@ for name, digest in hashes.items():
         assert prior not in current
         rename(current[name], prior)
     rename(current[name + '.pending'], name)
-gh('api', '-X', 'PATCH', endpoint, '-f', f'target_commitish={source}', '-f', f'body={notes}')
+gh('api', '-X', 'PATCH', endpoint, '-F', 'draft=true', '-f', 'tag_name=v1.6.4', '-f', f'target_commitish={source}', '-f', f'body={notes}')
 updated = release()
-assert updated['target_commitish'] == source
+assert updated['target_commitish'] == source and updated['tag_name'] == 'v1.6.4'
 current = {asset['name']: asset for asset in updated['assets']}
 assert all(current[name]['digest'] == digest for name, digest in hashes.items())
 for name in files:
