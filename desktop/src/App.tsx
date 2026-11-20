@@ -44,6 +44,7 @@ import { listen } from "@tauri-apps/api/event";
 import { AttendancePage } from "./Attendance";
 import { StudyPage, FocusDock } from "./Study";
 import { SyncNotice } from "./SyncNotice";
+import { DeadlinePage, CourseOverviewPage } from "./Overview";
 import { GradesPage } from "./Grades";
 import { ProtectedSection, SecurityMonitor, UnlockView } from "./Security";
 import { UpdateDialog } from "./UpdateDialog";
@@ -235,6 +236,8 @@ const navigation: [Page, string, typeof Home][] = [
   ["study", "학습", BookOpen],
   ["checklist", "체크리스트", CheckSquare],
   ["diary", "일기장", BookOpen],
+  ["deadlines", "마감 보드", CalendarDays],
+  ["courses", "과목별 현황", LayoutGrid],
 ];
 export function App() {
   const [appVersion, setAppVersion] = useState(__CALIX_VERSION__);
@@ -985,6 +988,8 @@ export function App() {
               {page === "grades" && <ProtectedSection scope="grades"><GradesPage /></ProtectedSection>}
               {page === "attendance" && <AttendancePage />}
               {page === "study" && <StudyPage />}
+              {page === "deadlines" && <DeadlinePage />}
+              {page === "courses" && <CourseOverviewPage />}
               <div hidden={page !== "diary"}>
                 <CachedDiary active={page === "diary"} />
               </div>

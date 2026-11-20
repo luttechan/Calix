@@ -95,7 +95,7 @@ export type Preferences = {
   attendance_sync: boolean;
   developer_mode: boolean;
   reminders: ReminderSettings;
-  theme: "pink" | "sky" | "mint" | "purple" | "dark";
+  theme: "pink" | "sky" | "mint" | "purple" | "dark" | "peach" | "amber" | "olive" | "lavender";
   glass: boolean;
   font_mode: string;
   catholic: boolean;
@@ -134,6 +134,8 @@ export type Snapshot = {
   journals: Summary[];
 };
 export type Page =
+  | "deadlines"
+  | "courses"
   | "grades"
   | "attendance"
   | "study"

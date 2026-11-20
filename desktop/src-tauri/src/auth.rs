@@ -33,7 +33,7 @@ pub async fn auth_open(app: AppHandle, webview: Webview, theme: Option<String>, 
         crate::focus_developer(&app);
         return Ok(());
     }
-    let theme = theme.filter(|t| ["pink","sky","mint","purple","dark"].contains(&t.as_str())).unwrap_or("pink".into());
+    let theme = theme.filter(|t| ["pink","sky","mint","purple","dark","peach","amber","olive","lavender"].contains(&t.as_str())).unwrap_or("pink".into());
     let font = if font.as_deref() == Some("windows") { "windows" } else { "pretendard" };
     let page = format!("login.html?theme={theme}&font={font}");
     WebviewWindowBuilder::new(&app, "login", WebviewUrl::App(page.into()))

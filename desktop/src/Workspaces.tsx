@@ -594,6 +594,10 @@ export function SettingsPage() {
     ["mint", "민트", "#9bcdb9"],
     ["purple", "퍼플", "#b7a0d4"],
     ["dark", "다크", "#333242"],
+    ["peach", "피치", "#deaa92"],
+    ["amber", "앰버", "#d7b16a"],
+    ["olive", "올리브", "#a7b580"],
+    ["lavender", "라벤더", "#aaa7dc"],
   ];
   return (
     <>

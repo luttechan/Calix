@@ -117,7 +117,7 @@ class EngineAPI:
         state = self.security.state()
         if state["locked"]:
             return dict(
-                version="1.6.20", events=[], courses=[], types=[], sessions=[],
+                version="1.6.30", events=[], courses=[], types=[], sessions=[],
                 timetableTerms=[], mainTerm="", timetableConfigured=False,
                 sections=[], statuses=[], tasks=[], offDays=[], journals=[],
                 holidays={}, specialDates={}, lastSync="", syncSummary="",
@@ -131,7 +131,7 @@ class EngineAPI:
         events = self.store.events()
         year = datetime.now(KST).year
         return dict(
-            version="1.6.20",
+            version="1.6.30",
             events=[asdict(e) for e in events],
             courses=[asdict(c) for c in self.store.courses()],
             types=self.store.event_types(),
@@ -287,7 +287,7 @@ class EngineAPI:
                 "sky",
                 "mint",
                 "purple",
-                "dark",
+                "dark", "peach", "amber", "olive", "lavender",
             ):
                 raise ValueError("닉네임과 테마를 확인하세요.")
             from learning_calendar.avatar import validate_avatar
@@ -550,7 +550,7 @@ class EngineAPI:
             glass = p.get("glass", self.settings.get("glass", True))
             mode = p.get("font_mode", self.settings.get("font_mode", "pretendard"))
             if (
-                theme not in ("pink", "sky", "mint", "purple", "dark")
+                theme not in ("pink", "sky", "mint", "purple", "dark", "peach", "amber", "olive", "lavender")
                 or type(glass) is not bool
                 or mode not in ("pretendard", "windows")
             ):

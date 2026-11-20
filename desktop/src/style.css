@@ -3689,3 +3689,8 @@ body.reminder-surface {
 .shortcut-list { display:grid; gap:16px; margin:12px 0; }
 .shortcut-list > div { display:grid; grid-template-columns:110px 1fr; gap:16px; align-items:start; }
 .shortcut-list dd { margin:0; line-height:1.6; }
+
+:root[data-theme="peach"]{--bg:#fcf4ef;--accent:#a65337;--accent-soft:#f9e5da;--ink:#432f29;--muted:#886f64;--line:#eddbd0;--halo:#efc1a6;--halo2:#ead4c8}
+:root[data-theme="amber"]{--bg:#faf6ed;--accent:#966517;--accent-soft:#f8ebcc;--ink:#3d3423;--muted:#82745b;--line:#e9dfc8;--halo:#e8ce92;--halo2:#e9dfbf}
+:root[data-theme="olive"]{--bg:#f4f6ef;--accent:#617536;--accent-soft:#e8eed9;--ink:#303927;--muted:#738064;--line:#dfe5d1;--halo:#c7d6a6;--halo2:#d7ddc7}
+:root[data-theme="lavender"]{--bg:#f4f3fb;--accent:#7161aa;--accent-soft:#ebe7f8;--ink:#34304a;--muted:#7d7595;--line:#e2ddef;--halo:#c9c3e9;--halo2:#ded4ee}

@@ -1,5 +1,7 @@
+import {sessionLanes} from "./planningState";
+import {FreeTimeFinder} from "./Planning";
 import { NumberField } from "./NumberField";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Plus, Sun, Trash2, Monitor, ArrowUpRight } from "lucide-react";
 import { Modal, TypeBadge, useCalix } from "./App";
 import { weekdays, dueText, status } from "./dates";
@@ -12,7 +14,15 @@ const minute = (value: string) => {
 };
 export function TimetablePage() {
   const { data, mutate } = useCalix();
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const update = () => setNow(Date.now());
+    const timer = setInterval(update, 10000);
+    window.addEventListener("focus", update);
+    return () => { clearInterval(timer); window.removeEventListener("focus", update); };
+  }, []);
   const [days, setDays] = useState(5);
+  const [density,setDensity] = useState(80);
   const [mode, setMode] = useState<"view" | "edit">("view");
   const [semester, setSemester] = useState(data.mainTerm);
   const [termDialog, setTermDialog] = useState(!data.timetableConfigured);
@@ -28,6 +38,7 @@ export function TimetablePage() {
   const [selectedDays, setSelectedDays] = useState(offDays);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const scheduled = sessions.filter((s) => !s.is_online);
+  const lanes = sessionLanes(scheduled);
   const online = sessions.filter((s) => s.is_online);
   const start = Math.min(
     480,
@@ -42,10 +53,10 @@ export function TimetablePage() {
     end,
     online.length ? 95 : 0,
     data.timetableConfigured,
+    density,
   );
   const workloads = useMemo(() => {
     const counts = new Map<number, { assignment: number; movie: number }>();
-    const now = Date.now();
     for (const event of data.events) {
       if (
         event.completed ||
@@ -58,7 +69,7 @@ export function TimetablePage() {
       counts.set(event.course_id, row);
     }
     return counts;
-  }, [data.events]);
+  }, [data.events, now]);
   const name = (s: Session) =>
     s.title || data.courses.find((c) => c.id === s.course_id)?.name || "수업";
   const work = (s: Session) => {
@@ -150,6 +161,7 @@ export function TimetablePage() {
             </option>
           ))}
         </select>
+        <label>시간 간격<select aria-label="시간표 시간 간격" value={density} onChange={e=>setDensity(Number(e.target.value))}><option value={0}>화면에 맞춤</option><option value={64}>보통</option><option value={80}>넓게</option><option value={104}>아주 넓게</option></select></label>
         <button onClick={() => setTermDialog(true)}>학기 추가</button>
         {data.timetableConfigured &&
           (term.name === data.mainTerm ? (
@@ -166,6 +178,7 @@ export function TimetablePage() {
             </button>
           ))}
       </div>
+      {data.timetableConfigured && <FreeTimeFinder sessions={sessions} offDays={offDays}/>}
       {!data.timetableConfigured ? (
         <section className="glass empty">
           <p>학기를 설정하세요.</p>
@@ -183,7 +196,7 @@ export function TimetablePage() {
             <div
               className="week-headers"
               style={{
-                gridTemplateColumns: `48px repeat(${days},minmax(105px,1fr))`,
+                gridTemplateColumns: `48px repeat(${days},minmax(150px,1fr))`,
               }}
             >
               <span />
@@ -200,7 +213,7 @@ export function TimetablePage() {
             <div
               className="week-body"
               style={{
-                gridTemplateColumns: `48px repeat(${days},minmax(105px,1fr))`,
+                gridTemplateColumns: `48px repeat(${days},minmax(150px,1fr))`,
                 height,
               }}
             >
@@ -246,6 +259,9 @@ export function TimetablePage() {
                             style={{
                               top: ((minute(s.start_time) - start) / 60) * unit,
                               height: Math.max(20, size - 4),
+                              left: `calc(${(lanes.get(s.id)?.lane || 0) * 100 / (lanes.get(s.id)?.count || 1)}% + 3px)`,
+                              right: "auto",
+                              width: `calc(${100 / (lanes.get(s.id)?.count || 1)}% - 6px)`,
                               borderLeftColor: s.color || "var(--accent)",
                               background: `color-mix(in srgb,${s.color || "var(--accent)"} 12%,var(--surface))`,
                             }}
