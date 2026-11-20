@@ -814,16 +814,14 @@ Section Install
 
   StrCpy $CalixPinnedSource $CalixPreviousLocation
   Call CalixRetargetTaskbarPins
-  ${If} $CalixPurgeRetained = 1
-    ${GetParent} "$INSTDIR" $CalixRetainedParent
-    Call CalixPurgeRetainedVersions
-    ${If} $CalixPreviousLocation != ""
-      ${GetParent} "$CalixPreviousLocation" $CalixRetainedParent
-      Call CalixPurgeRetainedVersions
-    ${EndIf}
-    StrCpy $CalixRetainedParent "$LOCALAPPDATA"
-    Call CalixPurgeRetainedVersions
+  ${GetParent} "$INSTDIR" $CalixRetainedParent
+  Call CalixMigrateRetainedVersions
+  ${If} $CalixPreviousLocation != ""
+    ${GetParent} "$CalixPreviousLocation" $CalixRetainedParent
+    Call CalixMigrateRetainedVersions
   ${EndIf}
+  StrCpy $CalixRetainedParent "$LOCALAPPDATA"
+  Call CalixMigrateRetainedVersions
 
   ${GetSize} "$INSTDIR" "/M=uninstall.exe /S=0K /G=0" $0 $1 $2
   IntOp $0 $0 + ${ESTIMATEDSIZE}
@@ -1139,7 +1137,7 @@ Function CalixRetargetTaskbarPins
   Pop $0
 FunctionEnd
 
-Function CalixPurgeRetainedVersions
+Function CalixMigrateRetainedVersions
   ${If} $CalixRetainedParent == ""
     Return
   ${EndIf}
@@ -1163,19 +1161,21 @@ Function CalixPurgeRetainedVersions
       ; Never run that old uninstaller: it would modify the current registry.
       StrCpy $CalixPinnedSource $CalixRetainedPath
       Call CalixRetargetTaskbarPins
-      Delete "$CalixRetainedPath\${MAINBINARYNAME}.exe"
-      Delete "$CalixRetainedPath\calix-engine.exe"
-      ${IfNot} ${FileExists} "$CalixRetainedPath\${MAINBINARYNAME}.exe"
-      ${AndIfNot} ${FileExists} "$CalixRetainedPath\calix-engine.exe"
-        Push "$CalixRetainedPath\_internal"
-        Call CalixRemoveTree
-        ${IfNot} ${FileExists} "$CalixRetainedPath\_internal"
-          Delete "$CalixRetainedPath\uninstall.previous"
-          RMDir "$CalixRetainedPath"
+      ${If} $CalixPurgeRetained = 1
+        Delete "$CalixRetainedPath\${MAINBINARYNAME}.exe"
+        Delete "$CalixRetainedPath\calix-engine.exe"
+        ${IfNot} ${FileExists} "$CalixRetainedPath\${MAINBINARYNAME}.exe"
+        ${AndIfNot} ${FileExists} "$CalixRetainedPath\calix-engine.exe"
+          Push "$CalixRetainedPath\_internal"
+          Call CalixRemoveTree
+          ${IfNot} ${FileExists} "$CalixRetainedPath\_internal"
+            Delete "$CalixRetainedPath\uninstall.previous"
+            RMDir "$CalixRetainedPath"
+          ${EndIf}
         ${EndIf}
-      ${EndIf}
-      ${If} ${FileExists} "$CalixRetainedPath\uninstall.previous"
-        DetailPrint "정리하지 못한 이전 버전: $CalixRetainedPath"
+        ${If} ${FileExists} "$CalixRetainedPath\uninstall.previous"
+          DetailPrint "정리하지 못한 이전 버전: $CalixRetainedPath"
+        ${EndIf}
       ${EndIf}
     ${EndIf}
     ClearErrors
