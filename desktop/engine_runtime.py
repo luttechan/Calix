@@ -358,7 +358,7 @@ def main():
 
                         self.updates = UpdateService(self.notify, self)
                     if method == "update.startup":
-                        if not self.startup_update_checked:
+                        if not self.startup_update_checked or params.get("reopened") is True:
                             self.startup_update_checked = True
                             if self.updates.phase not in (
                                 "checking",

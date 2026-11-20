@@ -12,17 +12,20 @@ import {
 import { Modal, TypeBadge, useCalix } from "./App";
 import { rpc } from "./bridge";
 import { InlineCell } from "./InlineCell";
+import { ChecklistDeadline } from "./ChecklistDeadline";
+import { useChecklistWidths } from "./checklistWidths";
 import { isTauri, invoke } from "@tauri-apps/api/core";
 import { UpdateDialog } from "./UpdateDialog";
 import { ProfileSettings, ResetSettings } from "./Profile";
 import { ReminderSettingsPanel } from "./Reminders";
 import { DevPanel } from "./DevPanel";
 import { SecuritySettings } from "./Security";
-import { dateKey, dueText, localInput, status, weekdays } from "./dates";
+import { dateKey, dueText, status, weekdays } from "./dates";
 import type { Task, Preferences } from "./types";
 const taskCollator = new Intl.Collator("ko", { numeric: true });
 export function ChecklistPage() {
   const { data, mutate, notify } = useCalix();
+  const columns = useChecklistWidths();
   const [listPage, setListPage] = useState(0),
     [section, setSection] = useState(1),
     [search, setSearch] = useState(""),
@@ -78,7 +81,6 @@ export function ChecklistPage() {
     <>
       <div className="page-heading">
         <div>
-          <p className="eyebrow">한 번에 하나씩</p>
           <h1>체크리스트</h1>
         </div>
         <button
@@ -149,7 +151,8 @@ export function ChecklistPage() {
           <span className="muted">{rows.length}개</span>
         </div>
         <div className="table-scroll">
-          <table className="checklist-table">
+          <table className="checklist-table" data-resized={Boolean(columns.widths)} style={columns.tableWidth ? {width: columns.tableWidth, minWidth: columns.tableWidth} : undefined}>
+            {columns.widths && <colgroup>{columns.widths.map((width, index) => <col key={index} style={{width}} />)}<col style={{width:columns.actionWidth}} /></colgroup>}
             <thead>
               <tr>
                 {[
@@ -160,8 +163,8 @@ export function ChecklistPage() {
                   ["professor", "담당 교수"],
                   ["status_name", "상태"],
                   ["note", "비고"],
-                ].map(([key, title]) => (
-                  <th key={key}>
+                ].map(([key, title], index) => (
+                  <th key={key} aria-sort={sort.key === key ? (sort.descending ? "descending" : "ascending") : "none"}>
                     <button
                       onClick={() =>
                         setSort({
@@ -176,6 +179,7 @@ export function ChecklistPage() {
                         <span>{sort.descending ? "↓" : "↑"}</span>
                       ) : null}
                     </button>
+                    <span className="checklist-resize" {...columns.handle(index, title)} />
                   </th>
                 ))}
                 <th className="delete-cell" aria-label="삭제" />
@@ -207,15 +211,7 @@ export function ChecklistPage() {
                     </div>
                   </td>
                   <td>
-                    <InlineCell
-                      label="기한"
-                      type="datetime-local"
-                      value={localInput(task.due_at)}
-                      display={dueText(task.due_at)}
-                      onCommit={(value) =>
-                        save(task, "due_at", value ? value + ":00+09:00" : null)
-                      }
-                    />
+                    <ChecklistDeadline value={task.due_at} onCommit={(value) => save(task, "due_at", value)} />
                   </td>
                   {(["category", "role", "professor"] as const).map((field) => (
                     <td key={field}>
@@ -775,7 +771,7 @@ export function SettingsPage() {
             <h2>일정</h2>
           </div>
           <button className="settings-link" onClick={() => setType(true)}>
-            사용자 유형
+            내 일정 카테고리
             <ArrowUpRight size={17} />
           </button>
           <button className="settings-link" onClick={() => setHoliday(true)}>
@@ -845,7 +841,7 @@ export function SettingsPage() {
         <ResetSettings />
       </div>
       {type && (
-        <Modal title="사용자 유형" onClose={() => setType(false)}>
+        <Modal title="내 일정 카테고리" onClose={() => setType(false)}>
           <div className="type-list">
             {data.types.map((t) => (
               <div key={t.id}>

@@ -559,21 +559,23 @@ function SessionViewer({
                   }}
                 >
                   <TypeBadge event={e} />
-                  <span>
+                  <span className="session-event-content">
                     <strong>{e.title}</strong>
-                    <small>{dueText(e.due_at)}</small>
+                    <span className="session-event-metadata">
+                      <small>{dueText(e.due_at)}</small>
+                      <small
+                        className={
+                          !e.completed &&
+                          e.due_at &&
+                          new Date(e.due_at).getTime() < Date.now()
+                            ? "danger"
+                            : "muted"
+                        }
+                      >
+                        {status(e)}
+                      </small>
+                    </span>
                   </span>
-                  <small
-                    className={
-                      !e.completed &&
-                      e.due_at &&
-                      new Date(e.due_at).getTime() < Date.now()
-                        ? "danger"
-                        : "muted"
-                    }
-                  >
-                    {status(e)}
-                  </small>
                 </button>
               ))}
             </section>

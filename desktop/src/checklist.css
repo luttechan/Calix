@@ -1,0 +1,28 @@
+.checklist-tools { gap: 10px 16px; flex-wrap: wrap; }
+.checklist-tools > input { border-color: var(--ui-border); background: var(--ui-field); }
+.checklist-tools .checkbox-label { padding: 5px 8px; border-radius: 7px; }
+.checklist-tools .checkbox-label:hover { background: var(--ui-hover); }
+.checklist-table th { position: relative; }
+.checklist-table th button { padding-inline-end: 13px; min-width: 0; }
+.checklist-table[data-resized="true"] th { width: auto; }
+.checklist-resize { position: absolute; inset: 6px 0 6px auto; width: 9px; cursor: col-resize; touch-action: none; }
+.checklist-resize::after { content: ""; position: absolute; inset: 4px 3px; border-inline-end: 1px solid var(--ui-border); }
+.checklist-resize:is(:hover, :focus-visible)::after { border-inline-end: 2px solid var(--accent); }
+.checklist-resize:focus-visible { outline: 1px solid var(--accent); border-radius: 4px; }
+.checklist-table .checklist-deadline { display: flex; align-items: center; gap: 6px; }
+.checklist-deadline svg { flex: none; color: var(--accent); }
+.checklist-deadline span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.modal.deadline-editor { width: min(374px, calc(100vw - 28px)); }
+.deadline-calendar-nav { display: grid; grid-template-columns: auto 1fr auto; align-items: center; justify-items: center; }
+.deadline-calendar-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; margin-top: 8px; }
+.deadline-calendar-days > span { text-align: center; color: var(--muted); font-size: 12px; }
+.deadline-calendar-days button { min-height: 32px; padding: 4px; border: 1px solid transparent; border-radius: 8px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.deadline-calendar-days [data-outside="true"] { color: var(--muted); opacity: .65; }
+.deadline-calendar-days [data-today="true"] { border-color: var(--accent); }
+.deadline-calendar-days [aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); font-weight: 700; opacity: 1; }
+.deadline-editor-fields { display: grid; grid-template-columns: minmax(0, 1fr) 61px 61px; gap: 8px; border-top: 1px solid var(--line); margin-top: 14px; padding-top: 12px; }
+.deadline-editor-fields label { margin: 0; gap: 4px; }
+.checklist-table .deadline-editor-fields input { min-height: 38px; padding: 7px 11px; border-color: var(--ui-border); background: var(--ui-field); }
+.deadline-editor-fields input[aria-invalid="true"] { border-color: #b54157; }
+.deadline-actions { justify-content: end; }
+.deadline-actions .text-button { margin-inline-end: auto; }

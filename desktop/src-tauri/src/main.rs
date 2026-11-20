@@ -232,7 +232,10 @@ fn main() {
             }
         })
         ;
-    let builder = if check_mode { builder } else { builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show(app))) };
+    let builder = if check_mode { builder } else { builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        show(app);
+        let _ = app.emit_to("main", "app:launch", ());
+    })) };
     builder.run(context).expect("Calix failed to start");
 }
 

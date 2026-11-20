@@ -5,6 +5,7 @@ import "./style.css";
 import "./typography.css";
 import "./interface.css";
 import "./select.css";
+import "./checklist.css";
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <App />
