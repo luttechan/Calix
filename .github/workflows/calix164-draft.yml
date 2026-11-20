@@ -2,7 +2,7 @@ name: Refresh Calix 1.6.4 draft
 on:
   push:
     branches: ['codex/calix164-draft-details']
-    paths: ['.github/workflows/calix164-draft.yml']
+    paths: ['.github/workflows/calix164-draft.yml', '.github/tools/update_calix164_draft_assets.py']
 permissions:
   contents: write
   actions: read
