@@ -150,7 +150,7 @@ class AppSecurity:
                 raise ValueError("잠금 범위를 확인하세요.")
 
     def require(self, method):
-        if method.startswith("security.") or method in ("bootstrap", "quit", "engine.state", "data.reset"):
+        if method.startswith("security.") or method in ("bootstrap", "quit", "engine.state", "data.reset", "update.startup"):
             return
         if method.startswith("grades.") and not self.material:
             raise ValueError("학점 메뉴를 사용하려면 비밀번호를 설정하세요.")

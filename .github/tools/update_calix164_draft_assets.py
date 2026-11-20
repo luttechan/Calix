@@ -10,10 +10,13 @@ import tempfile
 repo = os.environ['GH_REPO']
 source = os.environ['SOURCE']
 endpoint = f'repos/{repo}/releases/452901539'
-previous = '483a36e9e913dbf6e1e35c20f209d597cd869557'
+previous = 'ee7c867277dcf425a4cc2f39f0529e630169e73b'
 notes = ('- Dev Lab 테마 팔레트 편집\n'
          '- 오류음과 동기화 완료음 Notification 1–10\n'
          '- 달력 연도, 월 이동 및 드롭다운 디자인 통일\n'
+         '- 체크리스트 열 너비와 기한 편집\n'
+         '- 실행 잠금 화면, 매 실행 업데이트 확인\n'
+         '- 시간표 강의 상세의 긴 제목 줄바꿈\n'
          '- 시간표 요일 정렬 및 수업 상세 정리\n'
          '- Windows 작업표시줄 버전 명칭 표시\n'
          '- 안내 문구 정리')

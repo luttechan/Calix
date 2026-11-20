@@ -184,6 +184,27 @@ def test_startup_update_checks_once_without_download(service):
     assert all("error" not in row for row in output if "id" in row)
 
 
+def test_reopening_a_locked_app_rechecks_updates_without_overlapping(service):
+    instance, output = service
+    calls = []
+    instance.handle(dict(id=90, method="security.setup", params=dict(
+        password="Calix lifecycle fixture!", policy=dict(main=False, timetable=False, grades=False, idle_minutes=5),
+    )))
+    instance.handle(dict(id=91, method="security.lock", params={"scope": "main"}))
+    assert all("error" not in row for row in output if row.get("id") in (90, 91))
+    instance.updates = SimpleNamespace(
+        phase="idle", state={"phase": "idle"}, check=lambda **kwargs: calls.append(kwargs),
+    )
+    instance.handle(dict(id=1, method="update.startup", params={}))
+    instance.handle(dict(id=2, method="update.startup", params={"reopened": True}))
+    instance.updates.phase = "downloading"
+    instance.handle(dict(id=3, method="update.startup", params={"reopened": True}))
+    instance.handle(dict(id=4, method="update.check", params={}))
+    assert calls == [{"automatic": True}, {"automatic": True}]
+    assert all("error" not in row for row in output if row.get("id") in (1, 2, 3))
+    assert any(row.get("id") == 4 and "error" in row for row in output)
+
+
 def test_developer_metrics_and_inspector_do_not_enable_logging(developer_service):
     instance, output = developer_service
     for request_id, method in enumerate(

@@ -2771,7 +2771,7 @@ label textarea {
 }
 .session-event-lists {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
   margin-top: 20px;
 }
@@ -2786,27 +2786,39 @@ label textarea {
   font-size: 15px;
 }
 .session-event-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   width: 100%;
+  min-width: 0;
   text-align: left;
   gap: 10px;
-  align-items: center;
+  align-items: start;
+  justify-content: stretch;
+  white-space: normal;
   padding: 12px;
   margin-bottom: 8px;
   border-radius: 14px;
 }
-.session-event-row > span {
-  flex: 1;
-  min-width: 0;
-}
-.session-event-row strong {
-  font-weight: 500;
-  display: block;
+.session-event-row > .type-badge {
+  white-space: normal;
   overflow-wrap: anywhere;
 }
-.session-event-row small {
-  display: block;
-  margin-top: 4px;
+.session-event-content {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.session-event-content strong {
+  font-weight: 500;
+}
+.session-event-metadata {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 8px;
+}
+.session-event-metadata small {
   font-size: 11px;
 }
 .session-event-row.completed {
@@ -2814,7 +2826,7 @@ label textarea {
 }
 @media (max-width: 800px) {
   .session-event-lists {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 body.reminder-surface {

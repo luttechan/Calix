@@ -57,6 +57,9 @@ class UpdateService(QObject):
             QNetworkRequest.RedirectPolicy.ManualRedirectPolicy,
         )
         request.setRawHeader(b"User-Agent", ("Calix/" + VERSION).encode())
+        if self.phase == "checking":
+            request.setAttribute(QNetworkRequest.Attribute.CacheLoadControlAttribute, QNetworkRequest.CacheLoadControl.AlwaysNetwork)
+            request.setRawHeader(b"Cache-Control", b"no-cache")
         request.setRawHeader(
             b"Accept",
             (

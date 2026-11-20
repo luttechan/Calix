@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { LockKeyhole, ShieldCheck } from "lucide-react";
+import { LockKeyhole, ShieldCheck, UserRound } from "lucide-react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { Modal, useCalix } from "./App";
 import { rpc } from "./bridge";
@@ -7,18 +7,38 @@ import { NumberField } from "./NumberField";
 import type { SecurityState } from "./types";
 import "./security-grades.css";
 
+const lockTime = new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+const lockDate = new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric", weekday: "long" });
+
+function LockClock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = () => {
+      setNow(new Date());
+      timer = setTimeout(tick, 60000 - Date.now() % 60000);
+    };
+    tick();
+    return () => clearTimeout(timer);
+  }, []);
+  return <div className="lock-clock"><time dateTime={now.toISOString()}>{lockTime.format(now)}</time><span>{lockDate.format(now)}</span></div>;
+}
+
 export function UnlockView({ scope = "main" }: { scope?: "main" | "timetable" | "grades" }) {
-  const { mutate, notify } = useCalix();
+  const { data, mutate, notify } = useCalix();
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [reset, setReset] = useState(false);
   const [confirmation, setConfirmation] = useState("");
   const title = scope === "main" ? "Calix 잠금" : scope === "timetable" ? "시간표 잠금" : "학점 메뉴 잠금";
+  const main = scope === "main";
   return (
-    <section className="unlock-view" aria-labelledby="unlock-title">
-      <span className="security-symbol"><LockKeyhole size={26} /></span>
-      <h1 id="unlock-title">{title}</h1>
+    <section className={`unlock-view${main ? " startup-unlock" : ""}`} aria-labelledby="unlock-title">
+      {main ? <><LockClock /><div className="lock-profile" data-checking={pending}>
+        <div className="lock-avatar">{data.preferences.avatar ? <img src={data.preferences.avatar} alt="" /> : <UserRound size={48} aria-hidden="true" />}</div>
+        <h1 id="unlock-title">{data.preferences.nickname || "Calix"}</h1>
+      </div></> : <><span className="security-symbol"><LockKeyhole size={26} /></span><h1 id="unlock-title">{title}</h1></>}
       <form onSubmit={event => {
         event.preventDefault();
         setPending(true);

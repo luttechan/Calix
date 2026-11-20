@@ -269,6 +269,7 @@ export function App() {
   }, []);
   const developerClicks = useRef({ count: 0, time: 0 });
   const privacyLocked = useRef(false);
+  const lockScreenShown = useRef(false);
   const navigationRequest = useRef(0);
   const refreshRequest = useRef(0);
   const lockRequest = useRef(false);
@@ -465,6 +466,7 @@ export function App() {
     const cleanups: (() => void)[] = [];
     for (const [event, handler] of [
       ["app:exit-request", () => setExit(true)],
+      ["app:launch", () => { void rpc("update.startup", { reopened: true }).catch(() => {}); }],
       ["auth:error-cue", soundError],
       [
         "app:hidden",
@@ -675,12 +677,13 @@ export function App() {
     [data, appVersion, mutate, notify, openEvent, soundError],
   );
   if (data?.security?.locked && context) {
+    lockScreenShown.current = true;
     return <Context.Provider value={context}>
       <div className="security-app-lock"><WindowControls /><UnlockView /></div>
     </Context.Provider>;
   }
   return (
-    <div className="app-shell">
+    <div className={`app-shell${lockScreenShown.current ? " app-shell--unlocked" : ""}`}>
       <SecurityMonitor state={data?.security} beforeLock={finishEditing} refresh={refresh} />
       <DeveloperConsole allowed={Boolean(data?.preferences.developer_mode)} onError={soundError} />
       <aside className="sidebar">
