@@ -362,6 +362,29 @@
 .modal select {
   max-width: 100%;
 }
+.session-viewer > header h2 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+}
+.session-facts {
+  margin: 0;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-panel);
+  border-radius: 13px;
+}
+.session-facts > div {
+  display: grid;
+  grid-template-columns: 4.25rem minmax(0, 1fr);
+  align-items: baseline;
+  column-gap: 12px;
+  padding: 10px 14px;
+}
+.session-facts > div + div { border-top: 1px solid var(--ui-border); }
+.session-facts dt { color: var(--muted); font-size: 13px; }
+.session-facts dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.session-viewer .session-event-filters { margin-top: 17px; width: fit-content; }
+.session-events-empty { margin: 16px 0 0; color: var(--muted); font-size: 13px; }
 .dialog-actions {
   gap: 8px;
 }

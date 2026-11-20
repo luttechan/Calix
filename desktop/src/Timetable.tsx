@@ -503,26 +503,26 @@ function SessionViewer({
 }) {
   const { data, openEvent } = useCalix();
   const [filter, setFilter] = useState<"pending" | "all" | "done">("pending");
-  const events = data.events.filter(
+  const courseEvents = data.events.filter(
     (e) =>
       e.course_id === session.course_id &&
       session.course_id > 0 &&
-      (filter === "all" || e.completed === (filter === "done")),
+      (e.kind === "assignment" || e.kind === "movie"),
   );
+  const events = courseEvents.filter(
+    (e) => filter === "all" || e.completed === (filter === "done"),
+  );
+  const schedule = session.is_online
+    ? "정해진 시간 없음"
+    : `${weekdays[session.day]}요일 ${session.start_time}–${session.end_time}`;
   return (
-    <Modal title={name} onClose={onClose} wide>
-      <p className="muted">
-        {[
-          session.professor,
-          session.is_online
-            ? "비대면"
-            : `${weekdays[session.day]} ${session.start_time}–${session.end_time}`,
-          session.room,
-        ]
-          .filter(Boolean)
-          .join(" / ")}
-      </p>
-      <div className="segmented" aria-label="수업 일정 상태">
+    <Modal title={name} onClose={onClose} wide={courseEvents.length > 0} className="session-viewer">
+      <dl className="session-facts">
+        <div><dt>교수명</dt><dd>{session.professor?.trim() || "미등록"}</dd></div>
+        <div><dt>시간</dt><dd>{schedule}</dd></div>
+        <div><dt>강의실</dt><dd>{session.room?.trim() || (session.is_online ? "온라인" : "미등록")}</dd></div>
+      </dl>
+      {courseEvents.length > 0 && <div className="segmented session-event-filters" aria-label="수업 일정 상태">
         {(
           [
             ["pending", "미완료"],
@@ -539,8 +539,8 @@ function SessionViewer({
             {label}
           </button>
         ))}
-      </div>
-      <div className="session-event-lists">
+      </div>}
+      {events.length ? <div className="session-event-lists">
         {(["assignment", "movie"] as const).map((kind) => {
           const rows = events.filter((e) => e.kind === kind);
           return (
@@ -576,17 +576,12 @@ function SessionViewer({
                   </small>
                 </button>
               ))}
-              {!rows.length && (
-                <div className="empty">
-                  {session.course_id > 0
-                    ? "일정 없음"
-                    : "연결된 강의 없음"}
-                </div>
-              )}
             </section>
           );
         })}
-      </div>
+      </div> : <p className="session-events-empty" role="status">
+        {session.course_id <= 0 ? "연결된 강의 없음" : courseEvents.length === 0 ? "과제·영상 없음" : filter === "pending" ? "미완료 일정 없음" : "완료 일정 없음"}
+      </p>}
     </Modal>
   );
 }

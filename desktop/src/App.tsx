@@ -102,12 +102,14 @@ export function Modal({
   onClose,
   wide = false,
   closeLabel = "닫기",
+  className = "",
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   wide?: boolean;
   closeLabel?: string;
+  className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -118,7 +120,7 @@ export function Modal({
     <dialog
       ref={ref}
       aria-label={title}
-      className={`modal ${wide ? "wide" : ""}`}
+      className={["modal", wide && "wide", className].filter(Boolean).join(" ")}
       onCancel={(e) => {
         e.preventDefault();
         onClose();

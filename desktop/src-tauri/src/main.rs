@@ -5,6 +5,8 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState};
 mod auth;
 mod campus;
+#[cfg(windows)]
+mod taskbar;
 
 #[derive(Default)]
 pub struct DeveloperState(pub std::sync::atomic::AtomicBool);
@@ -73,10 +75,18 @@ async fn developer_export(app: tauri::AppHandle, webview: tauri::Webview, report
 }
 
 #[tauri::command]
-fn quit_app(app: tauri::AppHandle, webview: tauri::Webview) -> Result<(), String> { auth::trusted(&webview, &["main"])?;app.exit(0);Ok(()) }
+fn quit_app(app: tauri::AppHandle, webview: tauri::Webview) -> Result<(), String> {
+    auth::trusted(&webview, &["main"])?;
+    #[cfg(windows)]
+    clear_taskbar_identity(&app);
+    app.exit(0);
+    Ok(())
+}
 #[tauri::command]
 fn restart_app(app: tauri::AppHandle, webview: tauri::Webview) -> Result<(), String> {
     auth::trusted(&webview, &["main"])?;
+    #[cfg(windows)]
+    clear_taskbar_identity(&app);
     app.restart();
 }
 #[tauri::command]
@@ -101,6 +111,27 @@ fn register_taskbar_identity(identifier: &str) {
     let identifier: Vec<u16> = identifier.encode_utf16().chain(std::iter::once(0)).collect();
     // Windows reads this null-terminated string before any window is created.
     unsafe { SetCurrentProcessExplicitAppUserModelID(identifier.as_ptr()) };
+}
+
+#[cfg(windows)]
+fn clear_taskbar_identity(app: &tauri::AppHandle) {
+    if let Some(hwnd) = app.get_webview_window("main").and_then(|window| window.hwnd().ok()) {
+        taskbar::clear_identity(windows::Win32::Foundation::HWND(hwnd.0));
+    }
+}
+
+#[cfg(windows)]
+fn verify_taskbar_identity(app: &tauri::App, title: &str) -> Result<String, String> {
+    let probe = tauri::window::WindowBuilder::new(app, "taskbar-probe")
+        .visible(false)
+        .skip_taskbar(true)
+        .build()
+        .map_err(|error| error.to_string())?;
+    let result = probe.hwnd().map_err(|error| error.to_string()).and_then(|hwnd| {
+        taskbar::verify_identity(windows::Win32::Foundation::HWND(hwnd.0), &app.config().identifier, title)
+    });
+    let _ = probe.destroy();
+    result
 }
 
 #[tauri::command]
@@ -143,16 +174,34 @@ fn main() {
         .invoke_handler(tauri::generate_handler![privacy_lock, reminder::reminder_show, reminder::reminder_payload, reminder::reminder_close, reminder::reminder_open_event, developer_console, developer_disable, developer_devtools, developer_export, campus::campus_identity, campus::campus_collect, campus::campus_cancel, campus::campus_debug, quit_app, restart_app, app_ready, auth::auth_open, auth::auth_mount, auth::auth_complete, auth::auth_status, auth::auth_reload, auth::auth_logout, auth::backup_file])
         .setup(move |app| {
             if let Some(path) = check.clone() {
+                #[cfg(windows)]
+                let taskbar_check = (!reminder_check).then(|| verify_taskbar_identity(app, &window_title));
                 let handle=app.handle().clone();
                 tauri::async_runtime::spawn(async move {
                     let result=if reminder_check {reminder::self_check(handle.clone()).await}else{campus::self_check(handle.clone()).await};
-                    let passed=result.is_ok();
                     let mut report=result.unwrap_or_else(|error|serde_json::json!({"passed":false,"error":error}));
                     report["mainWindowTitle"] = serde_json::Value::String(window_title);
+                    #[cfg(windows)]
+                    if let Some(check) = taskbar_check {
+                        match check {
+                            Ok(name) => report["taskbarDisplayName"] = serde_json::Value::String(name),
+                            Err(error) => {
+                                report["taskbarError"] = serde_json::Value::String(error);
+                                report["passed"] = serde_json::Value::Bool(false);
+                            }
+                        }
+                    }
+                    let passed = report["passed"].as_bool() == Some(true);
                     let _=std::fs::write(path,report.to_string());
                     handle.exit(if passed {0}else{1});
                 });
                 return Ok(());
+            }
+            #[cfg(windows)]
+            if let Some(hwnd) = app.get_webview_window("main").and_then(|window| window.hwnd().ok()) {
+                if let Err(error) = taskbar::set_identity(windows::Win32::Foundation::HWND(hwnd.0), &app.config().identifier, &window_title) {
+                    eprintln!("Could not set the Windows taskbar title: {error}");
+                }
             }
             let open = MenuItem::with_id(app, "open", "열기", true, None::<&str>)?;
             let exit = MenuItem::with_id(app, "exit", "종료", true, None::<&str>)?;
