@@ -11,7 +11,7 @@ export function PlanningPanel({ now }: { now: Date }) {
     <div className="deadline-grid planning-panel">
       <article className="overview-card">
         <h2>오늘의 학습 계획</h2>
-        <div className="overview-tools">
+        <div className="plan-fields">
           <label>
             학습 시간
             <select
@@ -41,15 +41,19 @@ export function PlanningPanel({ now }: { now: Date }) {
             </select>
           </label>
         </div>
-        <p className="muted">
+        <p className="plan-summary muted" aria-live="polite">
           {plan.length}개 · 예상 {plan.length * minutes}분
         </p>
         <div className="overview-items">
           {plan.map((e, i) => (
-            <button key={e.key} onClick={() => openEvent(e.key)}>
-              <span>{i + 1}</span>
-              <span>
-                <strong>{e.title}</strong>
+            <button
+              className="plan-step"
+              key={e.key}
+              onClick={() => openEvent(e.key)}
+            >
+              <span className="plan-number">{i + 1}</span>
+              <span className="plan-item-copy">
+                <strong title={e.title}>{e.title}</strong>
                 <small>{e.course_name}</small>
               </span>
             </button>
@@ -74,8 +78,12 @@ export function PlanningPanel({ now }: { now: Date }) {
               </summary>
               <div className="overview-items">
                 {items.map((e) => (
-                  <button key={e.key} onClick={() => openEvent(e.key)}>
-                    {e.title}
+                  <button
+                    className="plan-warning-item"
+                    key={e.key}
+                    onClick={() => openEvent(e.key)}
+                  >
+                    <strong title={e.title}>{e.title}</strong>
                   </button>
                 ))}
               </div>

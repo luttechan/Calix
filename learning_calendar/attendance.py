@@ -14,6 +14,13 @@ STATES = {
 }
 
 
+def normalize_status(value) -> str | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    state = value.strip().casefold()
+    return state if state in STATES else "unknown"
+
+
 def integer(value):
     if type(value) is int and 0 <= value < 2**53:
         return value
@@ -61,7 +68,7 @@ def project(course, sources):
                 l = integer(lesson.get("lesson_position"))
                 if l is None:
                     raise ValueError("출결 차시를 확인하지 못했습니다.")
-                state = indexed.get((w, l), {}).get("attendance_status", "none")
+                state = normalize_status(indexed.get((w, l), {}).get("attendance_status")) or "none"
                 rows.append(
                     dict(
                         key=f"lesson:{course.id}:{w}:{l}",
@@ -77,7 +84,7 @@ def project(course, sources):
                         due_at=date(week.get("due_at")),
                         title=f"{w}주차 {l}차시",
                         kind=text(lesson.get("attendance_calc_type"), 80),
-                        status=state if state in STATES else "unknown",
+                        status=state,
                     )
                 )
     items = sources.get("attendance_items")
@@ -85,6 +92,13 @@ def project(course, sources):
     summaries = (
         summaries.get("attendance_summaries", {}) if isinstance(summaries, dict) else {}
     )
+    by_item_id = {}
+    if isinstance(summaries, dict):
+        for key, summary in summaries.items():
+            if isinstance(summary, dict):
+                item_id = integer(summary.get("item_id"))
+                status = normalize_status(summary.get("attendance_status")) or "none"
+                by_item_id[str(item_id) if item_id is not None else key] = status
     if isinstance(items, dict) and isinstance(items.get("attendance_items"), list):
         for item in items["attendance_items"][:10000]:
             if not isinstance(item, dict):
@@ -94,12 +108,7 @@ def project(course, sources):
             identifier = integer(item.get("item_id"))
             if identifier is None:
                 raise ValueError("출결 항목 ID를 확인하지 못했습니다.")
-            summary = summaries.get(str(identifier), {})
-            state = (
-                summary.get("attendance_status", "none")
-                if isinstance(summary, dict)
-                else "none"
-            )
+            state = by_item_id.get(str(identifier), "none")
             media = item.get("item_content_data") or {}
             rows.append(
                 dict(
@@ -116,7 +125,7 @@ def project(course, sources):
                     kind=text(
                         media.get("content_type") or item.get("item_content_type"), 80
                     ),
-                    status=state if state in STATES else "unknown",
+                    status=state,
                 )
             )
     return rows

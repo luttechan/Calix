@@ -3,6 +3,7 @@
 from __future__ import annotations
 from collections.abc import Iterable
 from urllib.parse import urljoin, urlsplit
+from .attendance import normalize_status
 from .models import Course, Event, parse_datetime
 
 BASE_URL = "https://canvas.bufs.ac.kr"
@@ -100,7 +101,7 @@ def movie_completion(item):
         or (isinstance(value, str) and value.lower() == "true")
     ):
         return True
-    attendance = item.get("attendance_status")
+    attendance = normalize_status(item.get("attendance_status"))
     if attendance in ("attendance", "late", "excused"):
         return True
     if (
@@ -177,6 +178,7 @@ def parse_movies(course: Course, payload: object) -> list[Event]:
                 continue
             key = f"movie:{course.id}:{identifier}"
             completion = movie_completion(item)
+            attendance = normalize_status(item.get("attendance_status"))
             event = Event(
                 key=key,
                 course_id=course.id,
@@ -194,9 +196,8 @@ def parse_movies(course: Course, payload: object) -> list[Event]:
                 url=safe_url(item.get("url")),
                 week=week,
                 lms_data=(
-                    {"attendance_status": item.get("attendance_status")}
-                    if item.get("attendance_status")
-                    in ("attendance", "late", "excused", "absent", "none")
+                    {"attendance_status": attendance}
+                    if attendance not in (None, "unknown")
                     else {}
                 ),
             )

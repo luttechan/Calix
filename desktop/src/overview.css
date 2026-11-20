@@ -130,13 +130,58 @@
 
 .planning-panel {
   margin: 0 0 16px;
+  align-items: start;
 }
-.planning-panel .overview-tools {
+.plan-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.plan-fields label {
   margin: 0;
-  gap: 8px 12px;
+  gap: 6px;
 }
-.planning-panel .overview-tools label {
-  flex-wrap: wrap;
+.plan-fields select {
+  width: 100%;
+  min-height: 40px;
+}
+.plan-summary {
+  margin: 10px 0 12px;
+}
+.overview-items > .plan-step {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  justify-content: start;
+  gap: 12px;
+}
+.plan-number {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.plan-item-copy {
+  min-width: 0;
+}
+.plan-item-copy strong,
+.plan-warning-item strong {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.plan-item-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.overview-items > .plan-warning-item {
+  justify-content: flex-start;
 }
 .deadline-page .page-heading {
   margin-bottom: 18px;

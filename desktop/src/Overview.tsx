@@ -55,7 +55,8 @@ export function DeadlinePage() {
   const [now, setNow] = useState(() => new Date()),
     [query, setQuery] = useState(""),
     [kind, setKind] = useState("all"),
-    [planning, setPlanning] = useState(false);
+    [planning, setPlanning] = useState(false),
+    [planningOpened, setPlanningOpened] = useState(false);
   useEffect(() => {
     const update = () => setNow(new Date());
     const timer = setInterval(update, 30000);
@@ -89,13 +90,16 @@ export function DeadlinePage() {
           type="button"
           aria-expanded={planning}
           aria-controls="deadline-planning"
-          onClick={() => setPlanning(!planning)}
+          onClick={() => {
+            setPlanningOpened(true);
+            setPlanning((open) => !open);
+          }}
         >
           학습 계획 <ChevronRight size={16} aria-hidden="true" />
         </button>
       </header>
       <div id="deadline-planning" hidden={!planning}>
-        {planning && <PlanningPanel now={now} />}
+        {planningOpened && <PlanningPanel now={now} />}
       </div>
       <div className="deadline-list">
         <div className="deadline-filters">

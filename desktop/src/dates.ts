@@ -41,7 +41,11 @@ export function localInput(value: string | null) {
 export function dueText(value: string | null) {
   return value ? dueFormatter.format(new Date(value)) : "기한 없음";
 }
+export function isExcusedMovie(event: EventItem) {
+  return event.kind === "movie" && event.lms_data?.attendance_status === "excused";
+}
 export function status(event: EventItem, now = Date.now()): string {
+  if (isExcusedMovie(event)) return "공결";
   if (!event.completion_verified && !event.manual)
     return event.kind === "movie" ? "시청 미확인" : "제출 미확인";
   if (event.kind === "movie" && event.lms_data?.attendance_status === "late")

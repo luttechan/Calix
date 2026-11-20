@@ -205,7 +205,6 @@ export function DiaryPage({ active = true }: { active?: boolean }) {
     <>
       <div className="page-heading">
         <div>
-          <p className="eyebrow">하루의 기록</p>
           <h1>일기장</h1>
         </div>
         <div className="toolbar">

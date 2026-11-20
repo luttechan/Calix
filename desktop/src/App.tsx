@@ -14,7 +14,11 @@ import {
   Home,
   CalendarDays,
   Calculator,
-  CheckSquare,
+  ClipboardCheck,
+  ListChecks,
+  ListTodo,
+  ChartNoAxesColumn,
+  NotebookPen,
   LayoutGrid,
   BookOpen,
   Settings,
@@ -58,6 +62,7 @@ import {
   remaining,
   shiftMonth,
   status,
+  isExcusedMovie,
   weekdays,
 } from "./dates";
 import type { Snapshot, EventItem, Page, SecurityState } from "./types";
@@ -177,7 +182,7 @@ export function EventRows({
       {events.slice(start, start + limit).map((e) => (
         <button
           key={e.key}
-          className={`event-row ${e.completed ? "completed" : ""}`}
+          className={`event-row ${e.completed && !isExcusedMovie(e) ? "completed" : ""}`}
           onClick={() => openEvent(e.key)}
         >
           <TypeBadge event={e} />
@@ -186,7 +191,9 @@ export function EventRows({
           <span className="muted nowrap">{dueText(e.due_at)}</span>
           <span
             className={
-              !e.completed &&
+              isExcusedMovie(e)
+                ? "attendance-status excused"
+                : !e.completed &&
               e.due_at &&
               new Date(e.due_at).getTime() < Date.now()
                 ? "danger"
@@ -232,12 +239,12 @@ const navigation: [Page, string, typeof Home][] = [
   ["videos", "영상", Video],
   ["timetable", "시간표", LayoutGrid],
   ["grades", "학점", Calculator],
-  ["attendance", "출결", CheckSquare],
+  ["attendance", "출결", ClipboardCheck],
   ["study", "학습", BookOpen],
-  ["checklist", "체크리스트", CheckSquare],
-  ["diary", "일기장", BookOpen],
-  ["deadlines", "마감 보드", CalendarDays],
-  ["courses", "과목별 현황", LayoutGrid],
+  ["checklist", "체크리스트", ListChecks],
+  ["diary", "일기장", NotebookPen],
+  ["deadlines", "마감 보드", ListTodo],
+  ["courses", "과목별 현황", ChartNoAxesColumn],
 ];
 export function App() {
   const [appVersion, setAppVersion] = useState(__CALIX_VERSION__);
@@ -1215,54 +1222,56 @@ function EventListPage({
         </div>
         <span className="count-pill">{filtered.length}개</span>
       </div>
-      <div className="event-view-toolbar">
-        <div className="segmented" aria-label="일정 보기">
-          {(
-            [
-              ["all", "전체 보기"],
-              ["course", "강의별 보기"],
-            ] as const
-          ).map(([id, label]) => (
+      <div className="event-filter-bar">
+        <div className="event-view-toolbar">
+          <div className="segmented" aria-label="일정 보기">
+            {(
+              [
+                ["all", "전체 보기"],
+                ["course", "강의별 보기"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                aria-pressed={view === id}
+                className={view === id ? "selected" : ""}
+                onClick={() => setView(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <select
+            aria-label="강의 선택"
+            value={course}
+            onChange={(event) => setCourse(event.target.value)}
+          >
+            <option value="all">전체 강의</option>
+            {courses.map((group) => (
+              <option key={group.id} value={group.id}>
+                {group.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="event-status-filters" aria-label="일정 상태">
+          {options.map(([value, label]) => (
             <button
-              key={id}
-              aria-pressed={view === id}
-              className={view === id ? "selected" : ""}
-              onClick={() => setView(id)}
+              key={value}
+              className={filter === value ? "selected" : ""}
+              aria-pressed={filter === value}
+              onClick={() => setFilter(value)}
             >
               {label}
+              <span>
+                {
+                  rows.filter((event) => matchesEventFilter(event, value, now))
+                    .length
+                }
+              </span>
             </button>
           ))}
         </div>
-        <select
-          aria-label="강의 선택"
-          value={course}
-          onChange={(event) => setCourse(event.target.value)}
-        >
-          <option value="all">전체 강의</option>
-          {courses.map((group) => (
-            <option key={group.id} value={group.id}>
-              {group.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="event-status-filters" aria-label="일정 상태">
-        {options.map(([value, label]) => (
-          <button
-            key={value}
-            className={filter === value ? "selected" : ""}
-            aria-pressed={filter === value}
-            onClick={() => setFilter(value)}
-          >
-            {label}
-            <span>
-              {
-                rows.filter((event) => matchesEventFilter(event, value, now))
-                  .length
-              }
-            </span>
-          </button>
-        ))}
       </div>
       {view === "all" ? (
         <section className="glass list-panel">
@@ -1373,6 +1382,7 @@ function CalendarPage({
             <button
               key={value}
               className={kind === value ? "selected" : ""}
+              aria-pressed={kind === value}
               onClick={() => setKind(value)}
             >
               {label}
@@ -1381,9 +1391,10 @@ function CalendarPage({
         </div>
         <span className="muted">
           {
-            events.filter(
-              (e) => e.due_at && dateKey(e.due_at).startsWith(month),
-            ).length
+            [...buckets.entries()].reduce(
+              (sum, [day, items]) => day.startsWith(month) ? sum + items.length : sum,
+              0,
+            )
           }
           개 일정
         </span>
@@ -1426,7 +1437,7 @@ function CalendarPage({
                 {(buckets.get(key) || []).slice(0, 3).map((e) => (
                   <button
                     key={e.key}
-                    className={`calendar-event ${e.kind} ${e.completed ? "completed" : ""} ${!e.completed && e.kind === "assignment" && e.due_at && new Date(e.due_at).getTime() < Date.now() ? "late" : ""}`}
+                    className={`calendar-event ${e.kind} ${isExcusedMovie(e) ? "excused" : e.completed ? "completed" : ""} ${!e.completed && e.kind === "assignment" && e.due_at && new Date(e.due_at).getTime() < Date.now() ? "late" : ""}`}
                     title={`${e.title} / ${status(e)}`}
                     onClick={(click) => {
                       click.stopPropagation();
@@ -1436,6 +1447,7 @@ function CalendarPage({
                   >
                     <i />
                     <span className="calendar-event-title">{e.title}</span>
+                    {isExcusedMovie(e) && <small className="calendar-attendance">공결</small>}
                   </button>
                 ))}
                 {(buckets.get(key)?.length || 0) > 3 && (
@@ -1542,7 +1554,7 @@ function EventDetails({
         <div className="detail-context">
           <TypeBadge event={event} />
           <span>{event.course_name || "개인 일정"}</span>
-          <span className="count-pill">{status(event)}</span>
+          <span className={isExcusedMovie(event) ? "count-pill attendance-status excused" : "count-pill"}>{status(event)}</span>
         </div>
         <form
           onSubmit={(e) => {

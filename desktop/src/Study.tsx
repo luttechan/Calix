@@ -294,9 +294,8 @@ export function StudyPage() {
     );
   return (
     <section className="learning-page study-page">
-      <div className="section-heading">
+      <div className="page-heading">
         <div>
-          <p className="eyebrow">MAKE TIME</p>
           <h1>나의 학습</h1>
         </div>
         <div>

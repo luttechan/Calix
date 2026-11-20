@@ -37,7 +37,6 @@ export function TimetablePage() {
   const [selectedDays, setSelectedDays] = useState(offDays);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const scheduled = sessions.filter((s) => !s.is_online);
-  const lanes = sessionLanes(scheduled);
   const online = sessions.filter((s) => s.is_online);
   const start = Math.min(
     480,
@@ -54,6 +53,10 @@ export function TimetablePage() {
     data.timetableConfigured,
     density,
   );
+  // Leave room for a readable, clickable card even for short custom sessions.
+  const minimumCardHeight = 24;
+  const lanes = sessionLanes(scheduled, Math.ceil((minimumCardHeight / unit) * 60));
+  const weekColumns = `48px repeat(${days}, minmax(112px, 1fr))`;
   const workloads = useMemo(() => {
     const counts = new Map<number, { assignment: number; movie: number }>();
     for (const event of data.events) {
@@ -143,6 +146,8 @@ export function TimetablePage() {
         </div>
       </div>
       <div className="semester-toolbar">
+        <label>
+          학기
         <select
           aria-label="시간표 학기"
           value={term.name}
@@ -160,6 +165,7 @@ export function TimetablePage() {
             </option>
           ))}
         </select>
+        </label>
         <label>시간 간격<select aria-label="시간표 시간 간격" value={density} onChange={e=>setDensity(Number(e.target.value))}><option value={0}>화면에 맞춤</option><option value={64}>보통</option><option value={80}>넓게</option><option value={104}>아주 넓게</option></select></label>
         <button onClick={() => setTermDialog(true)}>학기 추가</button>
         {data.timetableConfigured &&
@@ -192,9 +198,7 @@ export function TimetablePage() {
           >
             <div
               className="week-headers"
-              style={{
-                gridTemplateColumns: `48px repeat(${days},minmax(150px,1fr))`,
-              }}
+              style={{ gridTemplateColumns: weekColumns, minWidth: 48 + days * 112 }}
             >
               <span />
               {weekdays.slice(0, days).map((day, i) => (
@@ -210,7 +214,8 @@ export function TimetablePage() {
             <div
               className="week-body"
               style={{
-                gridTemplateColumns: `48px repeat(${days},minmax(150px,1fr))`,
+                gridTemplateColumns: weekColumns,
+                minWidth: 48 + days * 112,
                 height,
               }}
             >
@@ -255,7 +260,7 @@ export function TimetablePage() {
                             title={`${name(s)} / ${s.start_time}–${s.end_time} / ${[s.professor, s.room].filter(Boolean).join(" / ")}`}
                             style={{
                               top: ((minute(s.start_time) - start) / 60) * unit,
-                              height: Math.max(20, size - 4),
+                              height: Math.max(minimumCardHeight, size - 4),
                               left: `calc(${(lanes.get(s.id)?.lane || 0) * 100 / (lanes.get(s.id)?.count || 1)}% + 3px)`,
                               right: "auto",
                               width: `calc(${100 / (lanes.get(s.id)?.count || 1)}% - 6px)`,

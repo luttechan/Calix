@@ -35,7 +35,7 @@ export function AttendancePage() {
     [error, setError] = useState("");
   const [course, setCourse] = useState(""),
     [view, setView] = useState("date"),
-    [source, setSource] = useState("lesson"),
+    [source, setSource] = useState("canvas"),
     [query, setQuery] = useState("");
   useEffect(() => {
     let alive = true,
@@ -51,7 +51,7 @@ export function AttendancePage() {
           }
         })
         .catch((e) => {
-          if (alive) setError(String(e));
+          if (alive && sequence === id) setError(String(e));
         })
         .finally(() => {
           if (alive && sequence === id) setLoading(false);
@@ -66,16 +66,21 @@ export function AttendancePage() {
       off();
     };
   }, []);
-  const selected = useMemo(
-    () =>
-      rows
+  const selected = useMemo(() => {
+    const coursesWithItems = new Set(
+      rows.filter((row) => row.source === "item").map((row) => row.course_id),
+    );
+    const search = query.trim().toLowerCase();
+    return rows
         .filter(
           (r) =>
             (!course || String(r.course_id) === course) &&
-            r.source === source &&
+            r.source === (source === "canvas"
+              ? (coursesWithItems.has(r.course_id) ? "item" : "lesson")
+              : source) &&
             `${r.title} ${r.course_name}`
               .toLowerCase()
-              .includes(query.toLowerCase()),
+              .includes(search),
         )
         .sort((a, b) =>
           view === "date"
@@ -88,14 +93,12 @@ export function AttendancePage() {
                   (a.week ?? 999) - (b.week ?? 999)
                 : (a.week ?? 999) - (b.week ?? 999) ||
                   (a.lesson ?? 999) - (b.lesson ?? 999)),
-        ),
-    [rows, course, view, source, query],
-  );
+        );
+  }, [rows, course, view, source, query]);
   return (
     <section className="learning-page">
-      <div className="section-heading">
+      <div className="page-heading">
         <div>
-          <p className="eyebrow">ATTENDANCE</p>
           <h1>출결 현황</h1>
         </div>
         <button
@@ -132,8 +135,9 @@ export function AttendancePage() {
           value={source}
           onChange={(e) => setSource(e.target.value)}
         >
+          <option value="canvas">Canvas 기준</option>
           <option value="lesson">수업별</option>
-          <option value="item">영상 / 활동별</option>
+          <option value="item">활동별</option>
         </select>
         <select
           aria-label="출결 정렬"

@@ -6,6 +6,16 @@ test('overlapping courses are separate and adjacent courses reuse a lane',()=>{
  const result=sessionLanes([row(1,'09:00','11:00'),row(2,'10:00','12:00'),row(3,'12:00','13:00')]);
  expect(result.get(1)).toEqual({lane:0,count:2});expect(result.get(2)).toEqual({lane:1,count:2});expect(result.get(3)).toEqual({lane:0,count:1});
 });
+test("adjacent short sessions use separate lanes when the cards are taller than the slots", () => {
+  const result = sessionLanes([
+    row(1, "09:00", "09:05"),
+    row(2, "09:05", "09:10"),
+    row(3, "10:00", "11:00"),
+  ], 18);
+  expect(result.get(1)).toEqual({ lane: 0, count: 2 });
+  expect(result.get(2)).toEqual({ lane: 1, count: 2 });
+  expect(result.get(3)).toEqual({ lane: 0, count: 1 });
+});
 test('study plan respects available time and excludes completed and expired work',()=>{
  const now=new Date('2026-11-20T12:00:00');const events=Array.from({length:3},(_,i)=>({key:String(i),title:String(i),due_at:'2026-11-21T12:00:00',completed:false}) as EventItem);
  expect(studyPlan(events,now,60,30)).toHaveLength(2);expect(busyDates(events,now)).toHaveLength(1);

@@ -603,7 +603,6 @@ export function SettingsPage() {
     <>
       <div className="page-heading">
         <div>
-          <p className="eyebrow">나에게 맞게</p>
           <h1>설정</h1>
         </div>
       </div>
@@ -725,6 +724,7 @@ export function SettingsPage() {
             {themes.map(([id, name, color]) => (
               <button
                 key={id}
+                aria-pressed={data.preferences.theme === id}
                 className={data.preferences.theme === id ? "selected" : ""}
                 onClick={() =>
                   void mutate("preferences.save", { theme: id }).catch(() => {})

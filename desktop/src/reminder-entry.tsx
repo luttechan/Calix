@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { ReminderWindow } from "./ReminderWindow";
 import "./style.css";
 import "./typography.css";
+import "./interface.css";
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ReminderWindow />

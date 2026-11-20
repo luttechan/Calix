@@ -1,0 +1,398 @@
+/* Shared surface, control and layout rules for Calix windows. */
+:root {
+  --ui-border: color-mix(in srgb, var(--ink) 12%, var(--line));
+  --ui-panel: color-mix(in srgb, var(--surface) 97%, var(--accent));
+  --ui-field: color-mix(in srgb, var(--surface) 90%, var(--bg));
+  --ui-hover: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  --ui-focus: color-mix(in srgb, var(--accent) 82%, var(--ink));
+  --ui-radius: 16px;
+}
+
+:where(button, input, select, textarea, summary, a):focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+.workspace main .page-heading {
+  margin: 8px 0 20px;
+  min-height: 46px;
+  gap: 12px 20px;
+  flex-wrap: wrap;
+}
+.workspace main .page-heading h1 {
+  margin: 0;
+  font-size: clamp(27px, 2.3vw, 35px);
+  font-weight: 670;
+  line-height: 1.25;
+  letter-spacing: -0.038em;
+}
+.page-heading .eyebrow {
+  margin: 0 0 5px;
+}
+.page-heading .toolbar {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+.page-heading .toolbar > button {
+  min-height: 36px;
+}
+.learning-page {
+  gap: 16px;
+}
+.learning-page > .page-heading {
+  margin-bottom: 0;
+}
+.study-page .page-heading > div:last-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sidebar nav {
+  align-content: start;
+  padding: 2px 3px;
+}
+.sidebar nav button {
+  position: relative;
+  min-height: 39px;
+}
+.sidebar nav button.active {
+  background: var(--accent-soft);
+  color: color-mix(in srgb, var(--accent) 73%, var(--ink));
+}
+.sidebar nav button.active::before {
+  position: absolute;
+  content: "";
+  inset: 10px auto 10px 0;
+  width: 3px;
+  border-radius: 3px;
+  background: var(--accent);
+}
+
+.event-filter-bar,
+.semester-toolbar,
+.grades-toolbar,
+.overview-page > .overview-tools,
+.learning-toolbar {
+  background: var(--ui-panel);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  padding: 10px 12px;
+}
+.event-filter-bar {
+  margin-bottom: 14px;
+}
+.event-filter-bar .event-view-toolbar {
+  margin-bottom: 10px;
+}
+.event-filter-bar .event-status-filters {
+  margin-bottom: 0;
+  gap: 6px;
+}
+.event-status-filters button {
+  min-height: 34px;
+}
+.semester-toolbar {
+  align-items: flex-end;
+}
+.semester-toolbar label {
+  margin: 0;
+  gap: 5px;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.semester-toolbar select,
+.semester-toolbar > button {
+  height: 42px;
+}
+.semester-toolbar > .count-pill {
+  align-self: flex-end;
+  margin-bottom: 8px;
+}
+.overview-page > .overview-tools {
+  margin: 0 0 14px;
+}
+.learning-toolbar > * {
+  min-width: 0;
+}
+.learning-toolbar .search svg {
+  flex-shrink: 0;
+}
+.segmented {
+  background: var(--ui-field);
+  border-color: var(--ui-border);
+}
+.segmented button {
+  white-space: nowrap;
+}
+.segmented button.selected {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.welcome,
+.stat,
+.home-content > section,
+.calendar-panel,
+.list-panel,
+.course-event-group,
+.checklist-panel,
+.timetable-panel,
+.journal-layout,
+.settings-panel,
+.attendance-table,
+.focus-card,
+.focus-history,
+.deadline-list,
+.overview-card,
+.grade-table {
+  border-color: var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+.stat,
+.study-metrics > article,
+.attendance-summary > div {
+  border-radius: var(--ui-radius);
+  font-variant-numeric: tabular-nums;
+}
+.attendance-summary > div,
+.study-metrics > article {
+  padding: 16px;
+  gap: 7px;
+}
+.attendance-table tbody tr:hover,
+.checklist-table tbody tr:hover {
+  background: var(--ui-hover);
+}
+.event-row .attendance-status.excused {
+  justify-self: start;
+}
+:root[data-theme="dark"] .type-badge.assignment {
+  color: #f4cd97;
+  background: #49392e;
+  border-color: #795944;
+}
+:root[data-theme="dark"] .type-badge.movie {
+  color: #c0dfff;
+  background: #2d4057;
+  border-color: #486a8b;
+}
+.calendar-event.excused,
+:root[data-theme="dark"] .calendar-event.excused {
+  background: #c2f5a9;
+  color: #185b2d;
+}
+.calendar-attendance {
+  flex-shrink: 0;
+  font-weight: 650;
+}
+.workspace main .timetable-panel,
+.workspace main .timetable-panel.with-online {
+  max-height: max(270px, calc(100dvh - 330px));
+  scroll-padding: 54px 8px 8px 58px;
+}
+.timetable-panel .week-headers {
+  box-shadow: 0 1px var(--line);
+}
+.timetable-panel .time-axis,
+.timetable-panel .week-headers > span:first-child {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--surface);
+}
+.timetable-panel .time-axis { border-right: 1px solid var(--line); }
+.timetable-panel .week-headers > span:first-child { align-self: stretch; }
+.journal-list button {
+  overflow-wrap: anywhere;
+}
+.journal-list button strong {
+  min-width: 0;
+}
+.settings-categories {
+  gap: 6px;
+  padding-block: 4px;
+}
+.settings-categories [aria-selected="true"] {
+  box-shadow: inset 0 -2px var(--accent);
+}
+.theme-picker {
+  gap: 10px;
+}
+.theme-picker > button {
+  min-width: 74px;
+  border-radius: 12px;
+}
+.theme-picker > button.selected {
+  background: var(--accent-soft);
+}
+.theme-picker > button[aria-pressed="true"] {
+  border-color: var(--accent);
+}
+
+.menu-option input[role="switch"], button.switch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex: 0 0 42px;
+  width: 42px;
+  min-height: 24px;
+  height: 24px;
+  padding: 2px;
+  border: 1px solid var(--ui-border);
+  border-radius: 999px;
+  background: var(--ui-field);
+}
+.menu-option input[role="switch"]::before, button.switch i {
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--ui-border);
+  background: var(--surface);
+}
+.menu-option input[role="switch"]:checked, button.switch.on {
+  justify-content: flex-end;
+  background: var(--ui-focus);
+  border-color: var(--ui-focus);
+}
+@media (forced-colors: active) {
+  .menu-option input[role="switch"] { appearance: auto; }
+  .menu-option input[role="switch"]::before { content: none; }
+  button.switch[aria-checked="true"] { background: Highlight; }
+}
+
+/* Keep native checkbox semantics and give selection controls the same states. */
+:root input[type="checkbox"]:not([role="switch"]) {
+  appearance: none;
+  display: inline-grid;
+  place-content: center;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--ink) 36%, var(--line));
+  border-radius: 5px;
+  background: var(--surface);
+  cursor: pointer;
+  vertical-align: middle;
+}
+:root input[type="checkbox"]:not([role="switch"]):checked,
+:root input[type="checkbox"]:not([role="switch"]):indeterminate {
+  border-color: var(--ui-focus);
+  background: var(--ui-focus);
+}
+:root input[type="checkbox"]:not([role="switch"]):checked::after {
+  content: "";
+  width: 8px;
+  height: 5px;
+  border: solid var(--surface);
+  border-width: 0 0 2px 2px;
+  transform: translateY(-1px) rotate(-45deg);
+}
+:root input[type="checkbox"]:not([role="switch"]):indeterminate::after {
+  content: "";
+  width: 8px;
+  height: 2px;
+  background: var(--surface);
+}
+:root input[type="checkbox"]:not([role="switch"]):disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+@media (forced-colors: active) {
+  :root input[type="checkbox"]:not([role="switch"]) {
+    appearance: auto;
+  }
+  :root input[type="checkbox"]:not([role="switch"])::after {
+    content: none;
+  }
+}
+
+.modal {
+  --dialog-gutter: 22px;
+  padding: 0 var(--dialog-gutter) var(--dialog-gutter);
+  border-color: var(--ui-border);
+  border-radius: 19px;
+  scroll-padding-top: 65px;
+}
+.modal > header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 0 calc(-1 * var(--dialog-gutter)) 18px;
+  padding: 13px var(--dialog-gutter);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  gap: 10px;
+}
+.modal > header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.modal > header button {
+  flex-shrink: 0;
+}
+.modal select {
+  max-width: 100%;
+}
+.dialog-actions {
+  gap: 8px;
+}
+body:has(.auth-shell),
+.auth-shell {
+  min-width: 0;
+}
+.auth-shell {
+  min-height: 0;
+}
+.auth-browser-frame {
+  border-color: var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+.auth-footer button {
+  flex-shrink: 0;
+}
+.reminder-card {
+  border-color: var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+.unlock-view {
+  border-radius: var(--ui-radius);
+}
+
+@media (max-width: 960px) {
+  .workspace main .page-heading {
+    margin-bottom: 14px;
+  }
+  .attendance-summary,
+  .study-metrics {
+    gap: 8px;
+  }
+  .attendance-summary > div,
+  .study-metrics > article {
+    padding: 13px;
+  }
+  .attendance-table td,
+  .attendance-table th {
+    padding-inline: 12px;
+  }
+}
+@media (max-height: 720px) {
+  .sidebar nav button {
+    min-height: 36px;
+    padding-block: 8px;
+  }
+  .modal {
+    max-height: calc(100dvh - 36px);
+    --dialog-gutter: 17px;
+  }
+  .auth-header {
+    height: 52px;
+  }
+  .auth-heading {
+    margin: 8px 0 12px;
+  }
+  .auth-footer {
+    min-height: 65px;
+  }
+}

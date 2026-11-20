@@ -23,7 +23,16 @@ export function busyDates(events: EventItem[], now: Date) {
     .filter(([, items]) => items.length >= 3)
     .sort((a, b) => a[0].localeCompare(b[0]));
 }
-export function sessionLanes(sessions: Session[]) {
+export function sessionLanes(sessions: Session[], minimumMinutes = 0) {
+  const minutes = (time: string) => {
+    const [hour, minute] = time.split(":").map(Number);
+    return hour * 60 + minute;
+  };
+  const visibleEnd = (session: Session) =>
+    Math.max(
+      minutes(session.end_time),
+      minutes(session.start_time) + minimumMinutes,
+    );
   const output = new Map<number, { lane: number; count: number }>();
   for (let day = 0; day < 7; day++) {
     const rows = sessions
@@ -35,27 +44,22 @@ export function sessionLanes(sessions: Session[]) {
           a.id - b.id,
       );
     let group: Session[] = [],
-      end = "";
+      end = 0;
     const flush = () => {
-      const ends: string[] = [];
+      const ends: number[] = [];
       for (const row of group) {
-        let lane = ends.findIndex((e) => e <= row.start_time);
+        let lane = ends.findIndex((e) => e <= minutes(row.start_time));
         if (lane < 0) lane = ends.length;
-        ends[lane] = row.end_time;
+        ends[lane] = visibleEnd(row);
         output.set(row.id, { lane, count: 0 });
       }
       for (const row of group) output.get(row.id)!.count = ends.length;
       group = [];
     };
     for (const row of rows) {
-      if (group.length && row.start_time >= end) flush();
+      if (group.length && minutes(row.start_time) >= end) flush();
       group.push(row);
-      end =
-        group.length === 1
-          ? row.end_time
-          : row.end_time > end
-            ? row.end_time
-            : end;
+      end = Math.max(end, visibleEnd(row));
     }
     flush();
   }
