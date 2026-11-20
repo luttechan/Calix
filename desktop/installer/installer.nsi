@@ -82,6 +82,9 @@ Var WixMode
 Var OldMainBinaryName
 Var CalixPreviousDisplayName
 Var CalixPinnedSource
+Var CalixTaskbarDirectory
+Var CalixTaskbarFind
+Var CalixTaskbarFile
 Var CalixPurgeCheckbox
 Var CalixPurgeRetained
 Var CalixRetainedParent
@@ -1099,34 +1102,27 @@ Function CalixRetargetTaskbarPins
   ${If} $CalixPinnedSource == ""
     Return
   ${EndIf}
-  Push $0
-  Push $1
-  Push $2
-  Push $3
-  StrCpy $0 "$APPDATA\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar"
+  StrCpy $CalixTaskbarDirectory "$APPDATA\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar"
   ClearErrors
-  FindFirst $1 $2 "$0\*.lnk"
+  FindFirst $CalixTaskbarFind $CalixTaskbarFile "$CalixTaskbarDirectory\*.lnk"
   ${IfNot} ${Errors}
     ${Do}
-      !insertmacro IsShortcutTarget "$0\$2" "$CalixPinnedSource\${MAINBINARYNAME}.exe"
+      ; The bundled shortcut macros overwrite $0 through $5.
+      !insertmacro IsShortcutTarget "$CalixTaskbarDirectory\$CalixTaskbarFile" "$CalixPinnedSource\${MAINBINARYNAME}.exe"
       Pop $3
       ${If} $3 = 1
         ClearErrors
-        CreateShortcut "$0\$2" "$INSTDIR\${MAINBINARYNAME}.exe" "" "$INSTDIR\${MAINBINARYNAME}.exe" 0 SW_SHOWNORMAL "" "${CALIXDISPLAYNAME}"
+        CreateShortcut "$CalixTaskbarDirectory\$CalixTaskbarFile" "$INSTDIR\${MAINBINARYNAME}.exe" "" "$INSTDIR\${MAINBINARYNAME}.exe" 0 SW_SHOWNORMAL "" "${CALIXDISPLAYNAME}"
         ${IfNot} ${Errors}
-          !insertmacro SetLnkAppUserModelId "$0\$2"
-          System::Call 'shell32::SHChangeNotify(i 0x2000, i 5, w "$0\$2", p 0)'
+          !insertmacro SetLnkAppUserModelId "$CalixTaskbarDirectory\$CalixTaskbarFile"
+          System::Call 'shell32::SHChangeNotify(i 0x2000, i 5, w "$CalixTaskbarDirectory\$CalixTaskbarFile", p 0)'
         ${EndIf}
       ${EndIf}
       ClearErrors
-      FindNext $1 $2
+      FindNext $CalixTaskbarFind $CalixTaskbarFile
     ${LoopUntil} ${Errors}
-    FindClose $1
+    FindClose $CalixTaskbarFind
   ${EndIf}
-  Pop $3
-  Pop $2
-  Pop $1
-  Pop $0
 FunctionEnd
 
 Function CalixMigrateRetainedVersions
