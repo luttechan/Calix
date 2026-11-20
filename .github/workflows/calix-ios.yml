@@ -1,0 +1,61 @@
+name: Calix iOS test build
+
+on:
+  push:
+    branches: [codex/calix-ios-test]
+    paths:
+      - Calix-iOS/**
+      - .github/workflows/calix-ios.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: calix-ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  simulator:
+    runs-on: macos-15
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+        working-directory: Calix-iOS
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+
+      - name: Build with Xcode
+        run: |
+          xcodebuild -version
+          xcodebuild -project Calix.xcodeproj -scheme Calix -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/Calix" \
+            CODE_SIGNING_ALLOWED=NO build
+
+      - name: Launch on an iPhone simulator
+        run: |
+          app="$RUNNER_TEMP/Calix/Build/Products/Debug-iphonesimulator/Calix.app"
+          device=$(xcrun simctl list devices available --json | jq -er '
+            [.devices | to_entries[] | select(.key | contains(".iOS-")) | .value[]
+             | select(.name | startswith("iPhone"))] | last | .udid')
+          echo "Selected simulator: $device"
+          xcrun simctl boot "$device"
+          xcrun simctl bootstatus "$device" -b
+          xcrun simctl install "$device" "$app"
+          bundle_id=$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$app/Info.plist")
+          xcrun simctl launch "$device" "$bundle_id"
+          sleep 3
+          mkdir -p "$RUNNER_TEMP/calix-artifacts"
+          xcrun simctl io "$device" screenshot "$RUNNER_TEMP/calix-artifacts/Calix-iPhone.png"
+          ditto -c -k --keepParent "$app" "$RUNNER_TEMP/calix-artifacts/Calix-iOS-Simulator.zip"
+
+      - name: Upload simulator build and screenshot
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Calix-iOS-Simulator
+          path: ${{ runner.temp }}/calix-artifacts/
+          if-no-files-found: error
+          retention-days: 14
