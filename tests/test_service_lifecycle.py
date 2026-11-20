@@ -89,6 +89,59 @@ def test_sync_requires_confirmed_login(service):
     assert not any(row.get("event") == "auth-required" for row in output)
     assert '학교 로그인' in next(row for row in output if row.get('id') == 1)['error']
 
+
+def test_startup_reminder_waits_for_unlock_and_idle_sync(service, monkeypatch):
+    instance, output = service
+    api = instance.handle.__func__.__globals__["api"]
+    locked = True
+    monkeypatch.setattr(api.security, "state", lambda: {"locked": locked})
+    checks = []
+
+    def reminder(_api, trigger):
+        checks.append(trigger)
+        return {"urgent": False} if trigger == "startup" else None
+
+    monkeypatch.setattr("learning_calendar.reminders.check", reminder)
+    instance.reminders_ready = True
+    instance.check_reminders()
+    assert not checks and instance.startup_reminder_pending
+
+    locked = False
+    instance.task = SimpleNamespace(deleteLater=lambda: None)
+    instance.check_reminders()
+    assert not checks and instance.startup_reminder_pending
+    instance.sync_finished()
+    instance.check_reminders()
+    assert checks == ["startup", "timer"]
+    assert [row["payload"] for row in output if row.get("event") == "reminder"] == [{"urgent": False}]
+
+
+def test_sync_reminder_survives_lock_and_ignores_stale_tokens(service, monkeypatch):
+    instance, output = service
+    api = instance.handle.__func__.__globals__["api"]
+    locked = True
+    monkeypatch.setattr(api.security, "state", lambda: {"locked": locked})
+    instance.reminders_ready = True
+    instance.startup_reminder_pending = False
+    instance.sync_reminder_token = "current"
+    checks = []
+
+    def reminder(_api, trigger):
+        checks.append(trigger)
+        return {"urgent": False}
+
+    monkeypatch.setattr("learning_calendar.reminders.check", reminder)
+    instance.release_sync_reminder("stale")
+    assert instance.released_sync_reminder_token is None
+    instance.release_sync_reminder("current")
+    assert not checks and instance.sync_reminder_token == "current"
+    locked = False
+    instance.check_reminders()
+    instance.release_sync_reminder("current")
+    assert checks == ["sync"] and instance.sync_reminder_token is None
+    assert [row["payload"] for row in output if row.get("event") == "reminder"] == [{"urgent": False}]
+
+
 @pytest.mark.parametrize('interactive', [True, False])
 def test_login_syncs_only_after_interactive_authentication(service, monkeypatch, interactive):
     instance, output = service
