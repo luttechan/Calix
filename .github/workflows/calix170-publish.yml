@@ -1,0 +1,78 @@
+name: Publish Calix 1.7.0
+on:
+  push:
+    branches: ['codex/calix170-publish']
+    paths: ['.github/workflows/calix170-publish.yml']
+permissions:
+  contents: write
+  actions: read
+concurrency: calix-170-publish
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: luttechan/Calix
+      SOURCE: 5a411319b20ac94347b601a34249eabbfc3a1ce5
+      RUN: '44800490867'
+      ARTIFACT: '14661826899'
+    steps:
+      - name: Verify Windows build and packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$GH_REPO/actions/runs/$RUN" > run.json
+          jq -e --arg sha "$SOURCE" '.conclusion == "success" and .head_sha == $sha and .head_repository.full_name == "luttechan/Calix"' run.json
+          gh api "repos/$GH_REPO/actions/artifacts/$ARTIFACT" > artifact.json
+          jq -e --arg sha "$SOURCE" '.expired == false and .workflow_run.head_sha == $sha and .digest == "sha256:676078d7a1680a1fd88122917e19967c7fcc3d741541162241dce6f7b16420ce"' artifact.json
+          gh run download "$RUN" --name Calix-1.7.0-development-Windows-x64 --dir packages
+          cd packages
+          test "$(find . -maxdepth 1 -type f | wc -l)" -eq 3
+          sha256sum --check --strict SHA256SUMS.txt
+          python - <<'PY'
+          from pathlib import PurePosixPath
+          from zipfile import ZipFile
+          with ZipFile('Calix-1.7.0-Windows-x64.zip') as archive:
+              assert archive.testzip() is None
+              for name in archive.namelist():
+                  entry = PurePosixPath(name)
+                  assert entry.parts[0] == 'Calix 1.7.0'
+                  assert entry.suffix.lower() not in ('.db', '.sqlite', '.sqlite3', '.har', '.dpapi', '.log'), name
+                  assert entry.name not in ('settings.json', 'canvas_session.json', 'cookies.json', 'app-lock.json'), name
+          PY
+      - name: Publish Calix 1.7.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh api "repos/$GH_REPO/git/ref/tags/v1.7.0" > /dev/null 2>&1; then
+            echo 'The version tag already exists.' >&2
+            exit 1
+          fi
+          cd packages
+          cat > notes.md <<'NOTES'
+          - 달력 연도, 월 이동과 드롭다운 개선
+          - 체크리스트 기한 편집과 열 너비 조절
+          - 시간표 요일 정렬, 수업 상세와 긴 제목 표시 수정
+          - 시작 잠금 화면과 창 버튼, 일반 리마인드 수정
+          - 실행 시 업데이트 확인, 동기화 완료음 선택
+          - 설정 상단과 Dev 화면 개편, 개발자 실험실 테마 팔레트 편집
+          - 데이터 초기화 창과 학교 로그인 없는 동기화 오류 알림 개선
+          - Canvas 과목으로 학점 계산기 자동 구성, 과목 일괄 가져오기 및 학기·전체 초기화
+          - 공휴일, 일기, 일정의 날짜 선택기와 일정 설정 창 디자인 통일
+
+          [사용 설명서](https://luttechan.github.io/calix/guide/)
+          NOTES
+          gh api -X POST "repos/$GH_REPO/git/refs" -f ref='refs/tags/v1.7.0' -f sha="$SOURCE" > tag.json
+          jq -e --arg sha "$SOURCE" '.object.sha == $sha' tag.json
+          gh release create v1.7.0 --verify-tag --draft --title 'Calix 1.7.0' --notes-file notes.md Calix-1.7.0-Setup-x64.exe Calix-1.7.0-Windows-x64.zip SHA256SUMS.txt
+          release_id=$(gh release view v1.7.0 --json databaseId --jq .databaseId)
+          gh api "repos/$GH_REPO/releases/$release_id" > draft.json
+          jq -e '.draft and .tag_name == "v1.7.0" and (.assets | length == 3)' draft.json
+          for file in Calix-1.7.0-Setup-x64.exe Calix-1.7.0-Windows-x64.zip SHA256SUMS.txt; do
+            digest=$(sha256sum "$file" | cut -d ' ' -f 1)
+            jq -e --arg name "$file" --arg digest "sha256:$digest" 'any(.assets[]; .name == $name and .digest == $digest)' draft.json
+          done
+          gh api -X PATCH "repos/$GH_REPO/releases/$release_id" -F draft=false -f make_latest=true > published.json
+          jq -e '(.draft == false) and (.prerelease == false) and .tag_name == "v1.7.0"' published.json
+          jq -r .html_url published.json
