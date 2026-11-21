@@ -1,0 +1,152 @@
+name: Replace Calix 1.7.4 public assets
+on:
+  push:
+    branches: ['codex/calix174-motion-publish']
+    paths: ['.github/workflows/calix174-motion-publish.yml']
+permissions:
+  contents: write
+  actions: read
+concurrency: calix-174-motion-publish
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: luttechan/Calix
+      SOURCE: cca8c6b01a53200f28aa00d44e884bdfe8b4e8f5
+      RUN: '44912641429'
+      ARTIFACT: '14711800608'
+    steps:
+      - name: Verify Windows build and packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$GH_REPO/actions/runs/$RUN" > run.json
+          jq -e --arg sha "$SOURCE" '.conclusion == "success" and .head_sha == $sha and .head_repository.full_name == "luttechan/Calix"' run.json
+          gh api "repos/$GH_REPO/actions/artifacts/$ARTIFACT" > artifact.json
+          jq -e --arg sha "$SOURCE" '.expired == false and .workflow_run.head_sha == $sha and .digest == "sha256:97f5385cd6be934599711a5cff3c685bf95d0c62d34840cda3bb291a725d95e0"' artifact.json
+          gh run download "$RUN" --name Calix-1.7.4-development-Windows-x64 --dir packages
+          cd packages
+          test "$(find . -maxdepth 1 -type f | wc -l)" -eq 3
+          sha256sum --check --strict SHA256SUMS.txt
+          python - <<'PY'
+          from pathlib import PurePosixPath
+          from zipfile import ZipFile
+          with ZipFile('Calix-1.7.4-Windows-x64.zip') as archive:
+              assert archive.testzip() is None
+              for name in archive.namelist():
+                  entry = PurePosixPath(name)
+                  assert entry.parts[0] == 'Calix 1.7.4'
+                  assert entry.suffix.lower() not in ('.db', '.sqlite', '.sqlite3', '.har', '.dpapi', '.log'), name
+                  assert entry.name not in ('settings.json', 'canvas_session.json', 'cookies.json', 'app-lock.json'), name
+          PY
+      - name: Replace the three public 1.7.4 release assets
+        shell: bash
+        working-directory: packages
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import shutil
+          import subprocess
+
+          repo = os.environ["GH_REPO"]
+          source = os.environ["SOURCE"]
+          base = "b548b1659d838042ea56bc51de73dd47f42ad75c"
+          names = ("Calix-1.7.4-Windows-x64.zip", "SHA256SUMS.txt", "Calix-1.7.4-Setup-x64.exe")
+          prefix = "motion-" + source[:8] + "-"
+          previous = "prior-" + base[:8] + "-"
+          endpoint = f"repos/{repo}"
+
+          def api(path, method="GET", data=None):
+              args = ["gh", "api", "--method", method, f"{endpoint}/{path}"]
+              if data is not None:
+                  args += ["--input", "-"]
+              result = subprocess.check_output(args, input=json.dumps(data).encode() if data is not None else None)
+              return json.loads(result) if result else None
+
+          def current():
+              return api("releases/tags/v1.7.4")
+
+          def assets():
+              return {asset["name"]: asset for asset in current()["assets"]}
+
+          def tag():
+              return api("git/ref/tags/v1.7.4")["object"]["sha"]
+
+          def move_tag(sha, force):
+              api("git/refs/tags/v1.7.4", "PATCH", {"sha": sha, "force": force})
+
+          def rename(asset, name):
+              api(f"releases/assets/{asset['id']}", "PATCH", {"name": name})
+
+          def delete(asset):
+              api(f"releases/assets/{asset['id']}", "DELETE")
+
+          release = current()
+          assert release["id"] == 453733782 and not release["immutable"] and not release["draft"]
+          assert tag() == base and api("git/ref/heads/main")["object"]["sha"] == base
+          old_assets = assets()
+          assert set(old_assets) == set(names)
+          assert {name: old_assets[name]["digest"] for name in names} == {
+              "Calix-1.7.4-Setup-x64.exe": "sha256:e5e28fa90b7a07718b9013c07a73841d689fa6faadb5dbdcc7c897ba42d44e7f",
+              "Calix-1.7.4-Windows-x64.zip": "sha256:dcfa039832da72d5f753ad1d3c7f80c6be246c341b12938f4067b38180e3557c",
+              "SHA256SUMS.txt": "sha256:78da1f6d25724478705dba10c542277a6e57aa10e5a65246e0457b5688fd0d12",
+          }
+          expected = {}
+          for name in names:
+              with Path(name).open("rb") as stream:
+                  expected[name] = "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
+              shutil.copyfile(name, prefix + name)
+
+          new_assets = {}
+          notes_updated = False
+          try:
+              subprocess.run(["gh", "release", "upload", "v1.7.4", "--repo", repo,
+                              *(prefix + name for name in names)], check=True)
+              staged = assets()
+              new_assets = {name: staged[prefix + name] for name in names}
+              assert all(new_assets[name]["digest"] == expected[name] for name in names)
+              assert tag() == base
+              move_tag(source, False)
+              assert tag() == source
+              for name in names:
+                  rename(old_assets[name], previous + name)
+                  rename(new_assets[name], name)
+
+              old_body = release.get("body") or ""
+              note = "- 방향이 있는 화면 전환, 카드 순차 등장, 달력 이동과 팝업 모션 개선"
+              body = old_body.replace("\n\n[사용 설명서]", f"\n{note}\n\n[사용 설명서]", 1)
+              if body == old_body:
+                  body = old_body.rstrip() + "\n\n" + note + "\n"
+              api(f"releases/{release['id']}", "PATCH", {"body": body})
+              notes_updated = True
+              verified = assets()
+              assert all(verified[name]["id"] == new_assets[name]["id"] and
+                         verified[name]["digest"] == expected[name] for name in names)
+          except Exception:
+              observed = assets()
+              by_id = {asset["id"]: name for name, asset in observed.items()}
+              for name, asset in new_assets.items():
+                  if by_id.get(asset["id"]) == name:
+                      rename(asset, prefix + name)
+              for name, asset in old_assets.items():
+                  if by_id.get(asset["id"]) == previous + name:
+                      rename(asset, name)
+              if tag() == source:
+                  move_tag(base, True)
+              if notes_updated:
+                  api(f"releases/{release['id']}", "PATCH", {"body": release.get("body") or ""})
+              for name, asset in assets().items():
+                  if name in {prefix + real_name for real_name in names}:
+                      delete(asset)
+              raise
+
+          for asset in old_assets.values():
+              delete(asset)
+          assert tag() == source and {name: meta["digest"] for name, meta in assets().items()} == expected
+          print(current()["html_url"])
+          PY
