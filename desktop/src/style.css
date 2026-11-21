@@ -1,4 +1,5 @@
 @import "./learning.css";
+@import "./motion.css";
 @font-face {
   font-family: Calix;
   src: url("/assets/fonts/CalixVariable.woff2") format("woff2");
@@ -2490,17 +2491,13 @@ label textarea {
   cursor: pointer;
 }
 .online-courses {
-  position: sticky;
-  bottom: 0;
-  z-index: 3;
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 14px;
-  margin-top: 12px;
   padding: 10px 14px;
   background: var(--surface);
-  box-shadow: 0 -5px 20px #25152e10;
 }
 .online-courses > header {
   display: flex;
@@ -2640,9 +2637,6 @@ label textarea {
   }
 }
 
-.timetable-panel.with-online {
-  max-height: max(180px, calc(100dvh - 330px));
-}
 .online-course .session-work {
   justify-content: flex-start;
 }

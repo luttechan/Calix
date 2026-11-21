@@ -1,0 +1,65 @@
+:root {
+  --motion-quick: 120ms;
+  --motion-panel: 180ms;
+  --motion-ease: cubic-bezier(.2, .65, .28, 1);
+}
+
+.app-shell button,
+.modal button,
+.auth-shell button {
+  transition: background-color var(--motion-quick) ease,
+    border-color var(--motion-quick) ease,
+    color var(--motion-quick) ease,
+    box-shadow var(--motion-quick) ease,
+    scale var(--motion-quick) var(--motion-ease);
+}
+
+.app-shell button:active:not(:disabled),
+.modal button:active:not(:disabled) {
+  scale: .98;
+}
+
+button.switch i,
+.menu-option input[role="switch"]::before {
+  transition: translate var(--motion-panel) var(--motion-ease),
+    background-color var(--motion-quick) ease;
+}
+
+.modal[open],
+.workspace main > [role="tabpanel"]:not([hidden]) {
+  animation: surface-in var(--motion-panel) var(--motion-ease);
+}
+
+.modal[open]::backdrop {
+  animation: backdrop-in var(--motion-panel) ease-out;
+}
+
+[popover]:popover-open {
+  animation: backdrop-in var(--motion-quick) ease-out;
+}
+
+@keyframes surface-in {
+  from { opacity: .68; }
+  to { opacity: 1; }
+}
+@keyframes backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+:root[data-reduce-motion] *, :root[data-reduce-motion] *::before,
+:root[data-reduce-motion] *::after, :root[data-reduce-motion] *::backdrop {
+  animation-duration: .001ms !important;
+  animation-delay: 0ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: .001ms !important;
+  transition-delay: 0ms !important;
+  scroll-behavior: auto !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-quick: 0ms;
+    --motion-panel: 0ms;
+  }
+}

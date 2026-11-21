@@ -186,12 +186,26 @@
   flex-shrink: 0;
   font-weight: 650;
 }
-.workspace main .timetable-panel,
-.workspace main .timetable-panel.with-online {
+.workspace main:has(> .timetable-layout),
+.timetable-layout {
+  display: flex;
+  flex-direction: column;
+}
+.workspace main:has(> .timetable-layout) > .page-heading,
+.workspace main:has(> .timetable-layout) > .semester-toolbar {
+  flex-shrink: 0;
+}
+.timetable-layout {
+  flex: 1 0 180px;
+  gap: 12px;
+  min-width: 0;
+}
+.timetable-layout .timetable-panel {
   --week-header-size: 42px;
   --week-axis: 48px;
   --week-day-min: 112px;
-  max-height: max(270px, calc(100dvh - 330px));
+  flex: 1 0 112px;
+  min-height: 0;
   padding: 0;
   scroll-padding: var(--week-header-size) 0 0 var(--week-axis);
 }
@@ -270,9 +284,11 @@
   background: var(--surface);
 }
 .menu-option input[role="switch"]:checked, button.switch.on {
-  justify-content: flex-end;
   background: var(--ui-focus);
   border-color: var(--ui-focus);
+}
+.menu-option input[role="switch"]:checked::before, button.switch.on i {
+  translate: 18px 0;
 }
 @media (forced-colors: active) {
   .menu-option input[role="switch"] { appearance: auto; }

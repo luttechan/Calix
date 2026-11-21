@@ -1,5 +1,6 @@
 import { NumberField } from "./NumberField";
 import { AnkiReview } from "./AnkiReview";
+import { AnvStatus } from "./AnvStatus";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Pause, Play, RotateCcw, Settings, SkipForward, Timer, X } from "lucide-react";
 import { rpc, subscribe } from "./bridge";
@@ -349,6 +350,7 @@ export function StudyPage() {
         </article>
       </div>
       {data.preferences.anki_sync && <AnkiReview />}
+      <AnvStatus />
       <div className="study-columns">
         <section className="glass focus-card">
           <div className="focus-brand">

@@ -756,6 +756,21 @@ export function SettingsPage() {
             </button>
           </div>
           <div className="setting-row">
+            <strong>모션 줄이기</strong>
+            <button
+              type="button"
+              className={`switch ${data.preferences.reduce_motion ? "on" : ""}`}
+              role="switch"
+              aria-label="모션 줄이기"
+              aria-checked={data.preferences.reduce_motion === true}
+              onClick={() => void mutate("preferences.save", {
+                reduce_motion: !data.preferences.reduce_motion,
+              }).catch(() => {})}
+            >
+              <i />
+            </button>
+          </div>
+          <div className="setting-row">
             <strong>글꼴</strong>
             <select
               aria-label="글꼴"

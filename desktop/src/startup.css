@@ -175,3 +175,8 @@
     transition: none;
   }
 }
+
+:root[data-reduce-motion] .startup-signature path {
+  animation: none;
+  stroke-dashoffset: 0;
+}

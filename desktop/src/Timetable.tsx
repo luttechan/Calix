@@ -48,7 +48,6 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
   const { panel, unit, height } = useTimetableScale(
     start,
     end,
-    online.length ? 95 : 0,
     data.timetableConfigured,
     density,
   );
@@ -174,10 +173,10 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
           <button type="button" onClick={onOpenHome}>홈으로</button>
         </section>
       ) : (
-        <>
+        <div className="timetable-layout">
           <section
             ref={panel}
-            className={`glass timetable-panel ${online.length ? "with-online" : ""}`}
+            className="glass timetable-panel"
             style={{ "--hour-unit": `${unit}px`, "--week-days": days } as React.CSSProperties}
           >
             <div className="week-grid">
@@ -300,7 +299,7 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
               </div>
             </section>
           )}
-        </>
+        </div>
       )}
       {viewing && (
         <SessionViewer

@@ -6,6 +6,9 @@ import "./typography.css";
 import "./interface.css";
 import "./select.css";
 import "./checklist.css";
+import { restoreMotionPreference } from "./motion";
+
+restoreMotionPreference();
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <App />

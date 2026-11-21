@@ -48,6 +48,7 @@ import { listen } from "@tauri-apps/api/event";
 import { AttendancePage } from "./Attendance";
 import { StudyPage, FocusDock } from "./Study";
 import { SyncNotice } from "./SyncNotice";
+import { motionReduced, saveMotionPreference } from "./motion";
 import { playErrorCue, stopErrorCue } from "./errorCue";
 import { applyThemePalette } from "./themePalette";
 import { defaultSyncTrack } from "./syncCue";
@@ -524,6 +525,18 @@ export function App() {
     data?.preferences.font_mode,
     data?.preferences.theme_palette,
   ]);
+  const reduceMotion = data?.preferences.reduce_motion;
+  const pageReady = Boolean(data && !data.security?.locked);
+  const mainView = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (reduceMotion !== undefined) saveMotionPreference(reduceMotion);
+    if (!pageReady || motionReduced()) return;
+    const animation = mainView.current?.animate(
+      [{ opacity: 0.72 }, { opacity: 1 }],
+      { duration: 180, easing: "ease-out" },
+    );
+    return () => animation?.cancel();
+  }, [page, pageReady, reduceMotion]);
   useEffect(() => {
     if (isTauri() && data?.preferences.onboarding_complete && !data.security?.locked)
       void rpc("reminders.ready").catch(() => {});
@@ -868,7 +881,7 @@ export function App() {
             <WindowControls />
           </div>
         </header>
-        <main>
+        <main ref={mainView}>
           {!data ? (
             <div className="loading-state">
               {error ? (

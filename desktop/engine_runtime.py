@@ -92,12 +92,15 @@ def main():
     class Service(QObject):
         incoming = Signal(object)
         anki_finished = Signal(object)
+        anv_finished = Signal(object)
 
         def __init__(self):
             super().__init__()
             self.incoming.connect(self.handle)
             self.anki_finished.connect(self.finish_anki)
+            self.anv_finished.connect(self.finish_anv)
             self.anki_busy = False
+            self.anv_busy = False
             self.anki_generation = 0
             self.task = None
             self.maintenance = None
@@ -204,6 +207,9 @@ def main():
                     result = api.dispatch(method, params)
                 elif method == "anki.read":
                     self.read_anki(request["id"], reply)
+                    return
+                elif method == "anv.status":
+                    self.read_anv(request["id"], reply)
                     return
                 elif method == "developer.maintenance.state":
                     result = self.maintenance_state
@@ -526,6 +532,31 @@ def main():
                 reply(response)
             else:
                 emit(response)
+
+        def read_anv(self, request_id, reply):
+            if self.anv_busy:
+                raise ValueError("ANV 연결을 확인하는 중입니다.")
+            from learning_calendar.anv import read_anv_status
+
+            def fetch():
+                self.anv_finished.emit((request_id, reply, read_anv_status()))
+
+            self.anv_busy = True
+            try:
+                threading.Thread(target=fetch, daemon=True).start()
+            except RuntimeError:
+                self.anv_busy = False
+                raise
+
+        def finish_anv(self, payload):
+            self.anv_busy = False
+            request_id, reply, status = payload
+            response = (
+                dict(id=request_id, error="ANV 조회가 취소됐습니다.")
+                if self.closing or api.security.state()["locked"]
+                else dict(id=request_id, result=status)
+            )
+            (reply or emit)(response)
 
         def accept_browser_identity(self, params):
             if params.get("interactive") is not True and (

@@ -51,8 +51,20 @@ def test_sync_completion_sound_preferences(engine):
         engine.dispatch("reminders.save", {"sync_track": "11"})
 
 
+def test_reduce_motion_is_opt_in_and_persisted(engine):
+    assert engine.bootstrap()["preferences"]["reduce_motion"] is False
+    engine.dispatch("preferences.save", {"reduce_motion": True})
+    assert read_settings(engine.settings_path)["reduce_motion"] is True
+    engine.dispatch("preferences.save", {"theme": "sky"})
+    assert engine.bootstrap()["preferences"]["reduce_motion"] is True
+    with pytest.raises(ValueError, match="모션"):
+        engine.dispatch("preferences.save", {"reduce_motion": "false"})
+    engine.dispatch("preferences.save", {"reduce_motion": False})
+    assert read_settings(engine.settings_path)["reduce_motion"] is False
+
+
 def test_release_164_follows_legacy_revision_labels():
-    tags = ["1.6.2", "v1.6.30", "v1.6.31", "v1.6.32", "v1.6.4", "v1.7.0", "v1.7.1", "v1.7.2", "v1.7.3"]
+    tags = ["1.6.2", "v1.6.30", "v1.6.31", "v1.6.32", "v1.6.4", "v1.7.0", "v1.7.1", "v1.7.2", "v1.7.3", "v1.7.4"]
     assert sorted(tags, key=version_key) == tags
 
 
@@ -60,7 +72,7 @@ def test_bootstrap_json_never_loads_qt_widgets_or_private_diary(engine):
     data = engine.dispatch("bootstrap", {})
     json.dumps(data, ensure_ascii=False)
     assert (
-        data["version"] == "1.7.3"
+        data["version"] == "1.7.4"
         and len(data["events"]) == 2
         and not data["tasks"]
         and engine.vault is None
@@ -209,7 +221,7 @@ def test_stdio_round_trip_and_clean_exit_use_temporary_data(tmp_path):
     )
     assert result.returncode == 0, result.stderr
     messages = [json.loads(line) for line in result.stdout.splitlines()]
-    assert next(r for r in messages if r.get("id") == 1)["result"]["version"] == "1.7.3"
+    assert next(r for r in messages if r.get("id") == 1)["result"]["version"] == "1.7.4"
 
 
 def test_quit_exits_cleanly_while_host_keeps_stdin_open(tmp_path):

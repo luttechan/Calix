@@ -119,12 +119,13 @@ class EngineAPI:
         palette = self.settings.get("theme_palettes", {}).get(theme, {})
         if state["locked"]:
             return dict(
-                version="1.7.3", events=[], courses=[], types=[], sessions=[],
+                version="1.7.4", events=[], courses=[], types=[], sessions=[],
                 timetableTerms=[], mainTerm="", timetableConfigured=False,
                 sections=[], statuses=[], tasks=[], offDays=[], journals=[],
                 holidays={}, specialDates={}, lastSync="", syncSummary="",
                 security=state,
                 preferences=dict(theme=theme, theme_palette=palette, glass=True,
+                                 reduce_motion=self.settings.get("reduce_motion", False),
                                  reminders=self.settings.get("reminders", {}), nickname=self.settings.get("nickname", ""), greeting="{닉네임}님, 오셨군요!",
                                  onboarding_complete=True, attendance_visible=False, attendance_sync=False,
                                  developer_mode=False, font_mode=self.settings.get("font_mode", "pretendard"),
@@ -134,7 +135,7 @@ class EngineAPI:
         semesters = self.store.timetable_config()
         year = datetime.now(KST).year
         return dict(
-            version="1.7.3",
+            version="1.7.4",
             events=[asdict(e) for e in events],
             courses=[asdict(c) for c in self.store.courses()],
             types=self.store.event_types(),
@@ -163,6 +164,7 @@ class EngineAPI:
                         ("attendance_sync", False),
                         ("anki_sync", False),
                         ("glass", True),
+                        ("reduce_motion", False),
                         ("developer_mode", False),
                         ("font_mode", "pretendard"),
                         ("nickname", ""),
@@ -573,6 +575,9 @@ class EngineAPI:
                 raise ValueError("Acknowledge the Developer Mode warning first.")
             theme = p.get("theme", self.settings.get("theme", "pink"))
             glass = p.get("glass", self.settings.get("glass", True))
+            reduce_motion = p.get("reduce_motion", self.settings.get("reduce_motion", False))
+            if type(reduce_motion) is not bool:
+                raise ValueError("모션 줄이기 설정을 확인하세요.")
             mode = p.get("font_mode", self.settings.get("font_mode", "pretendard"))
             if (
                 theme not in THEMES
@@ -590,6 +595,7 @@ class EngineAPI:
                 **menu_settings,
                 theme=theme,
                 glass=glass,
+                reduce_motion=reduce_motion,
                 font_mode=mode,
                 developer_mode=developer_mode,
                 developer_acknowledged=developer_mode

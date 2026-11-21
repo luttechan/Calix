@@ -2,7 +2,6 @@ import { useLayoutEffect, useRef, useState } from "react";
 export function useTimetableScale(
   start: number,
   end: number,
-  reserved = 0,
   ready = true,
   fixedUnit = 0,
 ) {
@@ -10,14 +9,13 @@ export function useTimetableScale(
     [unit, setUnit] = useState(64);
   useLayoutEffect(() => {
     let frame = 0;
+    const element = panel.current;
+    if (!ready || !element) return;
     const measure = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
-        if (!panel.current) return;
-        const main = panel.current.closest("main");
-        const bottom = main?.getBoundingClientRect().bottom || innerHeight;
-        const available =
-          bottom - panel.current.getBoundingClientRect().top - 80 - reserved;
+        const header = element.querySelector(".week-headers")?.clientHeight ?? 0;
+        const available = element.clientHeight - header;
         const hours = Math.max(1, (end - start) / 60);
         const next = fixedUnit || Math.max(40, Math.min(64, available / hours));
         setUnit((previous) =>
@@ -26,15 +24,12 @@ export function useTimetableScale(
       });
     };
     const observer = new ResizeObserver(measure);
-    const main = panel.current?.closest("main");
-    if (main) observer.observe(main);
-    window.addEventListener("resize", measure);
+    observer.observe(element);
     measure();
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
-      window.removeEventListener("resize", measure);
     };
-  }, [start, end, reserved, ready, fixedUnit]);
+  }, [start, end, ready, fixedUnit]);
   return { panel, unit, height: ((end - start) / 60) * unit };
 }

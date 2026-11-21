@@ -102,6 +102,7 @@ export type Preferences = {
   theme: "pink" | "sky" | "mint" | "purple" | "dark" | "peach" | "amber" | "olive" | "lavender";
   theme_palette?: ThemePalette;
   glass: boolean;
+  reduce_motion: boolean;
   font_mode: string;
   catholic: boolean;
   birthday: boolean;
