@@ -284,6 +284,7 @@
   background: var(--surface);
 }
 .menu-option input[role="switch"]:checked, button.switch.on {
+  justify-content: flex-start;
   background: var(--ui-focus);
   border-color: var(--ui-focus);
 }

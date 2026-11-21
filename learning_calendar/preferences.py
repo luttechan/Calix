@@ -48,6 +48,7 @@ def read_settings(path: str | Path) -> dict:
         "theme_palettes": {},
         "notifications": False,
         "glass": True,
+        "reduce_motion": False,
         "developer_mode": False,
         "developer_acknowledged": False,
         "font_mode": "pretendard",
@@ -72,6 +73,7 @@ def read_settings(path: str | Path) -> dict:
             for key in (
                 "notifications",
                 "glass",
+                "reduce_motion",
                 "attendance_visible",
                 "attendance_sync",
                 "anki_sync",
@@ -154,6 +156,7 @@ def write_settings(path: str | Path, settings: dict):
             "attendance_sync",
             "anki_sync",
             "glass",
+            "reduce_motion",
             "developer_mode",
             "developer_acknowledged",
             "font_mode",
