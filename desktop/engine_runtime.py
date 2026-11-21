@@ -146,7 +146,11 @@ def main():
                 "session-error",
                 "authentication",
             ):
-                diagnostics.add(f"{event}: {payload.get('message', '')}")
+                diagnostics.add(
+                    f"{event}: {payload.get('message', '')}",
+                    source="sync",
+                    level="error" if event in ("sync-error", "session-error") else "info",
+                )
             if event == "reminder" and api.security.state()["locked"]:
                 return
             emit(dict(event=event, **payload))
@@ -237,7 +241,13 @@ def main():
                     result = diagnostics.set_enabled(params.get("enabled"))
 
                 elif method == "diagnostics.record":
-                    diagnostics.add(str(params.get("message", ""))[:4096])
+                    source = params.get("source")
+                    level = params.get("level")
+                    diagnostics.add(
+                        str(params.get("message", ""))[:4096],
+                        source=source if source in ("ui", "bridge") else "sync",
+                        level=level if level in ("warn", "error") else "info",
+                    )
                     result = True
                 elif method == "diagnostics.read":
                     after = params.get("after", 0)
@@ -462,6 +472,12 @@ def main():
                 response = dict(
                     id=request.get("id"), error="요청을 처리하지 못했습니다."
                 )
+            if diagnostics.enabled and api.security.state()["locked"]:
+                diagnostics.set_enabled(False)
+            if "error" in response:
+                name = request.get("method")
+                if isinstance(name, str) and not name.startswith("diagnostics."):
+                    diagnostics.add(f"{name[:100]}: {response['error']}", level="error")
             self.publish_busy()
             if reply:
                 reply(response)
@@ -504,6 +520,8 @@ def main():
                 or api.store is not store
             ):
                 response = dict(id=response["id"], error="Anki 조회가 취소됐습니다.")
+            elif "error" in response:
+                diagnostics.add(f"anki.read: {response['error']}", level="error")
             if reply:
                 reply(response)
             else:
@@ -569,9 +587,7 @@ def main():
             self.publish_busy()
 
         def start_collector(self):
-            from learning_calendar.timetable_terms import activate_current
-
-            self.collection_semester = activate_current(api.store)["main"]
+            self.collection_semester = api.store.timetable_config()["main"]
             self.collector = secrets.token_hex(16)
             self.collection_timer.start(210000)
             diagnostics.add("Collector started with the WebView2 login profile")

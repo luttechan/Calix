@@ -1,12 +1,52 @@
-.semester-settings-controls { display: flex; align-items: end; gap: 8px; flex-wrap: wrap; padding-bottom: 14px; }
-.semester-settings-controls > label { min-width: min(100%, 220px); margin: 0; }
-.semester-settings-controls > button, .semester-settings-controls select { min-height: 42px; }
-.semester-period-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
-.semester-period-heading h3 { margin: 0; }
-.semester-periods { list-style: none; padding: 0; margin: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--ui-panel); }
-.semester-periods li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 13px; }
-.semester-periods li + li { border-top: 1px solid var(--line); }
-.semester-periods li > div { min-width: 0; overflow-wrap: anywhere; }
-.semester-periods .count-pill { margin-inline-start: 7px; }
-.semester-periods small { display: block; margin-top: 3px; color: var(--muted); }
-.semester-periods button { flex: none; }
+.welcome-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 1 auto;
+  gap: clamp(15px, 2vw, 32px);
+  min-width: 0;
+}
+.welcome > :first-child { min-width: 0; overflow-wrap: anywhere; }
+.welcome-actions .welcome-mark { flex: none; }
+.home-semester-button {
+  min-width: 0;
+  gap: 10px;
+  padding: 10px 13px;
+  background: var(--ui-panel);
+  border-color: var(--ui-border);
+  border-radius: 13px;
+  text-align: start;
+}
+.home-semester-button > svg { flex: none; color: var(--accent); }
+.home-semester-button span { display: grid; min-width: 0; overflow-wrap: anywhere; }
+.home-semester-button small { color: var(--muted); font-size: 11px; }
+.home-semester-button strong { font-size: 13px; font-weight: 650; }
+.semester-warning {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  padding: 12px;
+  margin: 0 0 18px;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: var(--ui-panel);
+}
+.semester-warning svg { flex: none; color: var(--accent); }
+.semester-switch-fields > div { display: grid; align-content: start; gap: 11px; overflow-wrap: anywhere; }
+.semester-switch-fields > div small { color: var(--muted); }
+.semester-settings-controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.semester-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--ui-panel);
+}
+.semester-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 13px; }
+.semester-list li + li { border-top: 1px solid var(--line); }
+.semester-list li strong { min-width: 0; overflow-wrap: anywhere; }
+.semester-list .count-pill { flex: none; }
+@media (max-width: 960px) {
+  .welcome-actions .welcome-mark { display: none; }
+}

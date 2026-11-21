@@ -103,6 +103,24 @@ def developer_service(service):
     return service
 
 
+def test_console_captures_failed_calix_requests_and_ui_errors(developer_service):
+    instance, output = developer_service
+    for identifier, method, params in [
+        (1, "diagnostics.enable", {"enabled": True}),
+        (2, "sync", {}),
+        (3, "diagnostics.record", {"source": "ui", "level": "error", "message": "TypeError: api_key=example-key"}),
+        (4, "diagnostics.read", {}),
+        (5, "diagnostics.enable", {"enabled": False}),
+        (6, "diagnostics.read", {}),
+    ]:
+        instance.handle(dict(id=identifier, method=method, params=params))
+    captured = next(row["result"] for row in output if row.get("id") == 4)
+    assert any(row["source"] == "engine" and row["level"] == "error" and "학교 로그인" in row["message"] for row in captured["rows"])
+    assert any(row["source"] == "ui" and row["level"] == "error" and "[REDACTED]" in row["message"] for row in captured["rows"])
+    assert "example-key" not in repr(captured)
+    assert next(row["result"] for row in output if row.get("id") == 6) == {"enabled": False, "rows": []}
+
+
 @pytest.mark.parametrize(
     "method", ["session.logout", "session.prepare", "session.import", "session.restore"]
 )

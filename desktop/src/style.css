@@ -1478,8 +1478,8 @@ label textarea {
   color: var(--muted);
 }
 .settings-panel {
-  max-width: 830px;
-  padding: 28px;
+  min-width: 0;
+  padding: clamp(16px, 2.8cqi, 38px);
   margin-bottom: 22px;
 }
 .settings-heading {
@@ -2994,10 +2994,9 @@ body.reminder-surface {
 }
 .settings-categories {
   display: grid;
-  grid-template-columns: repeat(9, max-content);
-  justify-content: space-between;
-  gap: 5px 4px;
-  max-width: 830px;
+  grid-template-columns: repeat(9, minmax(max-content, 1fr));
+  gap: 5px clamp(4px, 0.8cqi, 12px);
+  min-width: 0;
   margin-bottom: 18px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--ui-border);
@@ -3005,9 +3004,9 @@ body.reminder-surface {
 .settings-categories [role="tab"] {
   min-width: 0;
   justify-content: flex-start;
-  gap: 7px;
-  min-height: 38px;
-  padding: 6px 9px;
+  gap: clamp(5px, 0.8cqi, 10px);
+  min-height: 42px;
+  padding: 6px clamp(8px, 1.1cqi, 14px);
   border: 1px solid transparent;
   background: transparent;
   border-radius: 8px;
@@ -3015,7 +3014,7 @@ body.reminder-surface {
   font-weight: 600;
 }
 .settings-categories [role="tab"] svg { width: 15px; height: 15px; flex: none; }
-.settings-categories [role="tab"] span { text-align: start; word-break: keep-all; }
+.settings-categories [role="tab"] span { min-width: 0; text-align: start; word-break: keep-all; overflow-wrap: anywhere; }
 .settings-categories [role="tab"]:hover { background: var(--ui-hover); color: var(--ink); }
 .settings-categories [role="tab"][aria-selected="true"] {
   background: color-mix(in srgb, var(--surface) 84%, var(--accent));
@@ -3251,23 +3250,34 @@ body.reminder-surface {
   flex-direction: column;
   overflow: hidden;
 }
-@container settings (max-width: 805px) {
+@container settings (max-width: 980px) {
+  .settings-categories { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+@container settings (max-width: 685px) {
   .settings-categories { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
-@container settings (max-width: 450px) {
+@container settings (max-width: 375px) {
   .settings-categories { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+@container settings (max-width: 520px) {
+  .reset-panel { align-items: flex-start; flex-wrap: wrap; gap: 12px; }
+}
+.settings-panel .theme-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
+}
+.settings-panel .theme-picker > button { min-width: 0; }
 .workspace main:has(> .settings-categories) > .page-heading,
 .settings-categories {
   flex-shrink: 0;
 }
 .workspace main:has(> .settings-categories) > [role="tabpanel"]:not([hidden]) {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   overflow: auto;
   scrollbar-gutter: stable;
   overscroll-behavior: contain;
-  max-width: 830px;
 }
 .workspace main > #settings-pane-alarms:not([hidden]) {
   display: flex;

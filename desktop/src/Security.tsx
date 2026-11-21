@@ -4,6 +4,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { Modal, useCalix } from "./App";
 import { rpc } from "./bridge";
 import { NumberField } from "./NumberField";
+import { playLogonCue, stopErrorCue } from "./errorCue";
 import type { SecurityState } from "./types";
 import "./security-grades.css";
 
@@ -68,9 +69,15 @@ export function UnlockView({ scope = "main" }: { scope?: "main" | "timetable" | 
       </div></> : <><span className="security-symbol"><LockKeyhole size={26} /></span><h1 id="unlock-title">{title}</h1></>}
       <form onSubmit={event => {
         event.preventDefault();
+        if (pending) return;
         setPending(true);
         setError("");
-        void mutate("security.unlock", { password, scope }).then(() => setPassword(""))
+        void mutate("security.unlock", { password, scope }).then(() => {
+          setPassword("");
+          const reminders = data.preferences.reminders;
+          stopErrorCue();
+          playLogonCue(reminders?.enabled !== false && reminders?.sound !== false, reminders?.volume);
+        })
           .catch(reason => setError(reason.message)).finally(() => setPending(false));
       }}>
         <label>비밀번호<input type="password" autoComplete="current-password" value={password} maxLength={1024} required autoFocus onChange={event => setPassword(event.target.value)} /></label>

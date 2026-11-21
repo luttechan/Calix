@@ -1,6 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod reminder;
-use tauri::{Emitter, Manager, WindowEvent};
+use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState};
 mod auth;
@@ -10,6 +10,8 @@ mod taskbar;
 
 #[derive(Default)]
 pub struct DeveloperState(pub std::sync::atomic::AtomicBool);
+
+const CONSOLE_WINDOW: &str = "developer-console";
 
 fn developer_settings_enabled(value: &serde_json::Value) -> bool {
     value["developer_mode"].as_bool() == Some(true) && value["developer_acknowledged"].as_bool() == Some(true)
@@ -27,26 +29,82 @@ pub(crate) fn require_developer() -> Result<(), String> {
 #[tauri::command]
 fn developer_disable(app: tauri::AppHandle, webview: tauri::Webview) -> Result<(), String> {
     auth::trusted(&webview, &["main"])?;
-    app.state::<DeveloperState>().0.store(false, std::sync::atomic::Ordering::SeqCst);
+    close_developer_console(&app);
     if let Some(window) = app.get_webview_window("main") { window.close_devtools(); let _=window.set_always_on_top(false); }
     campus::campus_debug(app, webview, false)
 }
 
 pub fn focus_developer(app: &tauri::AppHandle) {
     if app.state::<DeveloperState>().0.load(std::sync::atomic::Ordering::SeqCst) {
-        if let Some(window)=app.get_webview_window("main") { let _=window.set_always_on_top(true);let _=window.unminimize();let _=window.show();let _=window.set_focus(); }
+        if let Some(window) = app.get_webview_window(CONSOLE_WINDOW) {
+            let _ = window.unminimize();
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
     }
 }
+
+fn restore_developer_priority(app: &tauri::AppHandle) {
+    use std::sync::atomic::Ordering;
+    if app.state::<DeveloperState>().0.swap(false, Ordering::SeqCst) {
+        for label in ["login", "reminder"] {
+            if let Some(window) = app.get_webview_window(label) {
+                let _ = window.set_always_on_top(true);
+            }
+        }
+        let _ = app.emit_to("main", "developer-console:closed", ());
+    }
+}
+
+fn close_developer_console(app: &tauri::AppHandle) {
+    restore_developer_priority(app);
+    if let Some(window) = app.get_webview_window(CONSOLE_WINDOW) {
+        let _ = window.destroy();
+    }
+}
+
 #[tauri::command]
-fn developer_console(app: tauri::AppHandle, webview: tauri::Webview, open: bool) -> Result<(),String> {
-    auth::trusted(&webview,&["main"])?;
-    if open { require_developer()?; }
-    app.state::<DeveloperState>().0.store(open,std::sync::atomic::Ordering::SeqCst);
-    if let Some(window)=app.get_webview_window("main") { window.set_always_on_top(open).map_err(|_|"Unable to prioritize Live Console.")?; }
-    if let Some(window)=app.get_webview_window("login") { let _=window.set_always_on_top(!open); }
-    if let Some(window)=app.get_webview_window("reminder") { let _=window.set_always_on_top(!open); }
+async fn developer_console(app: tauri::AppHandle, webview: tauri::Webview, open: bool) -> Result<(), String> {
+    auth::trusted(&webview, &["main"])?;
+    if !open {
+        close_developer_console(&app);
+        return Ok(());
+    }
+    require_developer()?;
+    if app.get_webview_window(CONSOLE_WINDOW).is_none() {
+        let builder = WebviewWindowBuilder::new(&app, CONSOLE_WINDOW, WebviewUrl::App("developer-console.html".into()))
+            .title("Calix Console")
+            .inner_size(900.0, 620.0)
+            .min_inner_size(580.0, 420.0)
+            .always_on_top(true);
+        builder.build().map_err(|error| error.to_string())?;
+    }
+    app.state::<DeveloperState>().0.store(true, std::sync::atomic::Ordering::SeqCst);
+    for label in ["main", "login", "reminder"] {
+        if let Some(window) = app.get_webview_window(label) {
+            let _ = window.set_always_on_top(false);
+        }
+    }
     focus_developer(&app);
     Ok(())
+}
+
+#[tauri::command]
+fn developer_console_publish(app: tauri::AppHandle, webview: tauri::Webview, state: serde_json::Value) -> Result<(), String> {
+    auth::trusted(&webview, &["main"])?;
+    require_developer()?;
+    if app.get_webview_window(CONSOLE_WINDOW).is_none() { return Ok(()); }
+    app.emit_to(CONSOLE_WINDOW, "developer-console:update", state).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn developer_console_action(app: tauri::AppHandle, webview: tauri::Webview, action: String) -> Result<(), String> {
+    auth::trusted(&webview, &[CONSOLE_WINDOW])?;
+    require_developer()?;
+    if !matches!(action.as_str(), "ready" | "sync" | "force" | "dismiss" | "cancel" | "capture" | "pause") {
+        return Err("Unknown console action.".into());
+    }
+    app.emit_to("main", "developer-console:action", action).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -92,7 +150,7 @@ fn restart_app(app: tauri::AppHandle, webview: tauri::Webview) -> Result<(), Str
 #[tauri::command]
 fn app_ready(app: tauri::AppHandle, webview: tauri::Webview) -> Result<(), String> {
     auth::trusted(&webview, &["main"])?;
-    if let Some(window) = app.get_webview_window("main") { let _ = window.set_always_on_top(app.state::<DeveloperState>().0.load(std::sync::atomic::Ordering::SeqCst)); }
+    if let Some(window) = app.get_webview_window("main") { let _ = window.set_always_on_top(false); }
     Ok(())
 }
 
@@ -136,12 +194,8 @@ fn verify_taskbar_identity(app: &tauri::App, title: &str) -> Result<String, Stri
 
 #[tauri::command]
 fn privacy_lock(app: tauri::AppHandle) {
-    for label in ["main", "developer-console"] {
-        if let Some(window) = app.get_webview_window(label) {
-            window.close_devtools();
-            if label == "developer-console" { let _ = window.hide(); }
-        }
-    }
+    close_developer_console(&app);
+    if let Some(window) = app.get_webview_window("main") { window.close_devtools(); }
     for label in ["login", "reminder"] {
         if let Some(window) = app.get_webview_window(label) { let _ = window.hide(); }
     }
@@ -171,7 +225,7 @@ fn main() {
         .manage(auth::AuthGate(std::sync::Mutex::new(())))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![privacy_lock, reminder::reminder_show, reminder::reminder_payload, reminder::reminder_close, reminder::reminder_open_event, developer_console, developer_disable, developer_devtools, developer_export, campus::campus_identity, campus::campus_collect, campus::campus_cancel, campus::campus_debug, quit_app, restart_app, app_ready, auth::auth_open, auth::auth_mount, auth::auth_complete, auth::auth_status, auth::auth_reload, auth::auth_logout, auth::backup_file])
+        .invoke_handler(tauri::generate_handler![privacy_lock, reminder::reminder_show, reminder::reminder_payload, reminder::reminder_close, reminder::reminder_open_event, developer_console, developer_console_publish, developer_console_action, developer_disable, developer_devtools, developer_export, campus::campus_identity, campus::campus_collect, campus::campus_cancel, campus::campus_debug, quit_app, restart_app, app_ready, auth::auth_open, auth::auth_mount, auth::auth_complete, auth::auth_status, auth::auth_reload, auth::auth_logout, auth::backup_file])
         .setup(move |app| {
             if let Some(path) = check.clone() {
                 #[cfg(windows)]
@@ -221,6 +275,9 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            if window.label() == CONSOLE_WINDOW && matches!(event, WindowEvent::Destroyed) {
+                restore_developer_priority(window.app_handle());
+            }
             if let WindowEvent::CloseRequested { api, .. } = event {
                 if window.label() == "main" { api.prevent_close();let _ = window.emit("app:hidden", ());let _ = window.hide(); }
                 else if window.label() == "reminder" {

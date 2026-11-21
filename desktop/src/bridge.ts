@@ -28,6 +28,10 @@ export function subscribe(
 let browserEvents: Promise<unknown> | null = null;
 let diagnosticEvents: Promise<unknown> | null = null;
 let browserBarrier: Promise<unknown> = Promise.resolve();
+function transportFailure(message: string) {
+  if (!stopping && typeof window !== "undefined")
+    window.dispatchEvent(new CustomEvent("calix:engine-error", { detail: message }));
+}
 function browserMessage(message: Record<string, unknown>) {
   if (message.event === "browser-collect") {
     const runId = String(message.runId);
@@ -137,6 +141,7 @@ async function start() {
     });
     const failed = (message: string) => {
       if (current !== generation) return;
+      transportFailure(message);
       generation++;
       failAll(message);
     };
@@ -150,6 +155,7 @@ async function start() {
     child = spawned;
   })().catch((error) => {
     if (current === generation) starting = null;
+    transportFailure("Engine startup failed.");
     throw error;
   });
   return starting;
@@ -179,6 +185,7 @@ export async function rpc<T = unknown>(
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
       pending.delete(id);
+      if (!method.startsWith("diagnostics.")) transportFailure(`RPC timed out: ${method}`);
       reject(new Error("처리 시간이 초과되었습니다."));
     }, 120000);
     pending.set(id, {
@@ -192,6 +199,7 @@ export async function rpc<T = unknown>(
       .catch((error) => {
         pending.delete(id);
         clearTimeout(timer);
+        if (!method.startsWith("diagnostics.")) transportFailure(`RPC write failed: ${method}`);
         reject(error);
       });
   });

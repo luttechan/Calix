@@ -120,15 +120,15 @@ export function DevPanel({ active }: { active: boolean }) {
     try {
       await action();
     } catch {
-      setMessage("Operation failed. Open Live Console for details.");
+      setMessage("Operation failed. Open Calix Console for details.");
     } finally {
       setPending(false);
     }
   };
   const tools = [
     [
-      "Live Console",
-      "Inspect runtime events and collector logs.",
+      "Calix Console",
+      "Open runtime, error and sync logs in a separate window.",
       () => window.dispatchEvent(new Event("calix:developer-console")),
     ],
     [

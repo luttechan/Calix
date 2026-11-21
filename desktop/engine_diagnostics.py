@@ -1,4 +1,4 @@
-"""Opt-in, bounded, memory-only crawl diagnostics. No response bodies or credentials."""
+"""Opt-in, bounded, memory-only Calix diagnostics."""
 
 import logging
 import threading
@@ -26,12 +26,12 @@ class Diagnostics(logging.Handler):
             self.rows.clear()
         return self.enabled
 
-    def add(self, message):
+    def add(self, message, *, source="engine", level="info"):
         with self.lock_rows:
             if not self.enabled:
                 return
             record = logging.LogRecord(
-                "crawl", logging.INFO, "", 0, str(message)[:4096], (), None
+                "calix", logging.INFO, "", 0, str(message)[:4096], (), None
             )
             message = self.format(record)
             self.sequence += 1
@@ -40,12 +40,15 @@ class Diagnostics(logging.Handler):
                     id=self.sequence,
                     time=datetime.now().isoformat(timespec="seconds"),
                     message=message,
+                    source=source,
+                    level=level,
                 )
             )
 
     def emit(self, record):
         if self.enabled:
-            self.add(self.format(record))
+            level = "error" if record.levelno >= logging.ERROR else "warn"
+            self.add(self.format(record), level=level)
 
     def read(self, after=0):
         with self.lock_rows:
@@ -67,7 +70,7 @@ class Diagnostics(logging.Handler):
 
         return dict(
             schema=1,
-            version="1.7.2",
+            version="1.7.3",
             python=platform.python_version(),
             platform=platform.system(),
             architecture=platform.machine(),
@@ -94,13 +97,14 @@ class Diagnostics(logging.Handler):
                 return original(session, request, **kwargs)
             url = urlsplit(request.url)
             target = f"{request.method} {url.hostname}{url.path}"
-            owner.add("HTTP START " + target)
+            owner.add("HTTP START " + target, source="sync")
             try:
                 response = original(session, request, **kwargs)
             except Exception as error:
-                owner.add(f"HTTP FAILED {target} {type(error).__name__}")
+                owner.add(f"HTTP FAILED {target} {type(error).__name__}", source="sync", level="error")
                 raise
-            owner.add(f"HTTP RESPONSE {response.status_code} {target}")
+            owner.add(f"HTTP RESPONSE {response.status_code} {target}", source="sync",
+                      level="warn" if response.status_code >= 400 else "info")
             return response
 
         requests.Session.send = send

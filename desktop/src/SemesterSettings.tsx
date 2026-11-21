@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { CalendarRange, Plus } from "lucide-react";
+import { CalendarRange, ChevronDown, Plus, TriangleAlert } from "lucide-react";
 import { Modal, useCalix } from "./App";
-import { DateField } from "./ChecklistDeadline";
-import { TermEditor } from "./Timetable";
+import { NumberField } from "./NumberField";
 import { rpc } from "./bridge";
 import type { Snapshot } from "./types";
 import "./semester-settings.css";
@@ -10,117 +9,138 @@ import "./semester-settings.css";
 type Term = Snapshot["timetableTerms"][number];
 type Rosters = Record<string, number[]>;
 
-export function SemesterSettings() {
-  const { data, mutate, notify } = useCalix();
-  const [editing, setEditing] = useState<Term | null>(null);
-  const [add, setAdd] = useState(false);
-  const [rosters, setRosters] = useState<Rosters | null>(null);
-  const [busy, setBusy] = useState(false);
-  const { timetableTerms: terms, mainTerm, semesterAutomatic, semesterSeasonal } = data;
-  const apply = (method: string, params: Record<string, unknown> = {}) => {
-    setBusy(true);
-    void mutate(method, params).catch(() => {}).finally(() => setBusy(false));
-  };
-  const openMove = async () => {
-    setBusy(true);
-    try {
-      setRosters(await rpc<Rosters>("semester.roster"));
-    } catch (error) {
-      // Keep read errors visible without refreshing the app state.
-      notify((error as Error).message, true);
-    } finally {
-      setBusy(false);
-    }
-  };
-  const dated = terms.some((term) => term.startsOn);
-  const ordered = [...terms].sort((a, b) =>
-    (a.startsOn ?? "9999").localeCompare(b.startsOn ?? "9999") || b.name.localeCompare(a.name),
-  );
+export function MainSemesterControl() {
+  const { data, mutate } = useCalix();
+  const [dialog, setDialog] = useState<"change" | "add" | "setup" | null>(null);
+  const [next, setNext] = useState("");
+  const [saving, setSaving] = useState(false);
+
   return <>
-    <section className="glass settings-panel semester-settings">
-      <div className="settings-heading">
-        <CalendarRange aria-hidden="true" />
-        <h2>학기</h2>
-      </div>
-      <div className="semester-settings-controls">
-        {data.timetableConfigured && <label>
-          메인 학기
-          <select value={mainTerm} disabled={busy} onChange={(event) => apply("semester.main", { name: event.target.value })}>
-            {ordered.map((term) => <option key={term.name}>{term.name}</option>)}
-          </select>
-        </label>}
-        <button type="button" disabled={busy} onClick={() => setAdd(true)}>
-          <Plus size={16} aria-hidden="true" />{data.timetableConfigured ? "학기 추가" : "학기 설정"}
-        </button>
-        <button type="button" className={dated ? "" : "primary"} disabled={busy}
-          onClick={() => apply("semester.school")}>부산외대 학사일정 적용</button>
-      </div>
-      <label className="menu-option">
-        <span><strong>날짜로 메인 학기 전환</strong><small>등록된 기간에 맞춰 실행 및 동기화 시 전환합니다.</small></span>
-        <input type="checkbox" role="switch" aria-label="날짜로 메인 학기 전환"
-          checked={!!semesterAutomatic} disabled={busy || !dated}
-          onChange={(event) => apply("semester.mode", { automatic: event.target.checked })} />
-      </label>
-      {semesterAutomatic && <label className="menu-option">
-        <strong>계절학기 포함</strong>
-        <input type="checkbox" role="switch" checked={semesterSeasonal !== false} disabled={busy}
-          onChange={(event) => apply("semester.mode", { seasonal: event.target.checked })} />
-      </label>}
-      {data.timetableConfigured && <>
-        <div className="semester-period-heading">
-          <h3>학기별 기간</h3>
-          <button type="button" disabled={busy || terms.length < 2 || !data.courses.length}
-            onClick={() => void openMove()}>Canvas 과목 옮기기</button>
-        </div>
-        <ul className="semester-periods">
-          {ordered.map((term) => <li key={term.name}>
-            <div>
-              <strong>{term.name}</strong>
-              {term.name === mainTerm && <span className="count-pill">메인</span>}
-              <small>{term.startsOn && term.endsOn ? `${term.startsOn} ~ ${term.endsOn}` : "기간 미설정"}</small>
-            </div>
-            <button type="button" disabled={busy} aria-label={`${term.name} 날짜 편집`}
-              onClick={() => setEditing(term)}>날짜 편집</button>
-          </li>)}
-        </ul>
-      </>}
-    </section>
-    {add && <TermEditor setup={!data.timetableConfigured} inSettings
-      onClose={() => setAdd(false)} onSaved={() => setAdd(false)} />}
-    {editing && <PeriodEditor term={editing} onClose={() => setEditing(null)} />}
-    {rosters && <CourseTransfer terms={ordered} rosters={rosters} onClose={() => setRosters(null)} />}
+    <button className="home-semester-button" type="button" aria-haspopup="dialog" onClick={() => {
+      setNext(data.mainTerm);
+      setDialog(data.timetableConfigured ? "change" : "setup");
+    }}>
+      <CalendarRange size={19} aria-hidden="true" />
+      <span><small>메인 학기</small><strong>{data.timetableConfigured ? data.mainTerm : "학기 설정"}</strong></span>
+      <ChevronDown size={15} aria-hidden="true" />
+    </button>
+    {dialog === "change" && (
+      <Modal title="메인 학기를 변경하시겠습니까?" onClose={() => { if (!saving) setDialog(null); }}>
+        <form onSubmit={(event) => {
+          event.preventDefault();
+          if (saving || next === data.mainTerm) return;
+          setSaving(true);
+          void mutate("semester.main", { name: next })
+            .then(() => setDialog(null)).catch(() => {}).finally(() => setSaving(false));
+        }}>
+          <p className="semester-warning"><TriangleAlert size={18} aria-hidden="true" />
+            <span>변경 후 시작하는 동기화에서 새 Canvas 과목은 선택한 학기에 추가됩니다.</span>
+          </p>
+          <div className="form-grid semester-switch-fields">
+            <div><small>현재 학기</small><strong>{data.mainTerm}</strong></div>
+            <label>
+              변경할 학기
+              <select value={next} disabled={saving} onChange={(event) => setNext(event.target.value)}>
+                {data.timetableTerms.map((term) => <option key={term.name} value={term.name}>{term.name}</option>)}
+              </select>
+            </label>
+          </div>
+          <div className="dialog-actions">
+            <button type="button" disabled={saving} onClick={() => setDialog("add")}>학기 추가</button>
+            <span />
+            <button type="button" disabled={saving} onClick={() => setDialog(null)}>취소</button>
+            <button className="primary" disabled={saving || next === data.mainTerm}>변경</button>
+          </div>
+        </form>
+      </Modal>
+    )}
+    {(dialog === "setup" || dialog === "add") && (
+      <TermEditor setup={dialog === "setup"} onClose={() => setDialog(dialog === "add" ? "change" : null)}
+        onSaved={(name) => {
+          if (dialog === "add") setNext(name);
+          setDialog(dialog === "add" ? "change" : null);
+        }} />
+    )}
   </>;
 }
 
-function PeriodEditor({ term, onClose }: { term: Term; onClose: () => void }) {
+export function SemesterSettings() {
+  const { data, notify } = useCalix();
+  const [add, setAdd] = useState(false);
+  const [rosters, setRosters] = useState<Rosters | null>(null);
+  const [loading, setLoading] = useState(false);
+  const { timetableTerms: terms, mainTerm } = data;
+  const openMove = async () => {
+    setLoading(true);
+    try {
+      setRosters(await rpc<Rosters>("semester.roster"));
+    } catch (error) {
+      notify((error as Error).message, true);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return <>
+    <section className="glass settings-panel semester-settings">
+      <div className="settings-heading"><CalendarRange aria-hidden="true" /><h2>학기</h2></div>
+      {data.timetableConfigured ? <>
+        <div className="semester-settings-controls">
+          <button type="button" onClick={() => setAdd(true)}><Plus size={16} aria-hidden="true" />학기 추가</button>
+          <button type="button" disabled={loading || terms.length < 2 || !data.courses.length}
+            onClick={() => void openMove()}>Canvas 과목 옮기기</button>
+        </div>
+        <ul className="semester-list">
+          {terms.map((term) => <li key={term.name}>
+            <strong>{term.name}</strong>
+            {term.name === mainTerm && <span className="count-pill">메인 학기</span>}
+          </li>)}
+        </ul>
+      </> : <p className="muted">홈에서 메인 학기를 설정하세요.</p>}
+    </section>
+    {add && <TermEditor setup={false} onClose={() => setAdd(false)} onSaved={() => setAdd(false)} />}
+    {rosters && <CourseTransfer terms={terms} rosters={rosters} onClose={() => setRosters(null)} />}
+  </>;
+}
+
+function TermEditor({ setup, onClose, onSaved }: {
+  setup: boolean;
+  onClose: () => void;
+  onSaved: (name: string) => void;
+}) {
   const { mutate } = useCalix();
-  const [start, setStart] = useState(term.startsOn ?? "");
-  const [end, setEnd] = useState(term.endsOn ?? "");
+  const today = new Date();
+  const [year, setYear] = useState(today.getFullYear());
+  const [term, setTerm] = useState(today.getMonth() < 7 ? "1" : "2");
   const [saving, setSaving] = useState(false);
-  return <Modal title={term.name} onClose={onClose}>
-    <form onSubmit={(event) => {
-      event.preventDefault();
-      if (saving || !start || !end || start > end) return;
-      setSaving(true);
-      void mutate("semester.dates", { name: term.name, startsOn: start, endsOn: end })
-        .then(onClose).catch(() => {}).finally(() => setSaving(false));
-    }}>
-      <div className="form-grid">
-        <label>시작일<DateField label="학기 시작일" value={start} onChange={setStart} disabled={saving} /></label>
-        <label>종료일<DateField label="학기 종료일" value={end} onChange={setEnd} disabled={saving} /></label>
-      </div>
-      <div className="dialog-actions">
-        {term.startsOn && <button type="button" className="text-button" disabled={saving} onClick={() => {
-          setSaving(true);
-          void mutate("semester.dates", { name: term.name, startsOn: null, endsOn: null })
-            .then(onClose).catch(() => {}).finally(() => setSaving(false));
-        }}>기간 지우기</button>}
-        <span />
-        <button type="button" disabled={saving} onClick={onClose}>취소</button>
-        <button className="primary" disabled={saving || !start || !end || start > end}>저장</button>
-      </div>
-    </form>
-  </Modal>;
+  return (
+    <Modal title={setup ? "메인 학기 설정" : "학기 추가"} onClose={() => { if (!saving) onClose(); }}>
+      <form onSubmit={(event) => {
+        event.preventDefault();
+        if (saving) return;
+        setSaving(true);
+        void mutate(setup ? "semester.configure" : "semester.add", {
+          year, term: term === "1" || term === "2" ? Number(term) : term,
+        }).then((name) => onSaved(String(name))).catch(() => {}).finally(() => setSaving(false));
+      }}>
+        {setup && <p className="semester-warning"><TriangleAlert size={18} aria-hidden="true" />
+          <span>기존 시간표와 학점을 선택한 학기에 연결합니다.</span>
+        </p>}
+        <div className="form-grid">
+          <label>학년도<NumberField aria-label="학년도" min={1900} max={2200}
+            step={1} required value={year} onValueChange={setYear} /></label>
+          <label>학기<select value={term} onChange={(event) => setTerm(event.target.value)}>
+            <option value="1">1학기</option><option value="2">2학기</option>
+            <option value="여름">여름 계절학기</option><option value="겨울">겨울 계절학기</option>
+          </select></label>
+        </div>
+        <div className="dialog-actions">
+          <span />
+          <button type="button" disabled={saving} onClick={onClose}>취소</button>
+          <button className="primary" disabled={saving}>{setup ? "설정" : "추가"}</button>
+        </div>
+      </form>
+    </Modal>
+  );
 }
 
 function CourseTransfer({ terms, rosters, onClose }: { terms: Term[]; rosters: Rosters; onClose: () => void }) {

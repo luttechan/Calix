@@ -124,11 +124,9 @@ export type Snapshot = {
   courses: Course[];
   types: { id: number; name: string; color: string }[];
   sessions: Session[];
-  timetableTerms: { name: string; offDays: number[]; startsOn?: string | null; endsOn?: string | null }[];
+  timetableTerms: { name: string; offDays: number[] }[];
   mainTerm: string;
   timetableConfigured: boolean;
-  semesterAutomatic?: boolean;
-  semesterSeasonal?: boolean;
   sections: { id: number; name: string }[];
   statuses: { id: number; name: string; color: string; kind: string }[];
   tasks: Task[];

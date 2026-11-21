@@ -7,7 +7,7 @@ import re
 class SecretSafeFormatter(logging.Formatter):
     def format(self, record):
         message = super().format(record)
-        secret = r"(?:password|passwd|[a-z0-9_-]*(?:token|session)[a-z0-9_-]*)"
+        secret = r"(?:password|passwd|api[_-]?key|[a-z0-9_-]*(?:token|session)[a-z0-9_-]*)"
         quoted = r"""(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')"""
         for pattern, replacement in (
             (
