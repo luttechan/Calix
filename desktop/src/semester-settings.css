@@ -1,0 +1,12 @@
+.semester-settings-controls { display: flex; align-items: end; gap: 8px; flex-wrap: wrap; padding-bottom: 14px; }
+.semester-settings-controls > label { min-width: min(100%, 220px); margin: 0; }
+.semester-settings-controls > button, .semester-settings-controls select { min-height: 42px; }
+.semester-period-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.semester-period-heading h3 { margin: 0; }
+.semester-periods { list-style: none; padding: 0; margin: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--ui-panel); }
+.semester-periods li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 13px; }
+.semester-periods li + li { border-top: 1px solid var(--line); }
+.semester-periods li > div { min-width: 0; overflow-wrap: anywhere; }
+.semester-periods .count-pill { margin-inline-start: 7px; }
+.semester-periods small { display: block; margin-top: 3px; color: var(--muted); }
+.semester-periods button { flex: none; }

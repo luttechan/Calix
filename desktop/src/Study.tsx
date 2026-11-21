@@ -1,4 +1,5 @@
 import { NumberField } from "./NumberField";
+import { AnkiReview } from "./AnkiReview";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Pause, Play, RotateCcw, Settings, SkipForward, Timer, X } from "lucide-react";
 import { rpc, subscribe } from "./bridge";
@@ -347,6 +348,7 @@ export function StudyPage() {
           </strong>
         </article>
       </div>
+      {data.preferences.anki_sync && <AnkiReview />}
       <div className="study-columns">
         <section className="glass focus-card">
           <div className="focus-brand">

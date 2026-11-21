@@ -1,10 +1,11 @@
 import {sessionLanes} from "./planningState";
 import { NumberField } from "./NumberField";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Sun, Trash2, Monitor, ArrowUpRight } from "lucide-react";
 import { Modal, TypeBadge, useCalix } from "./App";
 import { weekdays, dueText, status } from "./dates";
 import { useTimetableScale } from "./useTimetableScale";
+import { TimeField } from "./TimeField";
 import type { Session } from "./types";
 
 const minute = (value: string) => {
@@ -406,12 +407,14 @@ export function TimetablePage() {
   );
 }
 
-function TermEditor({
+export function TermEditor({
   setup,
+  inSettings = false,
   onClose,
   onSaved,
 }: {
   setup: boolean;
+  inSettings?: boolean;
   onClose: () => void;
   onSaved: (name: string) => void;
 }) {
@@ -421,6 +424,7 @@ function TermEditor({
     new Date().getMonth() < 7 ? 1 : 2,
   );
   const [saving, setSaving] = useState(false);
+  const [makeMain, setMakeMain] = useState(true);
   return (
     <Modal title={setup ? "학기 설정" : "학기 추가"} onClose={onClose}>
       <form
@@ -429,8 +433,8 @@ function TermEditor({
           if (saving) return;
           setSaving(true);
           void mutate(
-            setup ? "timetable.term.configure" : "timetable.term.add",
-            { year, term },
+            `${inSettings ? "semester" : "timetable.term"}.${setup ? "configure" : "add"}`,
+            { year, term, make_main: inSettings && makeMain },
           )
             .then(() =>
               onSaved(
@@ -478,6 +482,10 @@ function TermEditor({
             </select>
           </label>
         </div>
+        {inSettings && !setup && <label className="checkbox-label">
+          <input type="checkbox" checked={makeMain} onChange={(event) => setMakeMain(event.target.checked)} />
+          메인 학기로 설정
+        </label>}
         <div className="dialog-actions">
           <span />
           <button type="button" onClick={onClose}>
@@ -615,8 +623,9 @@ function SessionEditor({
     color: session?.color || "#af527f",
   });
   const [extra, setExtra] = useState<
-    { day: number; start_time: string; end_time: string; room: string }[]
+    { key: number; day: number; start_time: string; end_time: string; room: string }[]
   >([]);
+  const nextSlot = useRef(0);
   const [saving, setSaving] = useState(false);
   const field = (
     key: "title" | "professor" | "room" | "color" | "start_time" | "end_time",
@@ -642,7 +651,9 @@ function SessionEditor({
                       end_time: form.end_time,
                       room: form.room,
                     },
-                    ...extra,
+                    ...extra.map(({ day, start_time, end_time, room }) => ({
+                      day, start_time, end_time, room,
+                    })),
                   ],
                 }
               : {}),
@@ -738,33 +749,15 @@ function SessionEditor({
               </label>
             </div>
             <div className="form-grid">
-              <label>
-                시작
-                <input
-                  type="time"
-                  aria-label="시작"
-                  value={form.start_time}
-                  onChange={(event) => field("start_time", event.target.value)}
-                  required
-                />
-              </label>
-              <label>
-                종료
-                <input
-                  type="time"
-                  aria-label="종료"
-                  value={form.end_time}
-                  onChange={(event) => field("end_time", event.target.value)}
-                  required
-                />
-              </label>
+              <TimeField label="시작" value={form.start_time} onChange={(value) => field("start_time", value)} />
+              <TimeField label="종료" value={form.end_time} onChange={(value) => field("end_time", value)} />
             </div>
           </>
         )}
         {!form.is_online && (
           <div className="additional-slots">
             {extra.map((slot, index) => (
-              <fieldset key={index} className="slot-editor">
+              <fieldset key={slot.key} className="slot-editor">
                 <legend>시간 {index + 2}</legend>
                 <div className="form-grid">
                   <label>
@@ -807,22 +800,14 @@ function SessionEditor({
                 </div>
                 <div className="form-grid">
                   {(["start_time", "end_time"] as const).map((key, i) => (
-                    <label key={key}>
-                      {i ? "종료" : "시작"}
-                      <input
-                        required
-                        type="time"
-                        aria-label={`시간 ${index + 2} ${i ? "종료" : "시작"}`}
-                        value={slot[key]}
-                        onChange={(e) =>
-                          setExtra((rows) =>
-                            rows.map((r, n) =>
-                              n === index ? { ...r, [key]: e.target.value } : r,
-                            ),
-                          )
-                        }
-                      />
-                    </label>
+                    <TimeField key={key}
+                      caption={i ? "종료" : "시작"}
+                      label={`시간 ${index + 2} ${i ? "종료" : "시작"}`}
+                      value={slot[key]}
+                      onChange={(value) => setExtra((rows) =>
+                        rows.map((row) => row.key === slot.key ? { ...row, [key]: value } : row),
+                      )}
+                    />
                   ))}
                 </div>
                 <button
@@ -838,10 +823,12 @@ function SessionEditor({
             <button
               type="button"
               disabled={extra.length >= 13}
-              onClick={() =>
+              onClick={() => {
+                const key = nextSlot.current++;
                 setExtra((rows) => [
                   ...rows,
                   {
+                    key,
                     day:
                       (rows.at(-1)?.day ?? form.day) + 1 > 6
                         ? 0
@@ -850,8 +837,8 @@ function SessionEditor({
                     end_time: form.end_time,
                     room: form.room,
                   },
-                ])
-              }
+                ]);
+              }}
             >
               <Plus size={16} />
               시간 추가

@@ -1,0 +1,57 @@
+.anki-review {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 18px;
+  min-width: 0;
+}
+.anki-review-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.anki-review-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+.anki-review-header h2 svg { color: var(--accent); }
+.anki-review-header button { gap: 6px; }
+.anki-review p { margin: 0; }
+.anki-review-totals {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+.anki-review-totals div {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.anki-review-totals dt, .anki-review-decks small { color: var(--muted); }
+.anki-review-totals dd {
+  margin: 3px 0 0;
+  font-size: 20px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.anki-review-decks summary { cursor: pointer; }
+.anki-review-decks small { margin-inline-start: 5px; }
+.anki-review-decks table {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.anki-review-decks :is(th, td) {
+  padding: 8px 5px;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+}
+.anki-review-decks :is(th, td):not(:first-child) { width: 17%; }
+.anki-review-decks th:first-child { text-align: left; overflow-wrap: anywhere; }
+.anki-review-decks tbody th { font-weight: 500; }

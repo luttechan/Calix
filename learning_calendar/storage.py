@@ -646,6 +646,7 @@ class Store:
         batches: dict[tuple[int, str], list[Event]],
         *,
         _commit=True,
+        grade_semester=None,
     ) -> dict[str, int]:
         """Replace only fully retrieved course/kind data, preserving local notes and stars."""
         now = datetime.now(timezone.utc).isoformat()
@@ -766,5 +767,5 @@ class Store:
             )
             from .grades import record_canvas_roster
 
-            record_canvas_roster(self, courses)
+            record_canvas_roster(self, courses, grade_semester)
         return totals

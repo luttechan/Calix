@@ -2994,7 +2994,7 @@ body.reminder-surface {
 }
 .settings-categories {
   display: grid;
-  grid-template-columns: repeat(8, max-content);
+  grid-template-columns: repeat(9, max-content);
   justify-content: space-between;
   gap: 5px 4px;
   max-width: 830px;
@@ -3251,10 +3251,10 @@ body.reminder-surface {
   flex-direction: column;
   overflow: hidden;
 }
-@container settings (max-width: 750px) {
-  .settings-categories { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@container settings (max-width: 805px) {
+  .settings-categories { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
-@container settings (max-width: 510px) {
+@container settings (max-width: 450px) {
   .settings-categories { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 .workspace main:has(> .settings-categories) > .page-heading,

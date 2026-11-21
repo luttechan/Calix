@@ -1,6 +1,7 @@
 import json
 import sqlite3
 import sys
+from datetime import date
 from pathlib import Path
 import pytest
 from learning_calendar.storage import Store
@@ -9,6 +10,7 @@ from learning_calendar.local_backup import write_backup, read_backup, restore_ba
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "desktop"))
 from engine_api import EngineAPI
+from learning_calendar.timetable_terms import activate_current
 
 
 def test_previous_version_requires_semester_confirmation_and_keeps_data(tmp_path):
@@ -169,3 +171,53 @@ def test_seasonal_semesters_can_be_created_and_selected(tmp_path, term):
     api.dispatch("timetable.term.main", dict(name=name))
     assert api.bootstrap()["mainTerm"] == name
     api.close()
+
+
+def test_auto_term_switch_uses_calendar_and_keeps_legacy_courses(tmp_path):
+    api = EngineAPI(tmp_path)
+    try:
+        autumn = api.dispatch("semester.configure", dict(year=2026, term=2))
+        api.dispatch("semester.school", {})
+        custom = dict(name=autumn, startsOn="2026-08-29", endsOn="2026-12-12")
+        api.dispatch("semester.dates", custom)
+        api.dispatch("semester.school", {})
+        api.dispatch("semester.main", dict(name=autumn))
+        api.dispatch("semester.mode", dict(automatic=True, seasonal=False))
+        api.store.db.execute("INSERT INTO courses(id,name) VALUES(1,'이전 과목')")
+        api.store.db.commit()
+        summer_end = date(2026, 7, 10)
+        assert activate_current(api.store, summer_end)["main"] == autumn
+        assert activate_current(api.store, date(2026, 12, 16))["main"] == autumn
+        first = activate_current(api.store, date(2027, 3, 1))
+        assert first["main"] == "2027학년도 1학기"
+        assert next(term for term in first["terms"] if term["name"] == autumn)["startsOn"] == "2026-08-29"
+        assert api.dispatch("semester.roster", {}) == {autumn: [1]}
+        api.store.apply_batch([Course(1, "이전 과목"), Course(2, "새 과목")], {(2, "assignment"): []}, grade_semester=first["main"])
+        assert api.dispatch("semester.roster", {}) == {autumn: [1], first["main"]: [2]}
+        with pytest.raises(ValueError, match="겹칩니다"):
+            api.dispatch("semester.dates", dict(name=autumn, startsOn="2027-03-01", endsOn="2027-03-02"))
+        assert api.store.timetable_config() == first
+        api.dispatch("semester.main", dict(name=autumn))
+        assert not activate_current(api.store, date(2027, 3, 1))["automatic"]
+        assert api.store.timetable_config()["main"] == autumn
+    finally:
+        api.close()
+
+
+def test_course_transfer_preserves_saved_grades_and_is_atomic(tmp_path):
+    api = EngineAPI(tmp_path)
+    try:
+        first = api.dispatch("semester.configure", dict(year=2026, term=1))
+        second = api.dispatch("semester.add", dict(year=2026, term=2, make_main=True))
+        assert api.bootstrap()["mainTerm"] == second
+        api.store.apply_batch([Course(1, "수업 A"), Course(2, "수업 B")], {(1, "assignment"): []}, grade_semester=first)
+        api.store.db.execute("INSERT INTO grade_items(semester,id,title) VALUES(?,?,?)", (first, "course:1", "수업 A"))
+        api.store.db.commit()
+        with pytest.raises(ValueError, match="학점 기록"):
+            api.dispatch("semester.move", dict(source=first, target=second, course_ids=[1, 2]))
+        assert api.dispatch("semester.roster", {}) == {first: [1, 2]}
+        assert api.dispatch("semester.move", dict(source=first, target=second, course_ids=[2])) == 1
+        api.store.apply_batch([Course(2, "수업 B")], {(2, "assignment"): []}, grade_semester=first)
+        assert api.dispatch("semester.roster", {}) == {first: [1], second: [2]}
+    finally:
+        api.close()

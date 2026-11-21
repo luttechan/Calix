@@ -4,7 +4,7 @@
 
 <p align="center"><a href="https://github.com/luttechan/Calix/releases/latest"><strong>Windows 다운로드</strong></a>　<a href="https://luttechan.github.io/calix/guide/">사용 설명서</a>　<a href="https://luttechan.github.io/calix/">공식 사이트</a></p>
 
-<p align="center">Windows 10 / 11 x64　|　공개 버전 1.7.1</p>
+<p align="center">Windows 10 / 11 x64　|　공개 버전 1.7.2</p>
 
 <p align="center"><img src="docs/images/calendar.webp" alt="Calix 달력 화면. 예시 일정이 과제와 영상 색상으로 구분되어 있습니다." width="1040"></p>
 
@@ -14,8 +14,12 @@
 | --- | --- |
 | Canvas | 과목별 과제, 영상, 제출 상태, 교수 코멘트, 출결 동기화 |
 | 일정 | 달력, 마감 보드, 체크리스트, 학기별 시간표, 사용자 카테고리 |
-| 학습 | 학점 계산, 뽀모도로, 공부 기록, 주간 통계 |
+| 학습 | 학점 계산, 뽀모도로, 공부 기록, 주간 통계, Anki |
 | 보관 | 일기장, 저장 데이터 암호화, 백업과 복원 |
+
+## 1.7.2
+
+학기 자동 전환, Anki 덱 현황 연동, 시간표 시간 선택과 한글 입력을 추가했습니다.
 
 ## 1.7.1
 

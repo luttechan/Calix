@@ -17,12 +17,13 @@ class SyncTask(QThread):
     error = Signal(str)
     authentication_required = Signal(str)
 
-    def __init__(self, cookies, db_path, parent=None, *, dom_snapshot=None):
+    def __init__(self, cookies, db_path, parent=None, *, dom_snapshot=None, grade_semester=None):
         super().__init__(parent)
         self.cookies = cookies
         self.db_path = Path(db_path)
         self.cancel_event = threading.Event()
         self.dom_snapshot = dom_snapshot
+        self.grade_semester = grade_semester
 
     def cancel(self):
         self.cancel_event.set()
@@ -129,7 +130,7 @@ class SyncTask(QThread):
                     raise SyncCancelled("취소됨")
                 store.set_meta("canvas_user_id", uid, _commit=False)
                 previous_ids = {c.id for c in store.courses()}
-                stats = store.apply_batch(courses, batches, _commit=False)
+                stats = store.apply_batch(courses, batches, _commit=False, grade_semester=self.grade_semester)
                 stats["new_courses"] = sum(c.id not in previous_ids for c in courses)
                 stats["reused_courses"] = sum(
                     r.get("unchanged") is True

@@ -83,8 +83,8 @@ class BrowserClient(CampusClient):
 
 
 class BrowserSyncTask(SyncTask):
-    def __init__(self, payload, path, parent=None):
-        super().__init__([], path, parent, dom_snapshot=payload)
+    def __init__(self, payload, path, parent=None, *, grade_semester=None):
+        super().__init__([], path, parent, dom_snapshot=payload, grade_semester=grade_semester)
 
     def _fetch_network(self):
         payload = self.dom_snapshot

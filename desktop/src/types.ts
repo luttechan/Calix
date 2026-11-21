@@ -96,6 +96,7 @@ export type ThemePalette = Partial<Record<PaletteColor, string>>;
 export type Preferences = {
   attendance_visible: boolean;
   attendance_sync: boolean;
+  anki_sync?: boolean;
   developer_mode: boolean;
   reminders: ReminderSettings;
   theme: "pink" | "sky" | "mint" | "purple" | "dark" | "peach" | "amber" | "olive" | "lavender";
@@ -123,9 +124,11 @@ export type Snapshot = {
   courses: Course[];
   types: { id: number; name: string; color: string }[];
   sessions: Session[];
-  timetableTerms: { name: string; offDays: number[] }[];
+  timetableTerms: { name: string; offDays: number[]; startsOn?: string | null; endsOn?: string | null }[];
   mainTerm: string;
   timetableConfigured: boolean;
+  semesterAutomatic?: boolean;
+  semesterSeasonal?: boolean;
   sections: { id: number; name: string }[];
   statuses: { id: number; name: string; color: string; kind: string }[];
   tasks: Task[];

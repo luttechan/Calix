@@ -119,7 +119,7 @@ class EngineAPI:
         palette = self.settings.get("theme_palettes", {}).get(theme, {})
         if state["locked"]:
             return dict(
-                version="1.7.1", events=[], courses=[], types=[], sessions=[],
+                version="1.7.2", events=[], courses=[], types=[], sessions=[],
                 timetableTerms=[], mainTerm="", timetableConfigured=False,
                 sections=[], statuses=[], tasks=[], offDays=[], journals=[],
                 holidays={}, specialDates={}, lastSync="", syncSummary="",
@@ -131,17 +131,22 @@ class EngineAPI:
                                  catholic=False, birthday=False, avatar=self.settings.get("avatar", "")),
             )
         events = self.store.events()
+        from learning_calendar.timetable_terms import activate_current
+
+        semesters = activate_current(self.store)
         year = datetime.now(KST).year
         return dict(
-            version="1.7.1",
+            version="1.7.2",
             events=[asdict(e) for e in events],
             courses=[asdict(c) for c in self.store.courses()],
             types=self.store.event_types(),
             security=state,
             sessions=[] if self.security.material and self.security.policy["timetable"] and "timetable" not in self.security.scopes else self.store.timetable(all_terms=True),
-            timetableTerms=self.store.timetable_config()["terms"],
-            mainTerm=self.store.timetable_config()["main"],
-            timetableConfigured=self.store.timetable_config().get("confirmed", False),
+            timetableTerms=semesters["terms"],
+            mainTerm=semesters["main"],
+            timetableConfigured=semesters.get("confirmed", False),
+            semesterAutomatic=semesters.get("automatic", False),
+            semesterSeasonal=semesters.get("seasonal", True),
             sections=self.checklist.sections(),
             statuses=self.checklist.statuses(),
             tasks=[
@@ -160,6 +165,7 @@ class EngineAPI:
                         ("reminders", {}),
                         ("attendance_visible", False),
                         ("attendance_sync", False),
+                        ("anki_sync", False),
                         ("glass", True),
                         ("developer_mode", False),
                         ("font_mode", "pretendard"),
@@ -452,10 +458,25 @@ class EngineAPI:
         if method == "timetable.delete":
             self.store.remove_timetable(p["id"])
             return True
+        if method in ("semester.school", "semester.mode", "semester.dates"):
+            from learning_calendar.timetable_terms import configure_dates
+
+            return configure_dates(self.store, method.split(".")[1], p)
+        if method == "semester.roster":
+            from learning_calendar.grades import roster_with_legacy
+
+            return roster_with_legacy(self.store, self.store.timetable_config()["main"])
+        if method == "semester.move":
+            from learning_calendar.grades import move_canvas_courses
+
+            return move_canvas_courses(self.store, p)
         if method in (
             "timetable.term.add",
             "timetable.term.main",
             "timetable.term.configure",
+            "semester.add",
+            "semester.main",
+            "semester.configure",
         ):
             from learning_calendar.timetable_terms import update
 
@@ -477,7 +498,10 @@ class EngineAPI:
                 )
             else:
                 name = p["name"]
-            return update(self.store, method.rsplit(".", 1)[1], name)
+            make_main = p.get("make_main", False)
+            if type(make_main) is not bool:
+                raise ValueError("메인 학기 설정을 확인하세요.")
+            return update(self.store, method.rsplit(".", 1)[1], name, make_main=make_main)
         if method == "timetable.off":
             days = p["days"]
             if not isinstance(days, list) or any(
@@ -569,7 +593,7 @@ class EngineAPI:
                 raise ValueError("테마를 확인하세요.")
             menu_settings = {
                 key: p.get(key, self.settings.get(key, False))
-                for key in ("attendance_visible", "attendance_sync")
+                for key in ("attendance_visible", "attendance_sync", "anki_sync")
             }
             if any(type(value) is not bool for value in menu_settings.values()):
                 raise ValueError("메뉴 활성화 설정을 확인하세요.")

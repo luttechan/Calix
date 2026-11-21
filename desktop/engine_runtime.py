@@ -91,14 +91,19 @@ def main():
 
     class Service(QObject):
         incoming = Signal(object)
+        anki_finished = Signal(object)
 
         def __init__(self):
             super().__init__()
             self.incoming.connect(self.handle)
+            self.anki_finished.connect(self.finish_anki)
+            self.anki_busy = False
+            self.anki_generation = 0
             self.task = None
             self.maintenance = None
             self.maintenance_state = dict(phase="idle")
             self.collector = None
+            self.collection_semester = None
             self.restore_token = None
             self.pending_sync = False
             self.restart_sync = False
@@ -193,6 +198,9 @@ def main():
                     if self.task or self.collector or self.maintenance or self.restore_token:
                         raise ValueError("진행 중인 작업을 마친 뒤 잠금을 설정하세요.")
                     result = api.dispatch(method, params)
+                elif method == "anki.read":
+                    self.read_anki(request["id"], reply)
+                    return
                 elif method == "developer.maintenance.state":
                     result = self.maintenance_state
                 elif method == "developer.maintenance.start":
@@ -421,7 +429,10 @@ def main():
                     self.notify("authentication", loggedIn=False)
                     self.notify("data-changed")
                 elif method == "preferences.save":
+                    anki_enabled = api.settings.get("anki_sync")
                     result = api.dispatch(method, params)
+                    if api.settings.get("anki_sync") != anki_enabled:
+                        self.anki_generation += 1
                     if not api.settings.get("developer_mode"):
                         diagnostics.set_enabled(False)
                         if self.maintenance:
@@ -452,6 +463,47 @@ def main():
                     id=request.get("id"), error="요청을 처리하지 못했습니다."
                 )
             self.publish_busy()
+            if reply:
+                reply(response)
+            else:
+                emit(response)
+
+        def read_anki(self, request_id, reply):
+            if api.settings.get("anki_sync") is not True:
+                raise ValueError("설정에서 Anki 동기화를 켜세요.")
+            if self.anki_busy:
+                raise ValueError("Anki 데이터를 가져오는 중입니다.")
+            from learning_calendar.anki import read_review
+
+            generation, store = self.anki_generation, api.store
+
+            def fetch():
+                try:
+                    response = dict(id=request_id, result=read_review())
+                except ValueError as error:
+                    response = dict(id=request_id, error=str(error))
+                except Exception:
+                    response = dict(id=request_id, error="Anki 데이터를 가져오지 못했습니다.")
+                self.anki_finished.emit((generation, store, reply, response))
+
+            self.anki_busy = True
+            try:
+                threading.Thread(target=fetch, daemon=True).start()
+            except RuntimeError:
+                self.anki_busy = False
+                raise
+
+        def finish_anki(self, payload):
+            generation, store, reply, response = payload
+            self.anki_busy = False
+            if (
+                self.closing
+                or api.security.state()["locked"]
+                or api.settings.get("anki_sync") is not True
+                or self.anki_generation != generation
+                or api.store is not store
+            ):
+                response = dict(id=response["id"], error="Anki 조회가 취소됐습니다.")
             if reply:
                 reply(response)
             else:
@@ -517,6 +569,9 @@ def main():
             self.publish_busy()
 
         def start_collector(self):
+            from learning_calendar.timetable_terms import activate_current
+
+            self.collection_semester = activate_current(api.store)["main"]
             self.collector = secrets.token_hex(16)
             self.collection_timer.start(210000)
             diagnostics.add("Collector started with the WebView2 login profile")
@@ -576,7 +631,8 @@ def main():
             self.collection_timer.stop()
             from engine_webview import BrowserSyncTask
 
-            self.task = BrowserSyncTask(payload, api.store.path, self)
+            self.task = BrowserSyncTask(payload, api.store.path, self, grade_semester=self.collection_semester)
+            self.collection_semester = None
             self.task.progress.connect(
                 lambda message: self.notify("sync-progress", message=message)
             )

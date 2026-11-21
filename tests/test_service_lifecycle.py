@@ -5,6 +5,7 @@ import json
 import logging
 import sys
 import secrets
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -43,6 +44,7 @@ def service(tmp_path):
         folder=tmp_path,
         emit=output.append,
         secrets=secrets,
+        threading=threading,
     )
     exec(
         compile(
@@ -53,6 +55,38 @@ def service(tmp_path):
     instance = namespace["Service"]()
     yield instance, output
     api.close()
+
+
+def test_anki_is_opt_in_and_discards_requests_after_disabling(service, monkeypatch):
+    instance, output = service
+    waiting = []
+
+    class Worker:
+        def __init__(self, *, target, daemon):
+            assert daemon
+            waiting.append(target)
+
+        def start(self):
+            pass
+
+    monkeypatch.setitem(instance.handle.__func__.__globals__, "threading", SimpleNamespace(Thread=Worker))
+    result = dict(decks=[], totals=dict(new=0, learning=0, review=0))
+    monkeypatch.setattr("learning_calendar.anki.read_review", lambda: result)
+    instance.handle(dict(id=10, method="anki.read", params={}))
+    assert not waiting
+    assert any(row.get("id") == 10 and "켜세요" in row["error"] for row in output)
+
+    instance.handle(dict(id=11, method="preferences.save", params=dict(anki_sync=True)))
+    instance.handle(dict(id=12, method="anki.read", params={}))
+    assert len(waiting) == 1 and not any(row.get("id") == 12 for row in output)
+    waiting.pop()()
+    assert dict(id=12, result=result) in output
+
+    instance.handle(dict(id=13, method="anki.read", params={}))
+    instance.handle(dict(id=14, method="preferences.save", params=dict(anki_sync=False)))
+    instance.handle(dict(id=15, method="preferences.save", params=dict(anki_sync=True)))
+    waiting.pop()()
+    assert any(row.get("id") == 13 and "취소" in row["error"] for row in output)
 
 
 @pytest.fixture

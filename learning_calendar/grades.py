@@ -40,10 +40,51 @@ def course_rosters(store):
     }
 
 
-def record_canvas_roster(store, courses):
+def roster_with_legacy(store, main):
+    rosters = course_rosters(store)
+    if not rosters:
+        ids = [course.id for course in store.courses()]
+        if ids:
+            rosters = {main: ids}
+    return rosters
+
+
+def anchor_cached_roster(store, main):
+    if not course_rosters(store):
+        rosters = roster_with_legacy(store, main)
+        if rosters:
+            store.set_meta(ROSTERS, json.dumps(rosters, ensure_ascii=False), _commit=False)
+
+
+def move_canvas_courses(store, params):
+    source, target, ids = (params.get(key) for key in ("source", "target", "course_ids"))
+    if not isinstance(ids, list) or not 1 <= len(ids) <= 1000 or any(type(cid) is not int for cid in ids):
+        raise ValueError("옮길 Canvas 과목을 선택하세요.")
+    chosen = set(ids)
+    store.db.execute("BEGIN IMMEDIATE")
+    with store.db:
+        config = store.timetable_config()
+        terms = [term["name"] for term in config["terms"]]
+        if source == target or source not in terms or target not in terms:
+            raise ValueError("출발 학기와 이동할 학기를 선택하세요.")
+        rosters = roster_with_legacy(store, config["main"])
+        if not chosen <= set(rosters.get(source, ())):
+            raise ValueError("Canvas 과목 목록이 변경되었습니다. 다시 선택하세요.")
+        stored = {row["id"] for row in store.db.execute("SELECT id FROM grade_items WHERE semester=?", (source,))}
+        if any(f"course:{cid}" in stored for cid in chosen):
+            raise ValueError("선택한 과목 중 저장된 학점 기록이 있습니다. 해당 과목을 제외하고 다시 선택하세요.")
+        rosters[source] = sorted(set(rosters[source]) - chosen)
+        rosters[target] = sorted(set(rosters.get(target, ())) | chosen)
+        store.set_meta(ROSTERS, json.dumps(rosters, ensure_ascii=False), _commit=False)
+    return len(chosen)
+
+
+def record_canvas_roster(store, courses, semester=None):
     if not courses:
         return
-    semester = store.timetable_config()["main"]
+    config = store.timetable_config()
+    if not any(term["name"] == semester for term in config["terms"]):
+        semester = config["main"]
     rosters = course_rosters(store)
     elsewhere = {cid for name, ids in rosters.items() if name != semester for cid in ids}
     rosters[semester] = sorted(set(rosters.get(semester, ())) | {course.id for course in courses if course.id not in elsewhere})

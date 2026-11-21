@@ -6,6 +6,7 @@ import {
   Check,
   Palette,
   CalendarDays,
+  CalendarRange,
   SlidersHorizontal,
   ArrowUpRight,
   Bell,
@@ -24,6 +25,7 @@ import { ProfileSettings, ResetSettings } from "./Profile";
 import { ReminderSettingsPanel } from "./Reminders";
 import { DevPanel } from "./DevPanel";
 import { SecuritySettings } from "./Security";
+import { SemesterSettings } from "./SemesterSettings";
 import { dateKey, dueText, status, weekdays } from "./dates";
 import type { Task, Preferences } from "./types";
 const taskCollator = new Intl.Collator("ko", { numeric: true });
@@ -542,12 +544,14 @@ export function SettingsPage() {
     [updates, setUpdates] = useState(false),
     [restore, setRestore] = useState<string | null>(null),
     [backupPassword, setBackupPassword] = useState(""),
-    [fileBusy, setFileBusy] = useState(false);
+    [fileBusy, setFileBusy] = useState(false),
+    [ankiSelection, setAnkiSelection] = useState<boolean | null>(null);
   const categories = [
     ["profile", "내 프로필", UserRound],
     ["appearance", "화면", Palette],
     ["alarms", "알림과 소리", Bell],
     ["calendar", "일정", CalendarDays],
+    ["semester", "학기", CalendarRange],
     ["menus", "메뉴 활성화", SlidersHorizontal],
     ["security", "비밀번호와 잠금", ShieldCheck],
     ["app", "앱 관리", Download],
@@ -637,6 +641,11 @@ export function SettingsPage() {
           </button>
         ))}
       </div>
+      {category === "semester" && (
+        <div role="tabpanel" id="settings-pane-semester" aria-labelledby="settings-tab-semester">
+          <SemesterSettings />
+        </div>
+      )}
       {category === "security" && (
         <div role="tabpanel" id="settings-pane-security" aria-labelledby="settings-tab-security">
           <SecuritySettings />
@@ -841,6 +850,29 @@ export function SettingsPage() {
             재시작
             <ArrowUpRight size={17} />
           </button>
+        </section>
+        <section className="glass settings-panel">
+          <div className="settings-heading"><h2>외부 연동</h2></div>
+          <label className="menu-option">
+            <span>
+              <strong>Anki 동기화</strong>
+              <small>같은 PC의 Anki에서 덱별 카드 수를 가져옵니다.</small>
+            </span>
+            <input
+              type="checkbox"
+              role="switch"
+              aria-label="Anki 동기화"
+              checked={ankiSelection ?? data.preferences.anki_sync === true}
+              disabled={ankiSelection !== null}
+              onChange={(event) => {
+                const enabled = event.target.checked;
+                setAnkiSelection(enabled);
+                void mutate("preferences.save", { anki_sync: enabled })
+                  .catch(() => {})
+                  .finally(() => setAnkiSelection(null));
+              }}
+            />
+          </label>
         </section>
         <ResetSettings />
       </div>
