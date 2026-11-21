@@ -1,7 +1,7 @@
 :root {
-  --motion-quick: 120ms;
-  --motion-panel: 180ms;
-  --motion-ease: cubic-bezier(.2, .65, .28, 1);
+  --motion-quick: 180ms;
+  --motion-panel: 360ms;
+  --motion-ease: cubic-bezier(.18, 1, .28, 1);
 }
 
 .app-shell button,
@@ -18,7 +18,7 @@
 .app-shell button:active:not(:disabled),
 .security-app-lock button:active:not(:disabled),
 .modal button:active:not(:disabled) {
-  scale: .98;
+  scale: .965;
 }
 
 button.switch i,
@@ -27,26 +27,75 @@ button.switch i,
     background-color var(--motion-quick) ease;
 }
 
-.modal[open],
-.workspace main > [role="tabpanel"]:not([hidden]) {
-  animation: surface-in var(--motion-panel) var(--motion-ease);
+.sidebar nav:has(.nav-motion-marker) {
+  position: relative;
+}
+.nav-motion-marker {
+  position: absolute;
+  inset: 0 auto auto 3px;
+  z-index: 1;
+  inline-size: 3px;
+  block-size: var(--nav-marker-height, 24px);
+  border-radius: 3px;
+  background: var(--accent);
+  opacity: 0;
+  transform: translateY(var(--nav-marker-y, 0px));
+  transition: transform var(--motion-panel) var(--motion-ease),
+    opacity var(--motion-quick) ease,
+    block-size var(--motion-panel) var(--motion-ease);
+  pointer-events: none;
+}
+.sidebar nav[data-marked] .nav-motion-marker { opacity: 1; }
+.sidebar nav[data-marked] button.active::before { content: none; }
+
+.modal[open] {
+  animation: modal-in var(--motion-panel) var(--motion-ease);
 }
 
 .modal[open]::backdrop {
-  animation: backdrop-in var(--motion-panel) ease-out;
+  animation: backdrop-in 235ms ease-out;
+}
+
+.modal[data-motion-closing]::backdrop { animation: backdrop-out 180ms ease-in both; }
+.modal[data-motion-closing] { pointer-events: none; }
+
+.workspace main > [role="tabpanel"]:not([hidden]) {
+  animation: panel-in 300ms var(--motion-ease);
 }
 
 [popover]:popover-open {
-  animation: backdrop-in var(--motion-quick) ease-out;
+  transform-origin: top center;
+  animation: popover-in 225ms var(--motion-ease);
 }
 
-@keyframes surface-in {
-  from { opacity: .68; }
-  to { opacity: 1; }
+@supports (appearance: base-select) {
+  select:open::picker(select) {
+    transform-origin: top center;
+    animation: popover-in 225ms var(--motion-ease);
+  }
 }
+
+@keyframes modal-in {
+  0% { opacity: 0; transform: translateY(26px) scale(.92); }
+  66% { opacity: 1; transform: translateY(-2px) scale(1.012); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes panel-in {
+  from { opacity: .25; translate: 0 12px; }
+  to { opacity: 1; translate: 0 0; }
+}
+@keyframes popover-in {
+  from { opacity: 0; scale: .94; translate: 0 -7px; }
+  to { opacity: 1; scale: 1; translate: 0 0; }
+}
+
 @keyframes backdrop-in {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+@keyframes backdrop-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 :root[data-reduce-motion] *, :root[data-reduce-motion] *::before,
@@ -58,10 +107,18 @@ button.switch i,
   transition-delay: 0ms !important;
   scroll-behavior: auto !important;
 }
+:root[data-reduce-motion] select::picker(select) { animation: none !important; }
 
 @media (prefers-reduced-motion: reduce) {
   :root {
     --motion-quick: 0ms;
     --motion-panel: 0ms;
+  }
+  .modal[open]::backdrop,
+  .modal[data-motion-closing]::backdrop,
+  .workspace main > [role="tabpanel"]:not([hidden]),
+  [popover]:popover-open,
+  select::picker(select) {
+    animation: none;
   }
 }

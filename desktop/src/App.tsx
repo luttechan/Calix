@@ -2,6 +2,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -48,7 +49,7 @@ import { listen } from "@tauri-apps/api/event";
 import { AttendancePage } from "./Attendance";
 import { StudyPage, FocusDock } from "./Study";
 import { SyncNotice } from "./SyncNotice";
-import { motionReduced, saveMotionPreference } from "./motion";
+import { animateCalendarMonth, animatePage, motionReduced, saveMotionPreference } from "./motion";
 import { playErrorCue, stopErrorCue } from "./errorCue";
 import { applyThemePalette } from "./themePalette";
 import { defaultSyncTrack } from "./syncCue";
@@ -115,10 +116,42 @@ export function Modal({
   className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    ref.current?.showModal();
-    return () => ref.current?.close();
+  const closing = useRef<Animation | null>(null);
+  const latestClose = useRef(onClose);
+  latestClose.current = onClose;
+  useLayoutEffect(() => {
+    const dialog = ref.current;
+    dialog?.showModal();
+    return () => {
+      closing.current?.cancel();
+      closing.current = null;
+      dialog?.close();
+    };
   }, []);
+  const requestClose = () => {
+    const dialog = ref.current;
+    if (closing.current) return;
+    if (!dialog || motionReduced()) {
+      onClose();
+      return;
+    }
+    const style = getComputedStyle(dialog);
+    const animation = dialog.animate(
+      [
+        { opacity: Number(style.opacity), transform: style.transform },
+        { opacity: 0, transform: "translateY(17px) scale(.96)" },
+      ],
+      { duration: 180, easing: "cubic-bezier(.32, 0, .67, 0)", fill: "forwards" },
+    );
+    closing.current = animation;
+    dialog.dataset.motionClosing = "";
+    void animation.finished.then(() => {
+      closing.current = null;
+      delete dialog.dataset.motionClosing;
+      latestClose.current();
+      animation.cancel();
+    }, () => {});
+  };
   return (
     <dialog
       ref={ref}
@@ -127,7 +160,7 @@ export function Modal({
       onCancel={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        onClose();
+        requestClose();
       }}
     >
       <header>
@@ -136,7 +169,7 @@ export function Modal({
           className="icon-button"
           title={closeLabel}
           aria-label={closeLabel}
-          onClick={onClose}
+          onClick={requestClose}
         >
           <X size={20} />
         </button>
@@ -256,6 +289,7 @@ const navigation: [Page, string, typeof Home][] = [
   ["deadlines", "마감 보드", ListTodo],
   ["courses", "과목별 현황", ChartNoAxesColumn],
 ];
+const pageOrder = [...navigation.map(([id]) => id), "settings"];
 export function App() {
   const [appVersion, setAppVersion] = useState(__CALIX_VERSION__);
   useEffect(() => {
@@ -529,15 +563,34 @@ export function App() {
   const reduceMotion = data?.preferences.reduce_motion;
   const pageReady = Boolean(data && !data.security?.locked);
   const mainView = useRef<HTMLElement>(null);
-  useEffect(() => {
+  const sidebarNav = useRef<HTMLElement>(null);
+  const previousPage = useRef(page);
+  useLayoutEffect(() => {
     if (reduceMotion !== undefined) saveMotionPreference(reduceMotion);
-    if (!pageReady || motionReduced()) return;
-    const animation = mainView.current?.animate(
-      [{ opacity: 0.72 }, { opacity: 1 }],
-      { duration: 180, easing: "ease-out" },
-    );
-    return () => animation?.cancel();
+  }, [reduceMotion]);
+  useLayoutEffect(() => {
+    const previous = previousPage.current;
+    previousPage.current = page;
+    if (!pageReady || !mainView.current) return;
+    return animatePage(mainView.current, Math.sign(pageOrder.indexOf(page) - pageOrder.indexOf(previous)));
   }, [page, pageReady, reduceMotion]);
+  const attendanceVisible = data?.preferences.attendance_visible === true;
+  useLayoutEffect(() => {
+    const menu = sidebarNav.current;
+    if (!menu) return;
+    const alignMarker = () => {
+      const active = menu.querySelector<HTMLButtonElement>("button[aria-current='page']");
+      menu.toggleAttribute("data-marked", Boolean(active));
+      if (active) {
+        menu.style.setProperty("--nav-marker-y", `${active.offsetTop + 8}px`);
+        menu.style.setProperty("--nav-marker-height", `${active.offsetHeight - 16}px`);
+      }
+    };
+    alignMarker();
+    const observer = new ResizeObserver(alignMarker);
+    observer.observe(menu);
+    return () => observer.disconnect();
+  }, [page, attendanceVisible, pageReady]);
   useEffect(() => {
     if (isTauri() && data?.preferences.onboarding_complete && !data.security?.locked)
       void rpc("reminders.ready").catch(() => {});
@@ -789,8 +842,9 @@ export function App() {
           </small>
         </a>
         <div className="nav-label">워크스페이스</div>
-        <nav>
-          {navigation.filter(([id]) => id !== "attendance" || data?.preferences.attendance_visible).map(([id, title, Icon]) => (
+        <nav ref={sidebarNav}>
+          <span className="nav-motion-marker" aria-hidden="true" />
+          {navigation.filter(([id]) => id !== "attendance" || attendanceVisible).map(([id, title, Icon]) => (
             <button
               key={id}
               className={page === id ? "active" : ""}
@@ -1358,6 +1412,14 @@ function CalendarPage({
     [day, setDay] = useState(dateKey()),
     [kind, setKind] = useState("all");
   const [year, monthNumber] = month.split("-");
+  const calendarGrid = useRef<HTMLDivElement>(null);
+  const previousMonth = useRef(month);
+  useLayoutEffect(() => {
+    const before = previousMonth.current;
+    previousMonth.current = month;
+    if (before === month || !calendarGrid.current) return;
+    return animateCalendarMonth(calendarGrid.current, month > before ? 1 : -1);
+  }, [month]);
   const moveMonth = (next: string) => {
     const [nextYear, nextMonth] = next.split("-").map(Number);
     const lastDay = new Date(Date.UTC(nextYear, nextMonth, 0)).getUTCDate();
@@ -1472,7 +1534,7 @@ function CalendarPage({
             </span>
           ))}
         </div>
-        <div className="month-grid">
+        <div className="month-grid" ref={calendarGrid}>
           {monthGrid(month).map((key) => (
             <div
               key={key}

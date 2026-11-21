@@ -2,11 +2,11 @@ name: Desktop 1.7.4 validation
 on:
   workflow_dispatch:
   push:
-    branches: ['codex/calix174-build']
+    branches: ['codex/calix174-motion-build']
 permissions:
   contents: read
 concurrency:
-  group: calix-174-build
+  group: calix-174-motion-build
   cancel-in-progress: true
 jobs:
   windows:
