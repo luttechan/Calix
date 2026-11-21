@@ -119,7 +119,7 @@ class EngineAPI:
         palette = self.settings.get("theme_palettes", {}).get(theme, {})
         if state["locked"]:
             return dict(
-                version="1.7.2", events=[], courses=[], types=[], sessions=[],
+                version="1.7.3", events=[], courses=[], types=[], sessions=[],
                 timetableTerms=[], mainTerm="", timetableConfigured=False,
                 sections=[], statuses=[], tasks=[], offDays=[], journals=[],
                 holidays={}, specialDates={}, lastSync="", syncSummary="",
@@ -131,12 +131,10 @@ class EngineAPI:
                                  catholic=False, birthday=False, avatar=self.settings.get("avatar", "")),
             )
         events = self.store.events()
-        from learning_calendar.timetable_terms import activate_current
-
-        semesters = activate_current(self.store)
+        semesters = self.store.timetable_config()
         year = datetime.now(KST).year
         return dict(
-            version="1.7.2",
+            version="1.7.3",
             events=[asdict(e) for e in events],
             courses=[asdict(c) for c in self.store.courses()],
             types=self.store.event_types(),
@@ -145,8 +143,6 @@ class EngineAPI:
             timetableTerms=semesters["terms"],
             mainTerm=semesters["main"],
             timetableConfigured=semesters.get("confirmed", False),
-            semesterAutomatic=semesters.get("automatic", False),
-            semesterSeasonal=semesters.get("seasonal", True),
             sections=self.checklist.sections(),
             statuses=self.checklist.statuses(),
             tasks=[
@@ -458,10 +454,6 @@ class EngineAPI:
         if method == "timetable.delete":
             self.store.remove_timetable(p["id"])
             return True
-        if method in ("semester.school", "semester.mode", "semester.dates"):
-            from learning_calendar.timetable_terms import configure_dates
-
-            return configure_dates(self.store, method.split(".")[1], p)
         if method == "semester.roster":
             from learning_calendar.grades import roster_with_legacy
 
@@ -498,10 +490,7 @@ class EngineAPI:
                 )
             else:
                 name = p["name"]
-            make_main = p.get("make_main", False)
-            if type(make_main) is not bool:
-                raise ValueError("메인 학기 설정을 확인하세요.")
-            return update(self.store, method.rsplit(".", 1)[1], name, make_main=make_main)
+            return update(self.store, method.rsplit(".", 1)[1], name)
         if method == "timetable.off":
             days = p["days"]
             if not isinstance(days, list) or any(

@@ -59,6 +59,30 @@ def test_invalid_counts_are_rejected(monkeypatch):
         anki.read_review()
 
 
+def test_defaults_without_scheduler_counts_do_not_abort_other_decks(monkeypatch):
+    calls = []
+    counts = {"new_count": 4, "learn_count": 3, "review_count": 2}
+
+    def request(action, params=None):
+        calls.append((action, params))
+        if action == "deckNamesAndIds":
+            return {"어휘": 789, "기본": 1}
+        if params["decks"] != ["어휘"]:
+            return anki._result({"result": None, "error": "Deck counts unavailable."})
+        return {"789": counts}
+
+    monkeypatch.setattr(anki, "_request", request)
+    assert anki.read_review() == {
+        "decks": [{"id": 789, "name": "어휘", "new": 4, "learning": 3, "review": 2}],
+        "totals": {"new": 4, "learning": 3, "review": 2},
+    }
+    assert calls[1:] == [
+        ("getDeckStats", {"decks": ["어휘", "기본"]}),
+        ("getDeckStats", {"decks": ["기본"]}),
+        ("getDeckStats", {"decks": ["어휘"]}),
+    ]
+
+
 def test_preference_defaults_off_and_restores_boolean_only(tmp_path):
     path = tmp_path / "settings.json"
     assert read_settings(path)["anki_sync"] is False

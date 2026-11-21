@@ -71,6 +71,7 @@ import {
 } from "./dates";
 import type { Snapshot, EventItem, Page, SecurityState } from "./types";
 import { ChecklistPage, TimetablePage, SettingsPage } from "./Workspaces";
+import { MainSemesterControl } from "./SemesterSettings";
 import { DiaryPage } from "./Diary";
 import { DeveloperConsole } from "./DeveloperConsole";
 import { Onboarding } from "./Profile";
@@ -318,10 +319,14 @@ export function App() {
   }, [reminders?.enabled, reminders?.sound, reminders?.volume]);
   const notify = useCallback((message: string, error = false) => {
     setToast({message, error});
-    if (error) soundError();
+    if (error) {
+      soundError();
+      window.dispatchEvent(new CustomEvent("calix:ui-error", { detail: message }));
+    }
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(null), 4500);
   }, [soundError]);
+  const consoleOpenError = useCallback(() => notify("Calix Console을 열지 못했습니다.", true), [notify]);
   const finishEditing = async () => {
     if (draft.current) await draft.current();
     if (leave.current) await leave.current();
@@ -687,7 +692,11 @@ export function App() {
   return (
     <div className={`app-shell${lockScreenShown.current ? " app-shell--unlocked" : ""}`}>
       <SecurityMonitor state={data?.security} beforeLock={finishEditing} refresh={refresh} />
-      <DeveloperConsole allowed={Boolean(data?.preferences.developer_mode)} onError={soundError} />
+      <DeveloperConsole
+        allowed={Boolean(data?.preferences.developer_mode) && !data?.security?.locked}
+        onError={soundError}
+        onOpenError={consoleOpenError}
+      />
       <aside className="sidebar">
         <a
           className="brand"
@@ -904,8 +913,11 @@ export function App() {
                         )}
                       </h1>
                     </div>
-                    <div className="welcome-mark" aria-hidden="true">
-                      <img src="/assets/icons/calix.svg" alt="" />
+                    <div className="welcome-actions">
+                      <MainSemesterControl />
+                      <div className="welcome-mark" aria-hidden="true">
+                        <img src="/assets/icons/calix.svg" alt="" />
+                      </div>
                     </div>
                   </section>
                   <section className="stats">
@@ -1019,7 +1031,7 @@ export function App() {
               <div hidden={page !== "checklist"}>
                 <CachedChecklist />
               </div>
-              {page === "timetable" && <ProtectedSection scope="timetable"><TimetablePage /></ProtectedSection>}
+              {page === "timetable" && <ProtectedSection scope="timetable"><TimetablePage onOpenHome={() => void navigate("home")} /></ProtectedSection>}
               {page === "grades" && <ProtectedSection scope="grades"><GradesPage /></ProtectedSection>}
               {page === "attendance" && <AttendancePage />}
               {page === "study" && <StudyPage />}
@@ -1111,7 +1123,7 @@ export function App() {
             <p>
               With testing and recommendations from members of
               <br />
-              <strong>Global Association in BUFS</strong>
+              <strong>Global Association Club in BUFS</strong>
             </p>
           </div>
           <div className="credit-links">

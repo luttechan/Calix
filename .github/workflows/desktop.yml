@@ -1,12 +1,12 @@
-name: Desktop 1.7.2 validation
+name: Desktop 1.7.3 validation
 on:
   workflow_dispatch:
   push:
-    branches: ['codex/calix172-build']
+    branches: ['codex/calix173-r2-build']
 permissions:
   contents: read
 concurrency:
-  group: calix-172-build
+  group: calix-173-build
   cancel-in-progress: true
 jobs:
   windows:
@@ -92,10 +92,10 @@ jobs:
           if ($process.ExitCode -ne 0) { if (Test-Path $report) { Get-Content $report }; throw 'WebView2 profile or viewport check failed.' }
           $result = Get-Content $report -Raw | ConvertFrom-Json
           if (-not $result.passed -or -not $result.sameProfile -or $result.viewport.width -le 0 -or $result.viewport.height -le 0) { throw 'Invalid WebView2 check result.' }
-          if ($result.mainWindowTitle -cne 'Calix (1.7.2)') { throw 'Incorrect Windows main window title.' }
-          if ($result.taskbarDisplayName -cne 'Calix (1.7.2)') { throw 'Incorrect Windows taskbar display name.' }
+          if ($result.mainWindowTitle -cne 'Calix (1.7.3)') { throw 'Incorrect Windows main window title.' }
+          if ($result.taskbarDisplayName -cne 'Calix (1.7.3)') { throw 'Incorrect Windows taskbar display name.' }
           Get-Content $report -Raw
-      - name: Check native photos and alarm media
+      - name: Check native media and detached console
         run: |
           $report = Join-Path $env:RUNNER_TEMP 'calix1592-media.json'
           $exe = (Resolve-Path desktop/src-tauri/target/release/calix-desktop.exe).Path
@@ -103,7 +103,7 @@ jobs:
           if (-not $process.WaitForExit(90000)) { $process.Kill(); throw 'Media check timed out.' }
           if ($process.ExitCode -ne 0) { if (Test-Path -LiteralPath $report) { Get-Content -LiteralPath $report }; throw 'Media check failed.' }
           $result = Get-Content -Raw -LiteralPath $report | ConvertFrom-Json
-          if (-not $result.passed -or -not $result.imageDecoded -or $result.sounds.Count -ne 11 -or -not $result.ipc.backupResponsive -or -not $result.ipc.mainResponsive -or $result.ipc.cycles -ne 5 -or $result.windowCount -ne 2) { throw 'Profile image or alarm decode failed.' }
+          if (-not $result.passed -or -not $result.imageDecoded -or -not $result.logonDecoded -or -not $result.consoleWindow -or $result.sounds.Count -ne 11 -or -not $result.ipc.backupResponsive -or -not $result.ipc.mainResponsive -or $result.ipc.cycles -ne 5 -or $result.windowCount -ne 2) { throw 'Native media or console validation failed.' }
           Get-Content -Raw -LiteralPath $report
       - name: Retain Rust build cache
         if: always()
@@ -119,13 +119,13 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $target = Join-Path $env:RUNNER_TEMP 'calix1421-installed'
           if (Test-Path -LiteralPath $target) { throw 'Install directory must be new.' }
-          $setup = (Resolve-Path desktop/.build/packages/Calix-1.7.2-Setup-x64.exe).Path
+          $setup = (Resolve-Path desktop/.build/packages/Calix-1.7.3-Setup-x64.exe).Path
           $process = Start-Process -FilePath $setup -ArgumentList @('/S',"/D=$target") -WindowStyle Hidden -PassThru
           if (-not $process.WaitForExit(180000)) { $process.Kill(); throw 'Installer timed out.' }
           if ($process.ExitCode -ne 0) { throw 'Installer failed.' }
           $portable = Join-Path $env:RUNNER_TEMP 'calix1421-portable'
-          Expand-Archive -LiteralPath desktop/.build/packages/Calix-1.7.2-Windows-x64.zip -DestinationPath $portable
-          $expected = Join-Path $portable 'Calix 1.7.2'
+          Expand-Archive -LiteralPath desktop/.build/packages/Calix-1.7.3-Windows-x64.zip -DestinationPath $portable
+          $expected = Join-Path $portable 'Calix 1.7.3'
           foreach ($name in @('calix-engine.exe','_internal')) {
             if (-not (Test-Path -LiteralPath (Join-Path $target $name))) { throw "Missing installed $name" }
           }
@@ -171,7 +171,7 @@ jobs:
           $engine.StandardInput.Close()
           if ($engine.ExitCode -ne 0) { throw $stderr.Result }
           $reply = $stdout.Result -split "`n" | Where-Object { $_.Trim() } | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object id -eq 1
-          if ($reply.result.version -ne '1.7.2') { throw 'Installed engine bootstrap failed.' }
+          if ($reply.result.version -ne '1.7.3') { throw 'Installed engine bootstrap failed.' }
           Write-Output 'Installer, embedded runtime hashes and installed engine startup verified.'
           if (-not $uiMatches) { throw 'Inspect UI binary difference before publication.' }
 
@@ -179,7 +179,7 @@ jobs:
         run: python desktop/tools/check_update_install.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: Calix-1.7.2-development-Windows-x64
+          name: Calix-1.7.3-development-Windows-x64
           path: desktop/.build/packages/*
           compression-level: 0
           retention-days: 7

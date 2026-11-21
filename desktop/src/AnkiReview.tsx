@@ -78,7 +78,7 @@ export function AnkiReview() {
                 </tbody>
               </table>
             </details>
-          ) : <p className="muted">덱 없음</p>}
+          ) : <p className="muted">집계할 덱 없음</p>}
         </>
       )}
     </section>

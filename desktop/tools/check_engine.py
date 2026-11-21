@@ -62,7 +62,6 @@ def check(exe):
         "learning_calendar.app_security",
         "learning_calendar.grades",
         "learning_calendar.anki",
-        "learning_calendar.academic_calendar",
     ):
         assert required in modules, required
     assert (
@@ -90,7 +89,7 @@ def check(exe):
         responses = [json.loads(line) for line in completed.stdout.splitlines()]
         assert (
             next(r for r in responses if r.get("id") == 1)["result"]["version"]
-            == "1.7.2"
+            == "1.7.3"
         )
         assert (
             next(r for r in responses if r.get("id") == 2)["result"]["initialized"]

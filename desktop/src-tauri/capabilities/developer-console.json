@@ -1,0 +1,6 @@
+{
+  "identifier": "developer-console",
+  "description": "Detached Calix developer diagnostics viewer",
+  "windows": ["developer-console"],
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
+}

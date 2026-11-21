@@ -139,9 +139,10 @@ pub async fn reminder_open_event(app:AppHandle,webview:Webview,key:String,revisi
 
 pub async fn self_check(app:AppHandle)->Result<Value,String>{
     app.state::<ReminderState>().checking.store(true,std::sync::atomic::Ordering::SeqCst);
+    let profile=std::env::temp_dir().join(format!("calix-media-check-{}",std::process::id()));
     let probe=WebviewWindowBuilder::new(&app,"main",WebviewUrl::App("reminder-probe.html".into()))
         .visible(false).additional_browser_args(UI_ARGS)
-        .data_directory(std::env::temp_dir().join(format!("calix-media-check-{}",std::process::id())))
+        .data_directory(profile.clone())
         .build().map_err(|e|format!("PROBE_WINDOW_FAILED: {e}"))?;
     let deadline=Instant::now()+Duration::from_secs(45);
     let ipc=loop {
@@ -163,13 +164,56 @@ pub async fn self_check(app:AppHandle)->Result<Value,String>{
             if ready==true { break; }
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
-        window.eval(r#"(async()=>{try{const image=new Image();const blob=await (await fetch('/assets/profile-avatar.png')).blob();const url=URL.createObjectURL(blob);let decoded=false;try{image.src=url;await image.decode();decoded=image.naturalWidth>0;}finally{URL.revokeObjectURL(url);}const sounds=[];for(const name of ['1','2','3','4','5','6','7','8','9','10','crit']){const audio=new Audio('/assets/alarm/'+name+'.mp3');audio.preload='metadata';await new Promise((resolve,reject)=>{audio.onloadedmetadata=resolve;audio.onerror=()=>reject(Error('AUDIO_DECODE_'+name));});sounds.push({name,duration:audio.duration});audio.src='';audio.load();}window.__mediaCheck={passed:decoded&&sounds.length===11,imageDecoded:decoded,sounds};}catch(e){window.__mediaCheck={passed:false,error:String(e)};}})()"#).map_err(|_|"MEDIA_PROBE_FAILED")?;
+        window.eval(r#"(async()=>{try{
+            const image=new Image();const blob=await (await fetch('/assets/profile-avatar.png')).blob();
+            const url=URL.createObjectURL(blob);let decoded=false;
+            try{image.src=url;await image.decode();decoded=image.naturalWidth>0;}finally{URL.revokeObjectURL(url);}
+            async function duration(path) {
+                const audio=new Audio(path);audio.preload='metadata';
+                await new Promise((resolve,reject)=>{audio.onloadedmetadata=resolve;audio.onerror=()=>reject(Error('AUDIO_DECODE_'+path));});
+                const seconds=audio.duration;audio.src='';audio.load();return seconds;
+            }
+            const sounds=[];
+            for(const name of ['1','2','3','4','5','6','7','8','9','10','crit']) {
+                sounds.push({name,duration:await duration('/assets/alarm/'+name+'.mp3')});
+            }
+            const logonDecoded=await duration('/assets/sound/logon.mp3')>0;
+            window.__mediaCheck={passed:decoded&&sounds.length===11&&logonDecoded,imageDecoded:decoded,sounds,logonDecoded};
+        }catch(e){window.__mediaCheck={passed:false,error:String(e)};}})()"#).map_err(|_|"MEDIA_PROBE_FAILED")?;
         loop {
             if Instant::now()>deadline { return Err("MEDIA_PROBE_TIMEOUT".into()); }
             let value=crate::campus::evaluate(&window,"window.__mediaCheck||null".into()).await?;
-            if !value.is_null() { if value["passed"]!=true{return Err(value.to_string());}return Ok(json!({"passed":true,"imageDecoded":value["imageDecoded"],"sounds":value["sounds"],"ipc":ipc,"windowCount":app.webview_windows().len()})); }
+            if !value.is_null() {
+                if value["passed"]!=true {return Err(value.to_string());}
+                let window_count=app.webview_windows().len();
+                check_developer_console(&app,&profile).await?;
+                return Ok(json!({"passed":true,"imageDecoded":value["imageDecoded"],"sounds":value["sounds"],"logonDecoded":value["logonDecoded"],"consoleWindow":true,"ipc":ipc,"windowCount":window_count}));
+            }
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
     }.await;
     let _=window.destroy();let _=probe.destroy();result
+}
+
+async fn check_developer_console(app: &AppHandle, profile: &std::path::Path) -> Result<(), String> {
+    let console = crate::create_developer_console_window(app, Some(profile))?;
+    let update = json!({
+        "enabled":true,"busy":false,"requesting":false,"force":false,"error":"",
+        "rows":[{"id":1,"time":"2026-11-21T00:00:00","source":"engine","level":"error","message":"Calix console probe"}],
+    });
+    let test = async {
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while Instant::now() < deadline {
+            app.emit_to("developer-console", "developer-console:update", &update)
+                .map_err(|error| error.to_string())?;
+            let shown = crate::campus::evaluate(&console,
+                "document.querySelector('.console-logs')?.textContent.includes('Calix console probe') ?? false".into()
+            ).await?;
+            if shown == true { return Ok(()); }
+            tokio::time::sleep(Duration::from_millis(150)).await;
+        }
+        Err("CONSOLE_IPC_TIMEOUT".into())
+    }.await;
+    let _ = console.destroy();
+    test
 }

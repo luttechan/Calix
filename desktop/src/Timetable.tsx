@@ -1,5 +1,4 @@
 import {sessionLanes} from "./planningState";
-import { NumberField } from "./NumberField";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Sun, Trash2, Monitor, ArrowUpRight } from "lucide-react";
 import { Modal, TypeBadge, useCalix } from "./App";
@@ -12,7 +11,7 @@ const minute = (value: string) => {
   const [h, m] = value.split(":").map(Number);
   return h * 60 + m;
 };
-export function TimetablePage() {
+export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
   const { data, mutate } = useCalix();
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
@@ -25,7 +24,6 @@ export function TimetablePage() {
   const [density,setDensity] = useState(80);
   const [mode, setMode] = useState<"view" | "edit">("view");
   const [semester, setSemester] = useState(data.mainTerm);
-  const [termDialog, setTermDialog] = useState(!data.timetableConfigured);
   const [viewing, setViewing] = useState<Session | null>(null);
   const term =
     data.timetableTerms.find((t) => t.name === semester) ||
@@ -167,27 +165,13 @@ export function TimetablePage() {
         </select>
         </label>
         <label>시간 간격<select aria-label="시간표 시간 간격" value={density} onChange={e=>setDensity(Number(e.target.value))}><option value={0}>화면에 맞춤</option><option value={64}>보통</option><option value={80}>넓게</option><option value={104}>아주 넓게</option></select></label>
-        <button onClick={() => setTermDialog(true)}>학기 추가</button>
-        {data.timetableConfigured &&
-          (term.name === data.mainTerm ? (
-            <span className="count-pill">메인 학기</span>
-          ) : (
-            <button
-              onClick={() =>
-                void mutate("timetable.term.main", { name: term.name }).catch(
-                  () => {},
-                )
-              }
-            >
-              메인 학기로 설정
-            </button>
-          ))}
+        {data.timetableConfigured && term.name === data.mainTerm &&
+          <span className="count-pill">메인 학기</span>}
       </div>
       {!data.timetableConfigured ? (
         <section className="glass empty">
-          <button className="primary" onClick={() => setTermDialog(true)}>
-            학기 설정
-          </button>
+          <p>홈에서 메인 학기를 설정하세요.</p>
+          <button type="button" onClick={onOpenHome}>홈으로</button>
         </section>
       ) : (
         <>
@@ -318,16 +302,6 @@ export function TimetablePage() {
           )}
         </>
       )}
-      {termDialog && (
-        <TermEditor
-          setup={!data.timetableConfigured}
-          onClose={() => setTermDialog(false)}
-          onSaved={(name) => {
-            setSemester(name);
-            setTermDialog(false);
-          }}
-        />
-      )}
       {viewing && (
         <SessionViewer
           session={viewing}
@@ -404,99 +378,6 @@ export function TimetablePage() {
         </Modal>
       )}
     </>
-  );
-}
-
-export function TermEditor({
-  setup,
-  inSettings = false,
-  onClose,
-  onSaved,
-}: {
-  setup: boolean;
-  inSettings?: boolean;
-  onClose: () => void;
-  onSaved: (name: string) => void;
-}) {
-  const { mutate } = useCalix();
-  const [year, setYear] = useState(new Date().getFullYear());
-  const [term, setTerm] = useState<number | string>(
-    new Date().getMonth() < 7 ? 1 : 2,
-  );
-  const [saving, setSaving] = useState(false);
-  const [makeMain, setMakeMain] = useState(true);
-  return (
-    <Modal title={setup ? "학기 설정" : "학기 추가"} onClose={onClose}>
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (saving) return;
-          setSaving(true);
-          void mutate(
-            `${inSettings ? "semester" : "timetable.term"}.${setup ? "configure" : "add"}`,
-            { year, term, make_main: inSettings && makeMain },
-          )
-            .then(() =>
-              onSaved(
-                `${year}학년도 ${term}${typeof term === "number" ? "학기" : " 계절학기"}`,
-              ),
-            )
-            .catch(() => {})
-            .finally(() => setSaving(false));
-        }}
-      >
-        {setup && (
-          <p className="muted">기존 시간표를 선택한 학기로 연결합니다.</p>
-        )}
-        <div className="form-grid">
-          <label>
-            학년도
-            <NumberField
-              aria-label="학년도"
-
-              min={1900}
-              max={2200}
-              step={1}
-              required
-              value={year}
-              onValueChange={setYear}
-            />
-          </label>
-          <label>
-            학기
-            <select
-              aria-label="학기"
-              value={term}
-              onChange={(e) =>
-                setTerm(
-                  ["1", "2"].includes(e.target.value)
-                    ? Number(e.target.value)
-                    : e.target.value,
-                )
-              }
-            >
-              <option value={1}>1학기</option>
-              <option value={2}>2학기</option>
-              <option value="여름">여름 계절학기</option>
-              <option value="겨울">겨울 계절학기</option>
-            </select>
-          </label>
-        </div>
-        {inSettings && !setup && <label className="checkbox-label">
-          <input type="checkbox" checked={makeMain} onChange={(event) => setMakeMain(event.target.checked)} />
-          메인 학기로 설정
-        </label>}
-        <div className="dialog-actions">
-          <span />
-          <button type="button" onClick={onClose}>
-            취소
-          </button>
-          <button className="primary" disabled={saving}>
-            {saving ? "저장 중" : setup ? "설정" : "추가"}
-          </button>
-        </div>
-      </form>
-    </Modal>
   );
 }
 

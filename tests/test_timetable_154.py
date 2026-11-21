@@ -1,7 +1,6 @@
 import json
 import sqlite3
 import sys
-from datetime import date
 from pathlib import Path
 import pytest
 from learning_calendar.storage import Store
@@ -10,7 +9,6 @@ from learning_calendar.local_backup import write_backup, read_backup, restore_ba
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "desktop"))
 from engine_api import EngineAPI
-from learning_calendar.timetable_terms import activate_current
 
 
 def test_previous_version_requires_semester_confirmation_and_keeps_data(tmp_path):
@@ -173,33 +171,25 @@ def test_seasonal_semesters_can_be_created_and_selected(tmp_path, term):
     api.close()
 
 
-def test_auto_term_switch_uses_calendar_and_keeps_legacy_courses(tmp_path):
+def test_legacy_auto_term_preferences_are_removed_and_only_manual_selection_changes_main(tmp_path):
     api = EngineAPI(tmp_path)
     try:
         autumn = api.dispatch("semester.configure", dict(year=2026, term=2))
-        api.dispatch("semester.school", {})
-        custom = dict(name=autumn, startsOn="2026-08-29", endsOn="2026-12-12")
-        api.dispatch("semester.dates", custom)
-        api.dispatch("semester.school", {})
-        api.dispatch("semester.main", dict(name=autumn))
-        api.dispatch("semester.mode", dict(automatic=True, seasonal=False))
+        spring = api.dispatch("semester.add", dict(year=2027, term=1))
+        config = api.store.timetable_config()
+        config.update(automatic=True, seasonal=True)
+        config["terms"][1].update(startsOn="1900-01-01", endsOn="2200-12-31")
+        api.store.set_meta("timetable_config", json.dumps(config))
         api.store.db.execute("INSERT INTO courses(id,name) VALUES(1,'이전 과목')")
         api.store.db.commit()
-        summer_end = date(2026, 7, 10)
-        assert activate_current(api.store, summer_end)["main"] == autumn
-        assert activate_current(api.store, date(2026, 12, 16))["main"] == autumn
-        first = activate_current(api.store, date(2027, 3, 1))
-        assert first["main"] == "2027학년도 1학기"
-        assert next(term for term in first["terms"] if term["name"] == autumn)["startsOn"] == "2026-08-29"
+        assert api.bootstrap()["mainTerm"] == autumn
+        assert all("startsOn" not in term for term in api.bootstrap()["timetableTerms"])
+        api.dispatch("semester.main", dict(name=spring))
         assert api.dispatch("semester.roster", {}) == {autumn: [1]}
-        api.store.apply_batch([Course(1, "이전 과목"), Course(2, "새 과목")], {(2, "assignment"): []}, grade_semester=first["main"])
-        assert api.dispatch("semester.roster", {}) == {autumn: [1], first["main"]: [2]}
-        with pytest.raises(ValueError, match="겹칩니다"):
-            api.dispatch("semester.dates", dict(name=autumn, startsOn="2027-03-01", endsOn="2027-03-02"))
-        assert api.store.timetable_config() == first
-        api.dispatch("semester.main", dict(name=autumn))
-        assert not activate_current(api.store, date(2027, 3, 1))["automatic"]
-        assert api.store.timetable_config()["main"] == autumn
+        api.store.apply_batch([Course(1, "이전 과목"), Course(2, "새 과목")], {(2, "assignment"): []}, grade_semester=spring)
+        assert api.dispatch("semester.roster", {}) == {autumn: [1], spring: [2]}
+        assert api.bootstrap()["mainTerm"] == spring
+        assert "automatic" not in json.loads(api.store.get_meta("timetable_config"))
     finally:
         api.close()
 
@@ -208,7 +198,9 @@ def test_course_transfer_preserves_saved_grades_and_is_atomic(tmp_path):
     api = EngineAPI(tmp_path)
     try:
         first = api.dispatch("semester.configure", dict(year=2026, term=1))
-        second = api.dispatch("semester.add", dict(year=2026, term=2, make_main=True))
+        second = api.dispatch("semester.add", dict(year=2026, term=2))
+        assert api.bootstrap()["mainTerm"] == first
+        api.dispatch("semester.main", dict(name=second))
         assert api.bootstrap()["mainTerm"] == second
         api.store.apply_batch([Course(1, "수업 A"), Course(2, "수업 B")], {(1, "assignment"): []}, grade_semester=first)
         api.store.db.execute("INSERT INTO grade_items(semester,id,title) VALUES(?,?,?)", (first, "course:1", "수업 A"))

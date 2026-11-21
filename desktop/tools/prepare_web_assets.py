@@ -49,7 +49,8 @@ def main():
     sound = output / "sound"
     sound.mkdir(exist_ok=True)
     source_sound = ROOT / "asset/sound"
-    shutil.copy2(source_sound / "error.mp3", sound / "error.mp3")
+    for name in ("error.mp3", "logon.mp3"):
+        shutil.copy2(source_sound / name, sound / name)
     if not (source_sound / "notify_1.mp3").is_file():
         raise FileNotFoundError("Default sync cue missing: asset/sound/notify_1.mp3")
     sync_tracks = []

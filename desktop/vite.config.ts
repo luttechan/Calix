@@ -7,7 +7,7 @@ const startup = {
   transformIndexHtml: {
     order: "pre" as const,
     handler: (html: string, context: { filename: string }) =>
-      ["login.html", "reminder.html", "reminder-probe.html"].some((name) =>
+      ["login.html", "reminder.html", "reminder-probe.html", "developer-console.html"].some((name) =>
         context.filename.endsWith(name),
       )
         ? html
@@ -49,6 +49,7 @@ export default defineConfig({
           new URL("./reminder-probe.html", import.meta.url),
         ),
         login: fileURLToPath(new URL("./login.html", import.meta.url)),
+        developerConsole: fileURLToPath(new URL("./developer-console.html", import.meta.url)),
       },
     },
   },
