@@ -103,6 +103,7 @@
 .startup-unlock form { gap: 10px; animation: lock-enter .5s .16s cubic-bezier(.2,.75,.3,1) both; }
 .startup-unlock label { margin: 0; }
 .startup-unlock .text-button { margin-top: 12px; }
+.lock-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 0 12px; }
 .lock-reset-dialog.modal { width: min(432px, calc(100vw - 32px)); }
 .lock-reset-warning {
   display: grid;

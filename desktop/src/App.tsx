@@ -291,6 +291,7 @@ export function App() {
     [credits, setCredits] = useState(false),
     [startupUpdate, setStartupUpdate] = useState(false),
     [exit, setExit] = useState(false),
+    [exitError, setExitError] = useState(""),
     [install, setInstall] = useState(false),
     [restart, setRestart] = useState(false),
     [exiting, setExiting] = useState(false);
@@ -599,7 +600,7 @@ export function App() {
       privacyLocked.current = true;
       setData(previous => previous ? { ...previous, security } : previous);
       setQuery(""); setSelected(null); setAddDate(null);
-      setExit(false); setCredits(false); setStartupUpdate(false);
+      setExit(false); setExitError(""); setCredits(false); setStartupUpdate(false);
       setInstall(false); setRestart(false); setToast(null);
       if (toastTimer.current) clearTimeout(toastTimer.current);
       if (isTauri()) await invoke("privacy_lock");
@@ -696,10 +697,58 @@ export function App() {
         : null,
     [data, appVersion, mutate, notify, openEvent, soundError],
   );
-  if (data?.security?.locked && context) {
+  const locked = data?.security?.locked === true;
+  const exitAction = !locked && restart ? "restart" : !locked && install ? "install" : "quit";
+  const closeExit = () => {
+    if (exitLock.current) return;
+    setExit(false);
+    setExitError("");
+    setInstall(false);
+    setRestart(false);
+  };
+  const confirmExit = async () => {
+    if (exitLock.current) return;
+    exitLock.current = true;
+    setExiting(true);
+    setExitError("");
+    let closeDialog = false;
+    try {
+      if (!locked) await finishEditing();
+      await stopEngine(exitAction === "install");
+      if (isTauri()) await invoke(exitAction === "restart" ? "restart_app" : "quit_app");
+      else closeDialog = true;
+    } catch (error) {
+      setExitError(error instanceof Error ? error.message : String(error));
+      soundError();
+    } finally {
+      exitLock.current = false;
+      setExiting(false);
+      if (closeDialog) closeExit();
+    }
+  };
+  const exitDialog = exit && (
+    <Modal
+      title={exitAction === "restart" ? "재시작하시겠습니까?" : exitAction === "install" ? "업데이트를 설치하시겠습니까?" : "종료하시겠습니까?"}
+      onClose={closeExit}
+    >
+      {exitError && <p role="alert" className="danger">{exitError}</p>}
+      <div className="dialog-actions">
+        <span />
+        <button type="button" disabled={exiting} onClick={closeExit}>취소</button>
+        <button type="button" className="primary" disabled={exiting} onClick={() => void confirmExit()}>
+          {exitAction === "restart" ? "저장하고 재시작" : exitAction === "install" ? "설치하고 종료" : locked ? "종료" : "저장하고 종료"}
+        </button>
+      </div>
+    </Modal>
+  );
+  if (locked && context) {
     lockScreenShown.current = true;
     return <Context.Provider value={context}>
-      <div className="security-app-lock"><WindowControls /><UnlockView /></div>
+      <div className="security-app-lock">
+        <WindowControls />
+        <UnlockView onExit={() => setExit(true)} />
+        {exitDialog}
+      </div>
     </Context.Provider>;
   }
   return (
@@ -1176,64 +1225,7 @@ export function App() {
           </p>
         </Modal>
       )}
-      {exit && (
-        <Modal
-          title={
-            restart
-              ? "재시작하시겠습니까?"
-              : install
-                ? "업데이트를 설치하시겠습니까?"
-                : "종료하시겠습니까?"
-          }
-          onClose={() => {
-            if (exitLock.current) return;
-            setExit(false);
-            setInstall(false);
-            setRestart(false);
-          }}
-        >
-          <div className="dialog-actions">
-            <span />
-            <button
-              disabled={exiting}
-              onClick={() => {
-                setExit(false);
-                setInstall(false);
-                setRestart(false);
-              }}
-            >
-              취소
-            </button>
-            <button
-              className="primary"
-              disabled={exiting}
-              onClick={() =>
-                void (async () => {
-                  if (exitLock.current) return;
-                  exitLock.current = true;
-                  setExiting(true);
-                  try {
-                    await finishEditing();
-                    await stopEngine(install);
-                    if (isTauri())
-                      await invoke(restart ? "restart_app" : "quit_app");
-                    else setExit(false);
-                  } finally {
-                    exitLock.current = false;
-                    setExiting(false);
-                  }
-                })().catch((e) => notify(e.message, true))
-              }
-            >
-              {restart
-                ? "저장하고 재시작"
-                : install
-                  ? "설치하고 종료"
-                  : "저장하고 종료"}
-            </button>
-          </div>
-        </Modal>
-      )}
+      {exitDialog}
     </div>
   );
 }

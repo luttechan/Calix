@@ -53,7 +53,10 @@ function LockedResetDialog({ onClose }: { onClose: () => void }) {
   </Modal>;
 }
 
-export function UnlockView({ scope = "main" }: { scope?: "main" | "timetable" | "grades" }) {
+export function UnlockView({ scope = "main", onExit }: {
+  scope?: "main" | "timetable" | "grades";
+  onExit?: () => void;
+}) {
   const { data, mutate } = useCalix();
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
@@ -84,7 +87,10 @@ export function UnlockView({ scope = "main" }: { scope?: "main" | "timetable" | 
         {error && <p role="alert">{error}</p>}
         <button className="button primary" disabled={pending}>{pending ? "확인 중" : "잠금 해제"}</button>
       </form>
-      {scope === "main" && <button type="button" className="text-button" disabled={pending} onClick={() => setReset(true)}>비밀번호를 잊으셨나요?</button>}
+      {main && <div className="lock-actions">
+        <button type="button" className="text-button" disabled={pending} onClick={() => setReset(true)}>비밀번호를 잊으셨나요?</button>
+        {onExit && <button type="button" className="text-button" onClick={onExit}>종료</button>}
+      </div>}
     </section>
     {reset && <LockedResetDialog onClose={() => setReset(false)} />}
   </>;

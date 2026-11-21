@@ -5,6 +5,7 @@
 }
 
 .app-shell button,
+.security-app-lock button,
 .modal button,
 .auth-shell button {
   transition: background-color var(--motion-quick) ease,
@@ -15,6 +16,7 @@
 }
 
 .app-shell button:active:not(:disabled),
+.security-app-lock button:active:not(:disabled),
 .modal button:active:not(:disabled) {
   scale: .98;
 }
