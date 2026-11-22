@@ -52,6 +52,7 @@ def read_settings(path: str | Path) -> dict:
         "developer_mode": False,
         "developer_acknowledged": False,
         "font_mode": "pretendard",
+        "language": "ko",
         "avatar": "",
         "nickname": "",
         "greeting": "{닉네임}님, 오셨군요!",
@@ -109,6 +110,8 @@ def read_settings(path: str | Path) -> dict:
                             pass
             if settings.get("font_mode") in ("pretendard", "windows"):
                 defaults["font_mode"] = settings["font_mode"]
+            if settings.get("language") in ("ko", "en", "ja"):
+                defaults["language"] = settings["language"]
             name = settings.get("active_db")
             reserved = {
                 "CON",
@@ -160,6 +163,7 @@ def write_settings(path: str | Path, settings: dict):
             "developer_mode",
             "developer_acknowledged",
             "font_mode",
+            "language",
             "nickname",
             "greeting",
             "onboarding_complete",

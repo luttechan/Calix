@@ -1,3 +1,4 @@
+import { t, useLanguage } from "./i18n";
 import { memo, useEffect, useRef, useState } from "react";
 import { Check, RefreshCw, TriangleAlert, X } from "lucide-react";
 import { defaultSyncTrack, playSyncCue, syncCuePath } from "./syncCue";
@@ -14,6 +15,7 @@ export const SyncNotice = memo(function SyncNotice({
   volume: number;
   track: string;
 }) {
+  useLanguage();
   const [state, setState] = useState<SyncNoticeState | null>(null),
     [visible, setVisible] = useState(false),
     [leaving, setLeaving] = useState(false);
@@ -107,8 +109,8 @@ export const SyncNotice = memo(function SyncNotice({
   const estimate = seconds === null
     ? state.total > 0 && state.current === state.total ? "마무리 중" : "예상 시간 계산 중"
     : seconds < 60
-      ? `약 ${seconds}초 남음`
-      : `약 ${Math.floor(seconds / 60)}분 ${seconds % 60}초 남음`;
+      ? t("약 {0}초 남음", [seconds])
+      : t("약 {0}분 {1}초 남음", [Math.floor(seconds / 60), seconds % 60]);
   const title = running
     ? "동기화 중"
     : state.phase === "success"
@@ -121,7 +123,7 @@ export const SyncNotice = memo(function SyncNotice({
   return (
     <aside
       className={`sync-notice ${state.phase} ${leaving ? "leaving" : ""}`}
-      aria-label="동기화 알림"
+      aria-label={t("동기화 알림")}
     >
       <header>
         <span className="sync-notice-icon">
@@ -134,12 +136,12 @@ export const SyncNotice = memo(function SyncNotice({
           )}
         </span>
         <div role={state.phase === "error" ? "alert" : "status"}>
-          <strong>{title}</strong>
-          {state.message !== title && <p>{state.message}</p>}
+          <strong>{t(title)}</strong>
+          {state.message !== title && <p>{t(state.message)}</p>}
         </div>
         <button
           className="icon-button"
-          aria-label="동기화 알림 닫기"
+          aria-label={t("동기화 알림 닫기")}
           onClick={dismiss}
         >
           <X size={16} />
@@ -150,7 +152,7 @@ export const SyncNotice = memo(function SyncNotice({
           <div
             className={`sync-notice-progress ${progress === null ? "indeterminate" : ""}`}
             role="progressbar"
-            aria-label="강의 확인 진행률"
+            aria-label={t("강의 확인 진행률")}
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={progress ?? undefined}
@@ -166,10 +168,10 @@ export const SyncNotice = memo(function SyncNotice({
           <footer>
             <span>
               {state.total
-                ? `${state.current} / ${state.total}개 강의`
-                : "학교 응답을 기다리는 중"}
+                ? t("{0} / {1}개 강의", [String(state.current), String(state.total)])
+                : t("학교 응답을 기다리는 중")}
             </span>
-            <span>{estimate}</span>
+            <span>{t(estimate)}</span>
           </footer>
         </>
       ) : (
@@ -177,18 +179,14 @@ export const SyncNotice = memo(function SyncNotice({
           <div className="sync-notice-counts">
             {state.phase !== "error" && (
               <>
-                <span>
-                  신규 강의 <b>{state.stats.new_courses || 0}</b>
+                <span>{t("신규 강의")}{" "}<b>{state.stats.new_courses || 0}</b>
                 </span>
-                <span>
-                  새 일정 <b>{state.stats.new || 0}</b>
+                <span>{t("새 일정")}{" "}<b>{state.stats.new || 0}</b>
                 </span>
-                <span>
-                  변경 <b>{state.stats.updated || 0}</b>
+                <span>{t("변경")}{" "}<b>{state.stats.updated || 0}</b>
                 </span>
                 {Boolean(state.stats.reused_courses) && (
-                  <span>
-                    재사용 <b>{state.stats.reused_courses}</b>
+                  <span>{t("재사용")}{" "}<b>{state.stats.reused_courses}</b>
                   </span>
                 )}
               </>
@@ -201,9 +199,7 @@ export const SyncNotice = memo(function SyncNotice({
                   if (details) timer.current = setTimeout(dismiss, 6000);
                 }}
                 aria-expanded={details}
-              >
-                확인 {state.warnings.length}건
-              </button>
+              >{t("확인")}{" "}{state.warnings.length}{t("건")}{" "}</button>
             )}
           </div>
         )

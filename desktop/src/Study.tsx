@@ -1,3 +1,4 @@
+import { t, useLanguage } from "./i18n";
 import { NumberField } from "./NumberField";
 import { AnkiReview } from "./AnkiReview";
 import { AnvStatus } from "./AnvStatus";
@@ -38,12 +39,13 @@ function useFocus() {
   return useSyncExternalStore(watch, () => current);
 }
 function Tomato() {
+  useLanguage();
   return (
     <svg
       className="tomato"
       viewBox="0 0 120 112"
       role="img"
-      aria-label="토마토"
+      aria-label={t("토마토")}
     >
       <defs>
         <radialGradient id="tomatoGlow" cx="35%" cy="30%">
@@ -78,14 +80,15 @@ function Tomato() {
   );
 }
 function Controls({ state }: { state: FocusState }) {
+  useLanguage();
   const { notify } = useCalix();
   const run = (a: string) => void command(a).catch((e) => notify(String(e), true));
   return (
     <div className="focus-controls">
       <button
         className="icon-button"
-        title="세션 초기화"
-        aria-label="세션 초기화"
+        title={t("세션 초기화")}
+        aria-label={t("세션 초기화")}
         onClick={() => run("reset")}
       >
         <RotateCcw size={17} />
@@ -104,18 +107,18 @@ function Controls({ state }: { state: FocusState }) {
           <Play size={18} />
         )}{" "}
         {state.running
-          ? "일시정지"
+          ? t("일시정지")
           : state.finished
-            ? "다음 세션"
+            ? t("다음 세션")
             : state.elapsed
-              ? "계속"
-              : "시작"}
+              ? t("계속")
+              : t("시작")}
       </button>
       {state.mode === "pomodoro" && (
         <button
           className="icon-button"
-          title="다음 세션"
-          aria-label="다음 세션"
+          title={t("다음 세션")}
+          aria-label={t("다음 세션")}
           onClick={() => run("next")}
         >
           <SkipForward size={18} />
@@ -125,10 +128,11 @@ function Controls({ state }: { state: FocusState }) {
   );
 }
 function FocusCommentSettings({ comments, onClose }: { comments: FocusComments; onClose: () => void }) {
+  useLanguage();
   const { notify } = useCalix();
   const [draft, setDraft] = useState({ ...comments });
   const [pending, setPending] = useState(false);
-  return <Modal title="집중 문구" onClose={onClose}>
+  return <Modal title={t("집중 문구")} onClose={onClose}>
     <form className="focus-comment-form" onSubmit={event => {
       event.preventDefault();
       if (pending) return;
@@ -139,14 +143,15 @@ function FocusCommentSettings({ comments, onClose }: { comments: FocusComments; 
       {([['heading', '집중 문구'], ['focus_end', '집중 완료'], ['break_end', '휴식 완료']] as const).map(([key, title]) =>
         <label key={key}>{title}<input value={draft[key]} maxLength={key === 'heading' ? 80 : 120} onChange={event => setDraft(previous => ({ ...previous, [key]: event.target.value }))} /></label>)}
       <div className="dialog-actions">
-        <button type="button" disabled={pending} onClick={() => setDraft({ ...DEFAULT_FOCUS_COMMENTS })}>기본값</button>
-        <button type="button" onClick={onClose}>취소</button>
-        <button type="submit" className="primary" disabled={pending}>저장</button>
+        <button type="button" disabled={pending} onClick={() => setDraft({ ...DEFAULT_FOCUS_COMMENTS })}>{t("기본값")}</button>
+        <button type="button" onClick={onClose}>{t("취소")}</button>
+        <button type="submit" className="primary" disabled={pending}>{t("저장")}</button>
       </div>
     </form>
   </Modal>;
 }
 export function FocusDock() {
+  useLanguage();
   const state = useFocus(),
     [tick, setTick] = useState(0),
     [collapsed, setCollapsed] = useState(false);
@@ -192,11 +197,11 @@ export function FocusDock() {
   return (
     <aside
       className={`focus-dock glass ${collapsed ? "collapsed" : ""}`}
-      aria-label="집중 타이머"
+      aria-label={t("집중 타이머")}
     >
       <button
         className="icon-button focus-collapse"
-        aria-label={collapsed ? "타이머 펼치기" : "타이머 접기"}
+        aria-label={collapsed ? t("타이머 펼치기") : t("타이머 접기")}
         onClick={() => setCollapsed(!collapsed)}
       >
         {collapsed ? <Timer size={18} /> : <X size={15} />}
@@ -207,9 +212,9 @@ export function FocusDock() {
             <img src="/assets/icons/calix.svg" alt="Calix" />
             <span>
               {state.phase === "break"
-                ? "휴식"
+                ? t("휴식")
                 : state.mode === "free"
-                  ? "자유 집중"
+                  ? t("자유 집중")
                   : "POMODORO"}
             </span>
           </div>
@@ -247,6 +252,7 @@ export function weeklyMetrics(events: EventItem[], start: string, end: string) {
   };
 }
 export function StudyPage() {
+  useLanguage();
   const { data, notify } = useCalix(),
     state = useFocus();
   const [mode, setMode] = useState("pomodoro"),
@@ -298,10 +304,10 @@ export function StudyPage() {
     <section className="learning-page study-page">
       <div className="page-heading">
         <div>
-          <h1>나의 학습</h1>
+          <h1>{t("나의 학습")}</h1>
         </div>
         <div>
-          <button onClick={() => setOffset(offset - 1)} aria-label="이전 주">
+          <button onClick={() => setOffset(offset - 1)} aria-label={t("이전 주")}>
             ←
           </button>
           <span className="week-range">
@@ -310,7 +316,7 @@ export function StudyPage() {
           <button
             onClick={() => setOffset(offset + 1)}
             disabled={offset >= 0}
-            aria-label="다음 주"
+            aria-label={t("다음 주")}
           >
             →
           </button>
@@ -324,28 +330,27 @@ export function StudyPage() {
           const v = value as typeof metrics.videos;
           return (
             <article className="glass" key={String(title)}>
-              <span>{String(title)}</span>
+              <span>{t(String(title))}</span>
               <strong>{v.percent === null ? "—" : `${v.percent}%`}</strong>
               <progress max={100} value={v.percent ?? 0} />
               <small>
-                {v.done} / {v.total}건
-              </small>
+                {v.done} / {v.total}{t("건")}{" "}</small>
             </article>
           );
         })}
         <article className="glass">
-          <span>미완료 항목</span>
+          <span>{t("미완료 항목")}</span>
           <strong>
             {metrics.pending}
-            <small>건</small>
+            <small>{t("건")}</small>
           </strong>
-          <small>이번 주 마감 기준</small>
+          <small>{t("이번 주 마감 기준")}</small>
         </article>
         <article className="glass">
-          <span>집중 시간</span>
+          <span>{t("집중 시간")}</span>
           <strong>
             {Math.floor(seconds / 60)}
-            <small>분</small>
+            <small>{t("분")}</small>
           </strong>
         </article>
       </div>
@@ -356,7 +361,7 @@ export function StudyPage() {
           <div className="focus-brand">
             <img src="/assets/icons/calix.svg" alt="Calix" />
             <span>FOCUS</span>
-            <button className="icon-button focus-settings" type="button" title="집중 문구 설정" aria-label="집중 문구 설정" disabled={!state} onClick={() => setCommentSettings(true)}><Settings size={18} /></button>
+            <button className="icon-button focus-settings" type="button" title={t("집중 문구 설정")} aria-label={t("집중 문구 설정")} disabled={!state} onClick={() => setCommentSettings(true)}><Settings size={18} /></button>
           </div>
           <Tomato />
           {comments.heading && <h2>{comments.heading}</h2>}
@@ -365,16 +370,12 @@ export function StudyPage() {
               aria-pressed={mode === "pomodoro"}
               disabled={!!state?.elapsed || state?.running}
               onClick={() => setMode("pomodoro")}
-            >
-              뽀모도로
-            </button>
+            >{t("뽀모도로")}{" "}</button>
             <button
               aria-pressed={mode === "free"}
               disabled={!!state?.elapsed || state?.running}
               onClick={() => setMode("free")}
-            >
-              자유 집중
-            </button>
+            >{t("자유 집중")}{" "}</button>
           </div>
           <div className="focus-options">
             {(
@@ -384,10 +385,10 @@ export function StudyPage() {
                 ["긴 휴식", long, setLong],
               ] as const
             ).map(([label, value, set]) => (
-              <label key={label}>
-                {label}
+              <label key={t(label)}>
+                {t(label)}
                 <NumberField
-                  aria-label={`${label} 분`}
+                  aria-label={t("{0} 분", [String(label)])}
 
                   min={1}
                   max={180}
@@ -396,15 +397,12 @@ export function StudyPage() {
                     mode === "free" || !!state?.elapsed || state?.running
                   }
                   onValueChange={set}
-                />
-                분
-              </label>
+                />{t("분")}{" "}</label>
             ))}
           </div>
           {mode === "pomodoro" && !!state?.round && (
             <p className="muted">
-              {(state.round % 4) + 1} / 4 세션
-            </p>
+              {(state.round % 4) + 1}{" "}{t("/ 4 세션")}{" "}</p>
           )}
           {(!state || (!state.running && !state.elapsed && !state.round)) && (
             <button
@@ -416,26 +414,24 @@ export function StudyPage() {
                   .catch((e) => notify(String(e), true))
               }
             >
-              <Play size={18} />
-              집중 시작
-            </button>
+              <Play size={18} />{t("집중 시작")}{" "}</button>
           )}
           {state && (state.running || state.elapsed > 0 || state.round > 0) && (
             <Controls state={state} />
           )}
         </section>
         <section className="glass focus-history">
-          <h2>요일별 집중 시간</h2>
+          <h2>{t("요일별 집중 시간")}</h2>
           <div className="focus-bars">
             {days.map((d, i) => {
               const s = totals.find((t) => t.day === d)?.seconds || 0;
               return (
                 <div key={d}>
-                  <small>{Math.floor(s / 60)}분</small>
+                  <small>{Math.floor(s / 60)}{t("분")}</small>
                   <div className="focus-bar-track">
                     <span style={{ height: `${(s / max) * 100}%` }} />
                   </div>
-                  <span>{["월", "화", "수", "목", "금", "토", "일"][i]}</span>
+                  <span>{[t("월"), t("화"), t("수"), t("목"), t("금"), t("토"), t("일")][i]}</span>
                 </div>
               );
             })}

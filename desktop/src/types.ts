@@ -78,6 +78,8 @@ export type ReminderSettings = {
   volume: number;
 };
 export type ReminderPayload = {
+  language?: import("./i18n").Language;
+  due_today?: boolean;
   title: string;
   message: string;
   urgent: boolean;
@@ -104,6 +106,7 @@ export type Preferences = {
   glass: boolean;
   reduce_motion: boolean;
   font_mode: string;
+  language?: import("./i18n").Language;
   catholic: boolean;
   birthday: boolean;
   avatar: string;

@@ -21,21 +21,22 @@ pub(crate) fn campus(url: &url::Url) -> bool {
 }
 
 #[tauri::command]
-pub async fn auth_open(app: AppHandle, webview: Webview, theme: Option<String>, font: Option<String>) -> Result<(), String> {
+pub async fn auth_open(app: AppHandle, webview: Webview, theme: Option<String>, font: Option<String>, language: Option<String>) -> Result<(), String> {
     trusted(&webview, &["main"])?;
+    let language = match language.as_deref() { Some("en") => "en", Some("ja") => "ja", _ => "ko" };
     let gate = app.state::<AuthGate>();
     let _guard = gate.0.lock().map_err(|_| "로그인 창을 준비하지 못했습니다.")?;
     if let Some(window) = app.get_window("login") {
         window.unminimize().map_err(|_| "로그인 창을 복원하지 못했습니다.")?;
         window.show().map_err(|_| "로그인 창을 표시하지 못했습니다.")?;
         window.set_focus().map_err(|_| "로그인 창을 표시하지 못했습니다.")?;
-        let _ = app.emit_to("login", "auth:theme", json!({"theme":theme,"font":font}));
+        let _ = app.emit_to("login", "auth:theme", json!({"theme":theme,"font":font,"language":language}));
         crate::focus_developer(&app);
         return Ok(());
     }
     let theme = theme.filter(|t| ["pink","sky","mint","purple","dark","peach","amber","olive","lavender"].contains(&t.as_str())).unwrap_or("pink".into());
     let font = if font.as_deref() == Some("windows") { "windows" } else { "pretendard" };
-    let page = format!("login.html?theme={theme}&font={font}");
+    let page = format!("login.html?theme={theme}&font={font}&language={language}");
     WebviewWindowBuilder::new(&app, "login", WebviewUrl::App(page.into()))
         .additional_browser_args(crate::reminder::UI_ARGS).title("Calix 로그인").inner_size(1040.0, 780.0).min_inner_size(820.0, 600.0)
         .decorations(false).always_on_top(!app.state::<crate::DeveloperState>().0.load(std::sync::atomic::Ordering::SeqCst)).center().build()

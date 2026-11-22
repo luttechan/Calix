@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Bell, BellRing, Check, Volume2, X, ArrowUpRight } from "lucide-react";
-import { dueText } from "./dates";
+import { ArrowRight, Bell, BellRing, ClipboardList, Play, Volume2, X } from "lucide-react";
 import type { ReminderPayload } from "./types";
 import { acceptReminder } from "./reminderState";
+import { locale, setLanguage, t, useLanguage } from "./i18n";
+import { dragWindow } from "./windowDrag";
 function useSound(sound: string, volume: number, signal: unknown) {
   const [blocked, setBlocked] = useState(false);
   const current = useRef<HTMLAudioElement | null>(null);
@@ -47,54 +48,53 @@ export function ReminderCard({
   onClose: () => void;
   onOpen: (key: string) => void;
 }) {
+  useLanguage();
   const { blocked, play } = useSound(payload.sound, payload.volume, payload);
+  const time = new Intl.DateTimeFormat(locale(), {
+    timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+  });
+  const day = new Intl.DateTimeFormat(locale(), { timeZone: "Asia/Seoul", month: "short", day: "numeric" });
+  const count = new Intl.NumberFormat(locale()).format(payload.total);
   return (
     <article className={`reminder-card ${payload.urgent ? "urgent" : ""}`}>
-      <header className="reminder-brand" data-tauri-drag-region>
+      <header className="reminder-brand" onMouseDown={dragWindow}>
         <span>
           <img src="/assets/icons/calix.svg" alt="" />
           Calix
         </span>
         <button
           className="icon-button"
-          aria-label="알림 닫기"
+          aria-label={t("알림 닫기")}
           onClick={onClose}
         >
           <X size={18} />
         </button>
       </header>
       <div className="reminder-intro">
-        <span className="reminder-bell" aria-hidden="true">
-          {payload.urgent ? <BellRing size={22} /> : <Bell size={22} />}
-        </span>
-        <div>
-          <p className="eyebrow">{payload.urgent ? "긴급 REMIND" : "REMIND"}</p>
-          <h1>{payload.title}</h1>
-        </div>
+        {payload.urgent ? <BellRing size={20} aria-hidden="true" /> : <Bell size={20} aria-hidden="true" />}
+        <h1>{t(payload.urgent ? "마감 임박" : payload.due_today ? "오늘 마감" : "다가오는 마감")}</h1>
+        <span className="reminder-count" aria-label={t("총 {0}건", [count])}>{count}</span>
       </div>
-      <div className="reminder-list-heading">
-        <strong>마감 예정</strong>
-        <span>총 {payload.total}건</span>
-      </div>
-      <div className="reminder-events" role="region" aria-label="마감 예정 일정" tabIndex={0}>
-        {payload.events.map((event) => (
+      <div className="reminder-events" role="region" aria-label={t("마감 예정 일정")} tabIndex={0}>
+        {payload.events.map((event) => {
+          const due = new Date(event.due_at ?? "");
+          const valid = Number.isFinite(due.getTime());
+          const assignment = event.kind === "assignment";
+          return (
           <button key={event.key} onClick={() => onOpen(event.key)}>
-            <span className={`reminder-type ${event.kind}`}>
-              {event.kind === "assignment" ? "과제" : "영상"}
+            <span className={`reminder-type ${event.kind}`} aria-label={t(assignment ? "과제" : "영상")} title={t(assignment ? "과제" : "영상")}>
+              {assignment ? <ClipboardList size={17} aria-hidden="true" /> : <Play size={17} aria-hidden="true" />}
             </span>
-            <span>
+            <span className="reminder-event-name">
               <strong title={event.title}>{event.title}</strong>
-              <small>
-                <span title={event.course_name}>{event.course_name}</span>
-                <time dateTime={event.due_at ?? undefined}>{dueText(event.due_at)}</time>
-              </small>
+              <small title={event.course_name}>{event.course_name}</small>
             </span>
-            <ArrowUpRight size={16} />
+            {valid && <time dateTime={event.due_at!}><span>{day.format(due)}</span><strong>{time.format(due)}</strong></time>}
           </button>
-        ))}
+        );})}
         {payload.total > payload.events.length && (
           <p className="reminder-list-more">
-            나머지 {payload.total - payload.events.length}건은 일정에서 확인할 수 있습니다.
+            {t("그 외 {0}건", [payload.total - payload.events.length])}
           </p>
         )}
       </div>
@@ -102,14 +102,13 @@ export function ReminderCard({
         {blocked && (
           <button className="quiet" onClick={play}>
             <Volume2 size={16} />
-            소리 재생
+            {t("소리 재생")}
           </button>
         )}
         <span />
-        <button onClick={() => onOpen("")}>일정 보기</button>
-        <button className="primary" onClick={onClose}>
-          <Check size={16} />
-          확인
+        <button className="primary" onClick={() => onOpen("")}>
+          {t("일정 보기")}
+          <ArrowRight size={15} aria-hidden="true" />
         </button>
       </footer>
     </article>
@@ -157,6 +156,7 @@ export function ReminderWindow() {
   }, []);
   useEffect(() => {
     if (state.payload) {
+      setLanguage(state.payload.language);
       document.documentElement.dataset.theme = state.payload.theme;
       document.documentElement.dataset.glass = String(state.payload.glass);
     }

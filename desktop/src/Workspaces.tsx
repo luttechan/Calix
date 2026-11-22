@@ -1,3 +1,4 @@
+import { t, useLanguage } from "./i18n";
 import { useMemo, useState } from "react";
 import {
   Plus,
@@ -30,6 +31,7 @@ import { dateKey, dueText, status, weekdays } from "./dates";
 import type { Task, Preferences } from "./types";
 const taskCollator = new Intl.Collator("ko", { numeric: true });
 export function ChecklistPage() {
+  useLanguage();
   const { data, mutate, notify } = useCalix();
   const columns = useChecklistWidths();
   const [listPage, setListPage] = useState(0),
@@ -87,7 +89,7 @@ export function ChecklistPage() {
     <>
       <div className="page-heading">
         <div>
-          <h1>체크리스트</h1>
+          <h1>{t("체크리스트")}</h1>
         </div>
         <button
           className="primary"
@@ -97,8 +99,7 @@ export function ChecklistPage() {
             )
           }
         >
-          <Plus size={17} />할 일 추가
-        </button>
+          <Plus size={17} />{t("할 일 추가")}{" "}</button>
       </div>
       <div className="checklist-top">
         <div className="section-tabs">
@@ -117,8 +118,8 @@ export function ChecklistPage() {
           {data.sections.length < 5 && (
             <button
               className="icon-button"
-              aria-label="섹션 추가"
-              title="섹션 추가"
+              aria-label={t("섹션 추가")}
+              title={t("섹션 추가")}
               onClick={() => setSectionEdit(true)}
             >
               <Plus size={17} />
@@ -127,22 +128,18 @@ export function ChecklistPage() {
         </div>
         <div className="toolbar">
           <button onClick={() => setStatusEdit(true)}>
-            <SlidersHorizontal size={15} />
-            상태 편집
-          </button>
+            <SlidersHorizontal size={15} />{t("상태 편집")}{" "}</button>
           {section === 1 && (
             <button onClick={() => setBatch(true)}>
-              <Download size={15} />
-              일괄 가져오기
-            </button>
+              <Download size={15} />{t("일괄 가져오기")}{" "}</button>
           )}
         </div>
       </div>
       <section className="glass checklist-panel">
         <div className="checklist-tools">
           <input
-            aria-label="할 일 검색"
-            placeholder="할 일 검색"
+            aria-label={t("할 일 검색")}
+            placeholder={t("할 일 검색")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -151,10 +148,8 @@ export function ChecklistPage() {
               type="checkbox"
               checked={pending}
               onChange={(e) => setPending(e.target.checked)}
-            />
-            미완료만
-          </label>
-          <span className="muted">{rows.length}개</span>
+            />{t("미완료만")}{" "}</label>
+          <span className="muted">{rows.length}{t("개")}</span>
         </div>
         <div className="table-scroll">
           <table className="checklist-table" data-resized={Boolean(columns.widths)} style={columns.tableWidth ? {width: columns.tableWidth, minWidth: columns.tableWidth} : undefined}>
@@ -180,15 +175,15 @@ export function ChecklistPage() {
                         })
                       }
                     >
-                      {title}
+                      {t(title)}
                       {sort.key === key ? (
                         <span>{sort.descending ? "↓" : "↑"}</span>
                       ) : null}
                     </button>
-                    <span className="checklist-resize" {...columns.handle(index, title)} />
+                    <span className="checklist-resize" {...columns.handle(index, t(title))} />
                   </th>
                 ))}
-                <th className="delete-cell" aria-label="삭제" />
+                <th className="delete-cell" aria-label={t("삭제")} />
               </tr>
             </thead>
             <tbody>
@@ -197,7 +192,7 @@ export function ChecklistPage() {
                   <td>
                     <div className="task-title">
                       <input
-                        aria-label={`${task.title} 완료`}
+                        aria-label={t("{0} 완료", [String(task.title)])}
                         type="checkbox"
                         checked={task.status_kind === "done"}
                         onChange={(e) =>
@@ -208,7 +203,7 @@ export function ChecklistPage() {
                         }
                       />
                       <InlineCell
-                        label="할 일"
+                        label={t("할 일")}
                         value={task.title}
                         onCommit={(value) =>
                           save(task, "title", value || "새 할 일")
@@ -224,10 +219,10 @@ export function ChecklistPage() {
                       <InlineCell
                         label={
                           field === "category"
-                            ? "분류"
+                            ? t("분류")
                             : field === "role"
-                              ? "내 역할"
-                              : "담당 교수"
+                              ? t("내 역할")
+                              : t("담당 교수")
                         }
                         value={task[field]}
                         suggestions={suggestions[field]}
@@ -238,7 +233,7 @@ export function ChecklistPage() {
                   ))}
                   <td>
                     <InlineCell
-                      label="상태"
+                      label={t("상태")}
                       value={task.status_id}
                       display={task.status_name}
                       color={task.status_color}
@@ -251,7 +246,7 @@ export function ChecklistPage() {
                   </td>
                   <td>
                     <InlineCell
-                      label="비고"
+                      label={t("비고")}
                       value={task.note}
                       maxLength={20000}
                       onCommit={(value) => save(task, "note", value || "")}
@@ -260,8 +255,8 @@ export function ChecklistPage() {
                   <td className="delete-cell">
                     <button
                       className="icon-button row-delete"
-                      title="삭제"
-                      aria-label={`${task.title} 삭제`}
+                      title={t("삭제")}
+                      aria-label={t("{0} 삭제", [String(task.title)])}
                       onClick={() => setRemove(task)}
                     >
                       <Trash2 size={16} />
@@ -271,7 +266,7 @@ export function ChecklistPage() {
               ))}
             </tbody>
           </table>
-          {!rows.length && <div className="empty">할 일 없음</div>}
+          {!rows.length && <div className="empty">{t("할 일 없음")}</div>}
         </div>
         {pageCount > 1 && (
           <div className="pagination">
@@ -281,25 +276,21 @@ export function ChecklistPage() {
             <button
               disabled={!currentPage}
               onClick={() => setListPage(currentPage - 1)}
-            >
-              이전
-            </button>
+            >{t("이전")}{" "}</button>
             <button
               disabled={currentPage >= pageCount - 1}
               onClick={() => setListPage(currentPage + 1)}
-            >
-              다음
-            </button>
+            >{t("다음")}{" "}</button>
           </div>
         )}
       </section>
       {batch && <BatchImport onClose={() => setBatch(false)} />}
       {remove && (
-        <Modal title="정말 삭제하시겠습니까?" onClose={() => setRemove(null)}>
+        <Modal title={t("정말 삭제하시겠습니까?")} onClose={() => setRemove(null)}>
           <p className="muted">{remove.title}</p>
           <div className="dialog-actions">
             <span />
-            <button onClick={() => setRemove(null)}>취소</button>
+            <button onClick={() => setRemove(null)}>{t("취소")}</button>
             <button
               className="primary"
               onClick={() =>
@@ -310,14 +301,12 @@ export function ChecklistPage() {
                   })
                   .catch(() => {})
               }
-            >
-              삭제
-            </button>
+            >{t("삭제")}{" "}</button>
           </div>
         </Modal>
       )}
       {sectionEdit && (
-        <Modal title="섹션 추가" onClose={() => setSectionEdit(false)}>
+        <Modal title={t("섹션 추가")} onClose={() => setSectionEdit(false)}>
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -330,19 +319,17 @@ export function ChecklistPage() {
                 .catch(() => {});
             }}
           >
-            <label>
-              이름
-              <input name="name" autoFocus required maxLength={32} />
+            <label>{t("이름")}{" "}<input name="name" autoFocus required maxLength={32} />
             </label>
             <div className="dialog-actions">
               <span />
-              <button className="primary">추가</button>
+              <button className="primary">{t("추가")}</button>
             </div>
           </form>
         </Modal>
       )}
       {statusEdit && (
-        <Modal title="상태 편집" onClose={() => setStatusEdit(false)}>
+        <Modal title={t("상태 편집")} onClose={() => setStatusEdit(false)}>
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -357,9 +344,7 @@ export function ChecklistPage() {
                 .catch(() => {});
             }}
           >
-            <label>
-              상태
-              <select
+            <label>{t("상태")}{" "}<select
                 name="id"
                 onChange={(e) => {
                   const s = data.statuses.find(
@@ -376,7 +361,7 @@ export function ChecklistPage() {
                   }
                 }}
               >
-                <option value="">새 상태</option>
+                <option value="">{t("새 상태")}</option>
                 {data.statuses.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
@@ -384,27 +369,21 @@ export function ChecklistPage() {
                 ))}
               </select>
             </label>
-            <label>
-              이름
-              <input name="name" maxLength={24} required />
+            <label>{t("이름")}{" "}<input name="name" maxLength={24} required />
             </label>
             <div className="form-grid">
-              <label>
-                색상
-                <input name="color" type="color" defaultValue="#af527f" />
+              <label>{t("색상")}{" "}<input name="color" type="color" defaultValue="#af527f" />
               </label>
-              <label>
-                처리
-                <select name="kind">
-                  <option value="open">진행할 일</option>
-                  <option value="done">완료</option>
-                  <option value="cancel">취소</option>
+              <label>{t("처리")}{" "}<select name="kind">
+                  <option value="open">{t("진행할 일")}</option>
+                  <option value="done">{t("완료")}</option>
+                  <option value="cancel">{t("취소")}</option>
                 </select>
               </label>
             </div>
             <div className="dialog-actions">
               <span />
-              <button className="primary">저장</button>
+              <button className="primary">{t("저장")}</button>
             </div>
           </form>
         </Modal>
@@ -413,6 +392,7 @@ export function ChecklistPage() {
   );
 }
 function BatchImport({ onClose }: { onClose: () => void }) {
+  useLanguage();
   const { data, mutate, notify } = useCalix(),
     [page, setPage] = useState(0),
     [query, setQuery] = useState(""),
@@ -437,22 +417,22 @@ function BatchImport({ onClose }: { onClose: () => void }) {
       return next;
     });
   return (
-    <Modal title="일괄 가져오기" onClose={onClose} wide>
+    <Modal title={t("일괄 가져오기")} onClose={onClose} wide>
       <div className="import-toolbar">
         <input
-          aria-label="가져올 일정 검색"
-          placeholder="일정 또는 과목 검색"
+          aria-label={t("가져올 일정 검색")}
+          placeholder={t("일정 또는 과목 검색")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
         <select
-          aria-label="가져올 유형"
+          aria-label={t("가져올 유형")}
           value={kind}
           onChange={(e) => setKind(e.target.value)}
         >
-          <option value="all">모든 유형</option>
-          <option value="assignment">과제</option>
-          <option value="movie">영상</option>
+          <option value="all">{t("모든 유형")}</option>
+          <option value="assignment">{t("과제")}</option>
+          <option value="movie">{t("영상")}</option>
         </select>
       </div>
       <div className="import-list">
@@ -471,7 +451,7 @@ function BatchImport({ onClose }: { onClose: () => void }) {
             <small>{dueText(e.due_at)}</small>
           </label>
         ))}
-        {!rows.length && <div className="empty">가져올 일정 없음</div>}
+        {!rows.length && <div className="empty">{t("가져올 일정 없음")}</div>}
       </div>
       {pageCount > 1 && (
         <div className="pagination">
@@ -481,23 +461,17 @@ function BatchImport({ onClose }: { onClose: () => void }) {
           <button
             disabled={!currentPage}
             onClick={() => setPage(currentPage - 1)}
-          >
-            이전
-          </button>
+          >{t("이전")}{" "}</button>
           <button
             disabled={currentPage >= pageCount - 1}
             onClick={() => setPage(currentPage + 1)}
-          >
-            다음
-          </button>
+          >{t("다음")}{" "}</button>
         </div>
       )}
       <div className="dialog-actions">
         <button
           onClick={() => setKeys(new Set([...keys, ...rows.map((e) => e.key)]))}
-        >
-          전체 선택
-        </button>
+        >{t("전체 선택")}{" "}</button>
         <button
           onClick={() =>
             setKeys(
@@ -509,11 +483,9 @@ function BatchImport({ onClose }: { onClose: () => void }) {
                 ),
             )
           }
-        >
-          선택 해제
-        </button>
+        >{t("선택 해제")}{" "}</button>
         <span />
-        <small>{keys.size}개 선택</small>
+        <small>{keys.size}{t("개 선택")}</small>
         <button
           className="primary"
           disabled={!keys.size || saving}
@@ -527,15 +499,14 @@ function BatchImport({ onClose }: { onClose: () => void }) {
               .catch(() => {})
               .finally(() => setSaving(false));
           }}
-        >
-          가져오기
-        </button>
+        >{t("가져오기")}{" "}</button>
       </div>
     </Modal>
   );
 }
 export { TimetablePage } from "./Timetable";
 export function SettingsPage() {
+  useLanguage();
   const { data, mutate, notify, requestInstall, requestRestart, openCredits } =
       useCalix(),
     [type, setType] = useState(false),
@@ -597,13 +568,13 @@ export function SettingsPage() {
     <>
       <div className="page-heading">
         <div>
-          <h1>설정</h1>
+          <h1>{t("설정")}</h1>
         </div>
       </div>
       <div
         className="settings-categories"
         role="tablist"
-        aria-label="설정 카테고리"
+        aria-label={t("설정 카테고리")}
       >
         {categories.map(([id, label, Icon], index) => (
           <button
@@ -637,7 +608,7 @@ export function SettingsPage() {
             }}
           >
             <Icon aria-hidden="true" />
-            <span>{label}</span>
+            <span>{t(label)}</span>
           </button>
         ))}
       </div>
@@ -658,20 +629,20 @@ export function SettingsPage() {
           aria-labelledby="settings-tab-menus"
         >
           <section className="glass settings-panel menu-settings">
-            <div className="settings-heading"><SlidersHorizontal aria-hidden="true" /><h2>출결</h2></div>
+            <div className="settings-heading"><SlidersHorizontal aria-hidden="true" /><h2>{t("출결")}</h2></div>
             {([
               ["attendance_visible", "메뉴 표시", "사이드바에 출결 메뉴를 표시합니다."],
               ["attendance_sync", "출결 동기화", "다음 동기화부터 출결 기록을 가져옵니다."],
             ] as const).map(([key, label, description]) => (
               <label className="menu-option" key={key}>
                 <span>
-                  <strong>{label}</strong>
-                  <small>{description}</small>
+                  <strong>{t(label)}</strong>
+                  <small>{t(description)}</small>
                 </span>
                 <input
                   type="checkbox"
                   role="switch"
-                  aria-label={label}
+                  aria-label={t(label)}
                   checked={data.preferences[key] === true}
                   onChange={(event) => {
                     void mutate("preferences.save", {
@@ -717,8 +688,21 @@ export function SettingsPage() {
         <section className="glass settings-panel">
           <div className="settings-heading">
             <Palette aria-hidden="true" />
-            <h2>화면</h2>
+            <h2>{t("화면")}</h2>
           </div>
+          <label className="setting-row">
+            <strong>{t("언어")}</strong>
+            <select
+              value={data.preferences.language ?? "ko"}
+              onChange={(event) => void mutate("preferences.save", {
+                language: event.target.value,
+              }).catch(() => {})}
+            >
+              <option value="ko">한국어</option>
+              <option value="en">English</option>
+              <option value="ja">日本語</option>
+            </select>
+          </label>
           <div className="theme-picker">
             {themes.map(([id, name, color]) => (
               <button
@@ -732,20 +716,20 @@ export function SettingsPage() {
                 <span style={{ background: color }}>
                   {data.preferences.theme === id && <Check size={20} />}
                 </span>
-                {name}
+                {t(name)}
               </button>
             ))}
           </div>
           <div className="setting-row">
             <div>
-              <strong>글래스</strong>
-              <small>배경 블러와 반투명 패널</small>
+              <strong>{t("글래스")}</strong>
+              <small>{t("배경 블러와 반투명 패널")}</small>
             </div>
             <button
               className={`switch ${data.preferences.glass ? "on" : ""}`}
               role="switch"
               aria-checked={data.preferences.glass}
-              aria-label="글래스"
+              aria-label={t("글래스")}
               onClick={() =>
                 void mutate("preferences.save", {
                   glass: !data.preferences.glass,
@@ -756,12 +740,12 @@ export function SettingsPage() {
             </button>
           </div>
           <div className="setting-row">
-            <strong>모션 줄이기</strong>
+            <strong>{t("모션 줄이기")}</strong>
             <button
               type="button"
               className={`switch ${data.preferences.reduce_motion ? "on" : ""}`}
               role="switch"
-              aria-label="모션 줄이기"
+              aria-label={t("모션 줄이기")}
               aria-checked={data.preferences.reduce_motion === true}
               onClick={() => void mutate("preferences.save", {
                 reduce_motion: !data.preferences.reduce_motion,
@@ -771,9 +755,9 @@ export function SettingsPage() {
             </button>
           </div>
           <div className="setting-row">
-            <strong>글꼴</strong>
+            <strong>{t("글꼴")}</strong>
             <select
-              aria-label="글꼴"
+              aria-label={t("글꼴")}
               value={data.preferences.font_mode}
               onChange={(e) =>
                 void mutate("preferences.save", {
@@ -782,7 +766,7 @@ export function SettingsPage() {
               }
             >
               <option value="pretendard">Pretendard</option>
-              <option value="windows">Windows 기본</option>
+              <option value="windows">{t("Windows 기본")}</option>
             </select>
           </div>
         </section>
@@ -796,19 +780,13 @@ export function SettingsPage() {
         <section className="glass settings-panel">
           <div className="settings-heading">
             <CalendarDays aria-hidden="true" />
-            <h2>일정</h2>
+            <h2>{t("일정")}</h2>
           </div>
-          <button className="settings-link" onClick={() => setType(true)}>
-            내 일정 카테고리
-            <ArrowUpRight size={17} />
+          <button className="settings-link" onClick={() => setType(true)}>{t("내 일정 카테고리")}{" "}<ArrowUpRight size={17} />
           </button>
-          <button className="settings-link" onClick={() => setHoliday(true)}>
-            공휴일 등록
-            <ArrowUpRight size={17} />
+          <button className="settings-link" onClick={() => setHoliday(true)}>{t("공휴일 등록")}{" "}<ArrowUpRight size={17} />
           </button>
-          <button className="settings-link" onClick={() => setSpecial(true)}>
-            특수 일정 등록
-            <ArrowUpRight size={17} />
+          <button className="settings-link" onClick={() => setSpecial(true)}>{t("특수 일정 등록")}{" "}<ArrowUpRight size={17} />
           </button>
         </section>
       </div>
@@ -821,7 +799,7 @@ export function SettingsPage() {
         <section className="glass settings-panel">
           <div className="settings-heading">
             <Download aria-hidden="true" />
-            <h2>앱 관리</h2>
+            <h2>{t("앱 관리")}</h2>
           </div>
           {[
             ["updates", "업데이트 확인"],
@@ -839,7 +817,7 @@ export function SettingsPage() {
                 else void requestFile(mode);
               }}
             >
-              {label}
+              {t(label)}
               <ArrowUpRight size={17} />
             </button>
           ))}
@@ -850,9 +828,7 @@ export function SettingsPage() {
                 notify(e.message, true),
               )
             }
-          >
-            사용 설명서
-            <ArrowUpRight size={17} />
+          >{t("사용 설명서")}{" "}<ArrowUpRight size={17} />
           </button>
 
           <button
@@ -861,22 +837,20 @@ export function SettingsPage() {
               if (isTauri()) requestRestart();
               else notify("재시작은 Windows 앱에서 진행합니다.");
             }}
-          >
-            재시작
-            <ArrowUpRight size={17} />
+          >{t("재시작")}{" "}<ArrowUpRight size={17} />
           </button>
         </section>
         <section className="glass settings-panel">
-          <div className="settings-heading"><h2>외부 연동</h2></div>
+          <div className="settings-heading"><h2>{t("외부 연동")}</h2></div>
           <label className="menu-option">
             <span>
-              <strong>Anki 동기화</strong>
-              <small>같은 PC의 Anki에서 덱별 카드 수를 가져옵니다.</small>
+              <strong>{t("Anki 동기화")}</strong>
+              <small>{t("같은 PC의 Anki에서 덱별 카드 수를 가져옵니다.")}</small>
             </span>
             <input
               type="checkbox"
               role="switch"
-              aria-label="Anki 동기화"
+              aria-label={t("Anki 동기화")}
               checked={ankiSelection ?? data.preferences.anki_sync === true}
               disabled={ankiSelection !== null}
               onChange={(event) => {
@@ -892,7 +866,7 @@ export function SettingsPage() {
         <ResetSettings />
       </div>
       {type && (
-        <Modal title="내 일정 카테고리" onClose={() => setType(false)}>
+        <Modal title={t("내 일정 카테고리")} onClose={() => setType(false)}>
           <div className="type-list">
             {data.types.map((t) => (
               <div key={t.id}>
@@ -914,24 +888,20 @@ export function SettingsPage() {
             }}
           >
             <div className="form-grid">
-              <label>
-                이름
-                <input name="name" required maxLength={40} />
+              <label>{t("이름")}{" "}<input name="name" required maxLength={40} />
               </label>
-              <label>
-                색상
-                <input type="color" name="color" defaultValue="#af527f" />
+              <label>{t("색상")}{" "}<input type="color" name="color" defaultValue="#af527f" />
               </label>
             </div>
             <div className="dialog-actions">
               <span />
-              <button className="primary">추가</button>
+              <button className="primary">{t("추가")}</button>
             </div>
           </form>
         </Modal>
       )}
       {holiday && (
-        <Modal title="공휴일 등록" onClose={() => setHoliday(false)}>
+        <Modal title={t("공휴일 등록")} onClose={() => setHoliday(false)}>
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -945,17 +915,13 @@ export function SettingsPage() {
                 .catch(() => {});
             }}
           >
-            <label>
-              날짜
-              <DateField label="공휴일 날짜" name="date" defaultValue={dateKey()} />
+            <label>{t("날짜")}{" "}<DateField label={t("공휴일 날짜")} name="date" defaultValue={dateKey()} />
             </label>
-            <label>
-              이름
-              <input name="name" maxLength={80} required />
+            <label>{t("이름")}{" "}<input name="name" maxLength={80} required />
             </label>
             <div className="dialog-actions">
               <span />
-              <button className="primary">등록</button>
+              <button className="primary">{t("등록")}</button>
             </div>
           </form>
         </Modal>
@@ -971,14 +937,14 @@ export function SettingsPage() {
       )}
       {restore && (
         <Modal
-          title="백업을 복원하시겠습니까?"
+          title={t("백업을 복원하시겠습니까?")}
           onClose={() => setRestore(null)}
         >
-          <p className="muted">현재 자료를 백업 파일로 바꿉니다.</p>
-          <label>백업 비밀번호<input type="password" autoComplete="current-password" placeholder="암호화된 백업만 입력" value={backupPassword} onChange={event => setBackupPassword(event.target.value)} /></label>
+          <p className="muted">{t("현재 자료를 백업 파일로 바꿉니다.")}</p>
+          <label>{t("백업 비밀번호")}<input type="password" autoComplete="current-password" placeholder={t("암호화된 백업만 입력")} value={backupPassword} onChange={event => setBackupPassword(event.target.value)} /></label>
           <div className="dialog-actions">
             <span />
-            <button onClick={() => setRestore(null)}>취소</button>
+            <button onClick={() => setRestore(null)}>{t("취소")}</button>
             <button
               className="primary"
               disabled={fileBusy}
@@ -993,14 +959,12 @@ export function SettingsPage() {
                   .catch(() => {})
                   .finally(() => setFileBusy(false));
               }}
-            >
-              복원
-            </button>
+            >{t("복원")}{" "}</button>
           </div>
         </Modal>
       )}
       {special && (
-        <Modal title="특수 일정 등록" className="settings-choice-dialog" onClose={() => setSpecial(false)}>
+        <Modal title={t("특수 일정 등록")} className="settings-choice-dialog" onClose={() => setSpecial(false)}>
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -1015,7 +979,7 @@ export function SettingsPage() {
           >
             <div className="settings-choice-list">
               <label className="menu-option">
-                <strong>가톨릭 일정</strong>
+                <strong>{t("가톨릭 일정")}</strong>
                 <input name="catholic" type="checkbox" role="switch" defaultChecked={data.preferences.catholic} />
               </label>
               <label className="menu-option">
@@ -1025,8 +989,8 @@ export function SettingsPage() {
             </div>
             <div className="dialog-actions">
               <span />
-              <button type="button" onClick={() => setSpecial(false)}>취소</button>
-              <button className="primary">저장</button>
+              <button type="button" onClick={() => setSpecial(false)}>{t("취소")}</button>
+              <button className="primary">{t("저장")}</button>
             </div>
           </form>
         </Modal>

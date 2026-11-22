@@ -1,3 +1,4 @@
+import { t, useLanguage } from "./i18n";
 import { useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { Clock3 } from "lucide-react";
@@ -12,10 +13,10 @@ const hour12 = (hour: number) => hour % 12 || 12;
 
 export function readTime(text: string, reference: string): string | null {
   let input = text.trim();
-  const prefix = input.match(/^(오전|오후)/);
-  const period = prefix ?? input.match(/(오전|오후)$/);
-  const afternoon = period?.[1] === "오후";
-  if (period) input = (prefix ? input.slice(2) : input.slice(0, -2)).trim();
+  const prefix = input.match(/^(오전|오후|午前|午後|AM|PM)/i);
+  const period = prefix ?? input.match(/(오전|오후|午前|午後|AM|PM)$/i);
+  const afternoon = /^(오후|午後|PM)$/i.test(period?.[1] ?? "");
+  if (period) input = (prefix ? input.slice(period[0].length) : input.slice(0, -period[0].length)).trim();
   if (period && !input) {
     const [hour, minute] = reference.split(":").map(Number);
     return format(hour % 12 + (afternoon ? 12 : 0), minute);
@@ -30,7 +31,7 @@ export function readTime(text: string, reference: string): string | null {
 
 const showTime = (value: string) => {
   const [hour, minute] = value.split(":").map(Number);
-  return `${hour >= 12 ? "오후" : "오전"} ${format(hour12(hour), minute)}`;
+  return `${t(hour >= 12 ? "오후" : "오전")} ${format(hour12(hour), minute)}`;
 };
 
 export function TimeField({
@@ -44,6 +45,7 @@ export function TimeField({
   value: string;
   onChange: (value: string) => void;
 }) {
+  useLanguage();
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
   const anchor = useRef<HTMLDivElement>(null);
@@ -75,7 +77,7 @@ export function TimeField({
             const text = event.target.value.slice(0, 24);
             setDraft(text);
             const next = readTime(text, value);
-            event.target.setCustomValidity(next ? "" : "시간을 확인하세요.");
+            event.target.setCustomValidity(next ? "" : t("시간을 확인하세요."));
             if (next) onChange(next);
           }}
           onBlur={(event) => {
@@ -91,7 +93,7 @@ export function TimeField({
         <button
           type="button"
           className="time-field-trigger"
-          aria-label={`${label} 시간 선택`}
+          aria-label={t("{0} 시간 선택", [String(label)])}
           aria-haspopup="dialog"
           aria-expanded={open}
           tabIndex={-1}
@@ -139,6 +141,7 @@ function ClockPicker({
   onClose: () => void;
   onPick: (value: string) => void;
 }) {
+  useLanguage();
   const [hour, setHour] = useState(() => Number(value.slice(0, 2)));
   const [minute, setMinute] = useState(() => Number(value.slice(3, 5)));
   const popup = useRef<HTMLDivElement>(null);
@@ -175,30 +178,30 @@ function ClockPicker({
   }, [anchor]);
   const choices = (
     <>
-      <div className="segmented time-picker-period" role="group" aria-label="오전 또는 오후">
+      <div className="segmented time-picker-period" role="group" aria-label={t("오전 또는 오후")}>
         <button type="button" aria-pressed={hour < 12} className={hour < 12 ? "selected" : ""}
-          onClick={() => setHour(hour % 12)}>오전</button>
+          onClick={() => setHour(hour % 12)}>{t("오전")}</button>
         <button type="button" aria-pressed={hour >= 12} className={hour >= 12 ? "selected" : ""}
-          onClick={() => setHour(hour % 12 + 12)}>오후</button>
+          onClick={() => setHour(hour % 12 + 12)}>{t("오후")}</button>
       </div>
       <div className="time-picker-columns">
         <div>
-          <span>시</span>
-          <div className="time-picker-options" role="group" aria-label="시 선택"
+          <span>{t("시")}</span>
+          <div className="time-picker-options" role="group" aria-label={t("시 선택")}
             onKeyDown={(event) => moveOption(event, hours, hour12(hour), selectHour)}>
             {hours.map((value) => (
-              <button type="button" key={value} aria-label={`${value}시`} data-option={value}
+              <button type="button" key={value} aria-label={t("{0}시", [String(value)])} data-option={value}
                 tabIndex={hour12(hour) === value ? 0 : -1}
                 aria-pressed={hour12(hour) === value} onClick={() => selectHour(value)}>{pad(value)}</button>
             ))}
           </div>
         </div>
         <div>
-          <span>분</span>
-          <div className="time-picker-options" role="group" aria-label="분 선택"
+          <span>{t("분")}</span>
+          <div className="time-picker-options" role="group" aria-label={t("분 선택")}
             onKeyDown={(event) => moveOption(event, minutes, minute, setMinute)}>
             {minutes.map((value) => (
-              <button type="button" key={value} aria-label={`${value}분`} data-option={value}
+              <button type="button" key={value} aria-label={t("{0}분", [String(value)])} data-option={value}
                 tabIndex={minute === value ? 0 : -1}
                 aria-pressed={minute === value} onClick={() => setMinute(value)}>{pad(value)}</button>
             ))}
@@ -207,18 +210,18 @@ function ClockPicker({
       </div>
       <footer className="time-picker-actions">
         <output aria-live="polite">{showTime(format(hour, minute))}</output>
-        <button className="primary" type="button" onClick={() => onPick(format(hour, minute))}>적용</button>
+        <button className="primary" type="button" onClick={() => onPick(format(hour, minute))}>{t("적용")}</button>
       </footer>
     </>
   );
   if (!("showPopover" in HTMLElement.prototype)) {
     return createPortal(
-      <Modal title={`${label} 시간 선택`} onClose={onClose} className="time-picker-fallback">{choices}</Modal>,
+      <Modal title={t("{0} 시간 선택", [String(label)])} onClose={onClose} className="time-picker-fallback">{choices}</Modal>,
       document.body,
     );
   }
   return (
-    <div ref={popup} role="dialog" aria-label={`${label} 시간 선택`} popover="auto" className="time-picker"
+    <div ref={popup} role="dialog" aria-label={t("{0} 시간 선택", [String(label)])} popover="auto" className="time-picker"
       onToggle={(event) => { if (event.newState === "closed") onClose(); }}>
       {choices}
     </div>

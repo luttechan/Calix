@@ -1,3 +1,4 @@
+import { t, useLanguage } from "./i18n";
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowDownToLine,
@@ -31,6 +32,7 @@ export function UpdateDialog({
   onClose: () => void;
   onInstall: () => void;
 }) {
+  useLanguage();
   const { notify, data, soundError } = useCalix(),
     [state, setState] = useState<State>({
       phase: "checking",
@@ -85,7 +87,7 @@ export function UpdateDialog({
   }, []);
   const working = state.phase === "checking" || state.phase === "downloading";
   return (
-    <Modal title="업데이트" onClose={onClose}>
+    <Modal title={t("업데이트")} onClose={onClose}>
       <div className="update-summary">
         <div className={`update-symbol ${working ? "working" : ""}`}>
           {working ? (
@@ -97,7 +99,7 @@ export function UpdateDialog({
           )}
         </div>
         <p className="eyebrow">Calix {state.current}</p>
-        <h2>{state.message}</h2>
+        <h2>{t(state.message ?? "")}</h2>
         {state.latest && (
           <p className="muted">{state.latest.replace(/^v/, "")}</p>
         )}
@@ -116,8 +118,7 @@ export function UpdateDialog({
               notify(error.message, true),
             )
           }
-        >
-          릴리즈 <ArrowUpRight size={15} />
+        >{t("릴리즈")}{" "}<ArrowUpRight size={15} />
         </button>
         <span />
         {!working && state.phase !== "ready" && (
@@ -126,9 +127,7 @@ export function UpdateDialog({
               void rpc("update.check").catch((error) => notify(error.message, true))
             }
           >
-            <RefreshCw size={15} />
-            다시 확인
-          </button>
+            <RefreshCw size={15} />{t("다시 확인")}{" "}</button>
         )}
         {state.phase === "available" && (
           <button
@@ -139,9 +138,7 @@ export function UpdateDialog({
               )
             }
           >
-            <ArrowDownToLine size={16} />
-            다운로드
-          </button>
+            <ArrowDownToLine size={16} />{t("다운로드")}{" "}</button>
         )}
         {state.phase === "ready" && (
           <button
@@ -150,9 +147,7 @@ export function UpdateDialog({
               keep.current = true;
               onInstall();
             }}
-          >
-            설치하고 종료
-          </button>
+          >{t("설치하고 종료")}{" "}</button>
         )}
       </div>
     </Modal>

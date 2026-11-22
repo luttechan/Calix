@@ -1,7 +1,9 @@
+import { t, useLanguage } from "./i18n";
 import { useState } from "react";
 import { useCalix } from "./App";
 import { studyPlan, busyDates } from "./planningState";
 export function PlanningPanel({ now }: { now: Date }) {
+  useLanguage();
   const { data, openEvent } = useCalix();
   const [budget, setBudget] = useState(60),
     [minutes, setMinutes] = useState(30);
@@ -10,40 +12,33 @@ export function PlanningPanel({ now }: { now: Date }) {
   return (
     <div className="deadline-grid planning-panel">
       <article className="overview-card">
-        <h2>오늘의 학습 계획</h2>
+        <h2>{t("오늘의 학습 계획")}</h2>
         <div className="plan-fields">
-          <label>
-            학습 시간
-            <select
-              aria-label="학습 시간"
+          <label>{t("학습 시간")}{" "}<select
+              aria-label={t("학습 시간")}
               value={budget}
               onChange={(e) => setBudget(Number(e.target.value))}
             >
               {[30, 60, 90, 120, 180].map((n) => (
                 <option key={n} value={n}>
-                  {n}분
-                </option>
+                  {n}{t("분")}{" "}</option>
               ))}
             </select>
           </label>
-          <label>
-            항목당 예상
-            <select
-              aria-label="항목당 예상 시간"
+          <label>{t("항목당 예상")}{" "}<select
+              aria-label={t("항목당 예상 시간")}
               value={minutes}
               onChange={(e) => setMinutes(Number(e.target.value))}
             >
               {[15, 30, 45, 60].map((n) => (
                 <option key={n} value={n}>
-                  {n}분
-                </option>
+                  {n}{t("분")}{" "}</option>
               ))}
             </select>
           </label>
         </div>
         <p className="plan-summary muted" aria-live="polite">
-          {plan.length}개, 예상 {plan.length * minutes}분
-        </p>
+          {plan.length}{t("개, 예상")}{" "}{plan.length * minutes}{t("분")}{" "}</p>
         <div className="overview-items">
           {plan.map((e, i) => (
             <button
@@ -63,19 +58,18 @@ export function PlanningPanel({ now }: { now: Date }) {
           <p>
             {budget < minutes &&
             studyPlan(data.events, now, minutes, minutes).length
-              ? "학습 시간 부족"
-              : "일정 없음"}
+              ? t("학습 시간 부족")
+              : t("일정 없음")}
           </p>
         )}
       </article>
       <article className="overview-card">
-        <h2>마감 밀집 경고</h2>
+        <h2>{t("마감 밀집 경고")}</h2>
         {crowded.length ? (
           crowded.map(([day, items]) => (
             <details key={day}>
               <summary>
-                {day}, {items.length}개
-              </summary>
+                {day}, {items.length}{t("개")}{" "}</summary>
               <div className="overview-items">
                 {items.map((e) => (
                   <button
@@ -90,7 +84,7 @@ export function PlanningPanel({ now }: { now: Date }) {
             </details>
           ))
         ) : (
-          <p className="muted">밀집 마감 없음</p>
+          <p className="muted">{t("밀집 마감 없음")}</p>
         )}
       </article>
     </div>

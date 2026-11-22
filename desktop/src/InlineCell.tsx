@@ -1,3 +1,4 @@
+import { t, useLanguage } from "./i18n";
 import { useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import { flushSync } from "react-dom";
 
@@ -19,6 +20,7 @@ const styledSuggestions = typeof HTMLElement !== "undefined" &&
 export function InlineCell({
   value, label, display, type = "text", suggestions, maxLength = 200, options, color, onCommit,
 }: Props) {
+  useLanguage();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [active, setActive] = useState(-1);
@@ -115,7 +117,7 @@ export function InlineCell({
         onChange={(event) => { setDraft(event.target.value); setActive(-1); }}
         onKeyDown={keys} onBlur={() => finish(draft)} />
       {open && (
-        <div ref={popup} id={id} role="listbox" aria-label={`${label} 제안`} popover="manual"
+        <div ref={popup} id={id} role="listbox" aria-label={t("{0} 제안", [String(label)])} popover="manual"
           className="cell-suggestions" style={{ "--cell-anchor": anchor } as CSSProperties}>
           {matches.map((item, index) => (
             <div key={item} id={`${id}-${index}`} role="option" aria-selected={active === index}

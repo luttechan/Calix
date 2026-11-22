@@ -1,6 +1,8 @@
 use serde_json::{json, Value};
 use std::{sync::Mutex, time::{Duration, Instant}};
-use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, Webview, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, Webview, WebviewUrl, WebviewWindowBuilder};
+
+const REMINDER_WIDTH: f64 = 444.0;
 
 pub const UI_ARGS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows";
 #[derive(Default)]
@@ -16,6 +18,9 @@ fn validate(value: &Value) -> Result<(),String> {
         if value[key].as_str().is_none_or(|text| text.is_empty() || text.len()>limit) { return Err("알림 내용을 확인하세요.".into()); }
     }
     if !["pink","sky","mint","purple","dark","peach","amber","olive","lavender"].contains(&value["theme"].as_str().unwrap_or("")) || value["urgent"].as_bool().is_none() || value["glass"].as_bool().is_none() { return Err("알림 설정을 확인하세요.".into()); }
+    if let Some(language) = value.get("language") {
+        if !matches!(language.as_str(), Some("ko" | "en" | "ja")) { return Err("알림 설정을 확인하세요.".into()); }
+    }
     let sound=value["sound"].as_str().ok_or("음원을 확인하세요.")?;
     if sound!="" && sound!="crit" && !(1..=10).any(|n|sound==n.to_string()) { return Err("음원을 확인하세요.".into()); }
     if value["volume"].as_f64().is_none_or(|n| !(0.0..=1.0).contains(&n)) { return Err("음량을 확인하세요.".into()); }
@@ -53,29 +58,39 @@ fn publish(app: &AppHandle, payload: Value) -> Result<u64, String> {
 fn show(app:&AppHandle,payload:Value)->Result<u64,String>{
     validate(&payload)?;
     let visible=!app.state::<ReminderState>().checking.load(std::sync::atomic::Ordering::SeqCst);
+    let monitor = app.get_webview_window("main")
+        .and_then(|window| window.current_monitor().ok().flatten())
+        .or_else(|| app.primary_monitor().ok().flatten());
+    let rows = payload["events"].as_array().map_or(0, Vec::len);
+    let available = monitor.as_ref()
+        .map_or(528.0, |m| (m.work_area().size.height as f64 / m.scale_factor() - 40.0).clamp(220.0, 528.0));
+    let height = (174.0 + 63.0 * rows.clamp(1, 6) as f64).min(available);
+    let position = monitor.as_ref().map(|m| {
+        let scale = m.scale_factor();
+        let area = m.work_area();
+        PhysicalPosition::new(
+            area.position.x + (area.size.width as i32 - ((REMINDER_WIDTH + 16.0) * scale) as i32).max(0),
+            area.position.y + (area.size.height as i32 - ((height + 16.0) * scale) as i32).max(0),
+        )
+    });
     let revision=publish(app,payload)?;
     if let Some(window)=app.get_webview_window("reminder") {
+        window.set_size(LogicalSize::new(REMINDER_WIDTH, height)).map_err(|_| "알림 창 크기를 조정하지 못했습니다.")?;
+        if let Some(position) = position { let _ = window.set_position(position); }
         if visible { window.show().map_err(|_|"알림을 표시하지 못했습니다.")?; }
         crate::focus_developer(app);
         return Ok(revision);
     }
     let developer=app.state::<crate::DeveloperState>().0.load(std::sync::atomic::Ordering::SeqCst);
-    let monitor=app.primary_monitor().ok().flatten();
-    let height=monitor.as_ref().map(|m|(m.size().height as f64/m.scale_factor()-100.0).clamp(360.0,580.0)).unwrap_or(580.0);
     let mut builder=WebviewWindowBuilder::new(app,"reminder",WebviewUrl::App("reminder.html".into()))
-        .title("Calix 알림").inner_size(440.0,height).decorations(false).resizable(false)
+        .title("Calix").inner_size(REMINDER_WIDTH,height).decorations(false).resizable(false)
         .visible(visible).focused(false).skip_taskbar(true).always_on_top(!developer)
         .additional_browser_args(UI_ARGS);
     if !visible {
         builder=builder.data_directory(std::env::temp_dir().join(format!("calix-media-check-{}",std::process::id())));
     }
     let window=builder.build().map_err(|e|format!("알림 창을 열지 못했습니다. ({e})"))?;
-    if let Some(m)=monitor {
-        let scale=m.scale_factor();let p=m.position();
-        let x=p.x+(m.size().width as i32-(464.0*scale) as i32).max(0);
-        let y=p.y+(m.size().height as i32-((height+80.0)*scale) as i32).max(0);
-        let _=window.set_position(PhysicalPosition::new(x,y));
-    }
+    if let Some(position) = position { let _ = window.set_position(position); }
     crate::focus_developer(app);
     Ok(revision)
 }

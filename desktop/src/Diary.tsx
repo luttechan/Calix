@@ -1,3 +1,4 @@
+import { t, useLanguage } from "./i18n";
 import { useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -21,6 +22,7 @@ import { dateKey } from "./dates";
 import { DateField } from "./ChecklistDeadline";
 import type { Summary, Journal } from "./types";
 export function DiaryPage({ active = true }: { active?: boolean }) {
+  useLanguage();
   const { data, notify, leave, mutate, soundError } = useCalix();
   const [secret, setSecret] = useState(false),
     [unlocked, setUnlocked] = useState(false),
@@ -206,23 +208,19 @@ export function DiaryPage({ active = true }: { active?: boolean }) {
     <>
       <div className="page-heading">
         <div>
-          <h1>일기장</h1>
+          <h1>{t("일기장")}</h1>
         </div>
         <div className="toolbar">
           <div className="segmented">
             <button
               className={!secret ? "selected" : ""}
               onClick={() => void switchMode(false)}
-            >
-              일반 일기
-            </button>
+            >{t("일반 일기")}{" "}</button>
             <button
               className={secret ? "selected" : ""}
               onClick={() => void switchMode(true)}
             >
-              <Lock size={13} />
-              비밀 일기
-            </button>
+              <Lock size={13} />{t("비밀 일기")}{" "}</button>
           </div>
           {(!secret || unlocked) && (
             <button
@@ -239,8 +237,7 @@ export function DiaryPage({ active = true }: { active?: boolean }) {
                   .catch((e) => notify(e.message, true))
               }
             >
-              <Plus size={17} />새 일기
-            </button>
+              <Plus size={17} />{t("새 일기")}{" "}</button>
           )}
         </div>
       </div>
@@ -249,7 +246,7 @@ export function DiaryPage({ active = true }: { active?: boolean }) {
           <div className="vault-symbol">
             <Lock size={31} />
           </div>
-          <h2>{initialized ? "비밀 일기" : "비밀 일기 만들기"}</h2>
+          <h2>{initialized ? t("비밀 일기") : t("비밀 일기 만들기")}</h2>
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -267,7 +264,7 @@ export function DiaryPage({ active = true }: { active?: boolean }) {
             }}
           >
             <label>
-              <span>{initialized ? "암호" : "암호 (12자 이상)"}</span>
+              <span>{initialized ? t("암호") : t("암호 (12자 이상)")}</span>
               <input
                 type="password"
                 autoComplete="off"
@@ -276,12 +273,12 @@ export function DiaryPage({ active = true }: { active?: boolean }) {
                 minLength={initialized ? 1 : 12}
                 maxLength={4096}
                 required
-                aria-label="비밀 일기 암호"
+                aria-label={t("비밀 일기 암호")}
               />
             </label>
             {error && <p className="danger">{error}</p>}
             <button className="primary" disabled={busy}>
-              {busy ? "확인 중" : initialized ? "잠금 해제" : "만들기"}
+              {busy ? t("확인 중") : initialized ? t("잠금 해제") : t("만들기")}
             </button>
           </form>
         </section>
@@ -290,11 +287,11 @@ export function DiaryPage({ active = true }: { active?: boolean }) {
           <aside className="journal-list">
             <div className="journal-list-title">
               <BookOpen size={17} />
-              <span>{entries.length}개 기록</span>
+              <span>{entries.length}{t("개 기록")}</span>
               {secret && (
                 <button
                   className="icon-button"
-                  title="잠금"
+                  title={t("잠금")}
                   onClick={() =>
                     void save()
                       .then(() => rpc("vault.lock"))
@@ -321,13 +318,13 @@ export function DiaryPage({ active = true }: { active?: boolean }) {
                 <strong>{entry.title}</strong>
               </button>
             ))}
-            {!entries.length && <p className="empty">아직 기록이 없습니다.</p>}
+            {!entries.length && <p className="empty">{t("아직 기록이 없습니다.")}</p>}
           </aside>
           <div className="journal-paper">
             <div className="journal-meta">
               <DateField
                 disabled={busy}
-                label="일기 날짜"
+                label={t("일기 날짜")}
                 value={date}
                 onChange={(value) => {
                   setDate(value);
@@ -335,11 +332,11 @@ export function DiaryPage({ active = true }: { active?: boolean }) {
                   dirtyRef.current = true;
                 }}
               />
-              <span>{busy ? "저장 중" : dirty ? "수정 중" : "저장됨"}</span>
+              <span>{busy ? t("저장 중") : dirty ? t("수정 중") : t("저장됨")}</span>
               <button
                 className="icon-button"
                 disabled={!id}
-                title="일기 삭제"
+                title={t("일기 삭제")}
                 onClick={() => setRemove(true)}
               >
                 <Trash2 size={16} />
@@ -348,8 +345,8 @@ export function DiaryPage({ active = true }: { active?: boolean }) {
             <input
               disabled={busy}
               className="journal-title"
-              aria-label="일기 제목"
-              placeholder="오늘의 제목"
+              aria-label={t("일기 제목")}
+              placeholder={t("오늘의 제목")}
               maxLength={200}
               value={title}
               onChange={(e) => {
@@ -360,21 +357,21 @@ export function DiaryPage({ active = true }: { active?: boolean }) {
             />
             <div className="format-bar">
               <button
-                title="굵게 (Ctrl+B)"
+                title={t("굵게 (Ctrl+B)")}
                 aria-pressed={editor?.isActive("bold")}
                 onClick={() => editor?.chain().focus().toggleBold().run()}
               >
                 <Bold size={16} />
               </button>
               <button
-                title="기울임 (Ctrl+I)"
+                title={t("기울임 (Ctrl+I)")}
                 aria-pressed={editor?.isActive("italic")}
                 onClick={() => editor?.chain().focus().toggleItalic().run()}
               >
                 <Italic size={16} />
               </button>
               <button
-                title="밑줄 (Ctrl+U)"
+                title={t("밑줄 (Ctrl+U)")}
                 aria-pressed={editor?.isActive("underline")}
                 onClick={() => editor?.chain().focus().toggleUnderline().run()}
               >
@@ -382,7 +379,7 @@ export function DiaryPage({ active = true }: { active?: boolean }) {
               </button>
               <input
                 type="color"
-                aria-label="글자 색"
+                aria-label={t("글자 색")}
                 defaultValue="#af527f"
                 onChange={(e) =>
                   editor?.chain().focus().setColor(e.target.value).run()
@@ -398,20 +395,18 @@ export function DiaryPage({ active = true }: { active?: boolean }) {
                     .catch((e) => notify(e.message, true))
                 }
               >
-                <Check size={15} />
-                저장
-              </button>
+                <Check size={15} />{t("저장")}{" "}</button>
             </div>
             <EditorContent editor={editor} />
           </div>
         </section>
       )}
       {remove && (
-        <Modal title="정말 삭제하시겠습니까?" onClose={() => setRemove(false)}>
+        <Modal title={t("정말 삭제하시겠습니까?")} onClose={() => setRemove(false)}>
           <p className="muted">{title}</p>
           <div className="dialog-actions">
             <span />
-            <button onClick={() => setRemove(false)}>취소</button>
+            <button onClick={() => setRemove(false)}>{t("취소")}</button>
             <button
               className="primary"
               onClick={() =>
@@ -423,9 +418,7 @@ export function DiaryPage({ active = true }: { active?: boolean }) {
                   })
                   .catch((e) => notify(e.message, true))
               }
-            >
-              삭제
-            </button>
+            >{t("삭제")}{" "}</button>
           </div>
         </Modal>
       )}

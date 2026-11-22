@@ -119,7 +119,7 @@ class EngineAPI:
         palette = self.settings.get("theme_palettes", {}).get(theme, {})
         if state["locked"]:
             return dict(
-                version="1.7.4", events=[], courses=[], types=[], sessions=[],
+                version="1.7.5", events=[], courses=[], types=[], sessions=[],
                 timetableTerms=[], mainTerm="", timetableConfigured=False,
                 sections=[], statuses=[], tasks=[], offDays=[], journals=[],
                 holidays={}, specialDates={}, lastSync="", syncSummary="",
@@ -129,13 +129,14 @@ class EngineAPI:
                                  reminders=self.settings.get("reminders", {}), nickname=self.settings.get("nickname", ""), greeting="{닉네임}님, 오셨군요!",
                                  onboarding_complete=True, attendance_visible=False, attendance_sync=False,
                                  developer_mode=False, font_mode=self.settings.get("font_mode", "pretendard"),
+                                 language=self.settings.get("language", "ko"),
                                  catholic=False, birthday=False, avatar=self.settings.get("avatar", "")),
             )
         events = self.store.events()
         semesters = self.store.timetable_config()
         year = datetime.now(KST).year
         return dict(
-            version="1.7.4",
+            version="1.7.5",
             events=[asdict(e) for e in events],
             courses=[asdict(c) for c in self.store.courses()],
             types=self.store.event_types(),
@@ -167,6 +168,7 @@ class EngineAPI:
                         ("reduce_motion", False),
                         ("developer_mode", False),
                         ("font_mode", "pretendard"),
+                        ("language", "ko"),
                         ("nickname", ""),
                         ("avatar", ""),
                         ("greeting", "{닉네임}님, 오셨군요!"),
@@ -579,6 +581,9 @@ class EngineAPI:
             if type(reduce_motion) is not bool:
                 raise ValueError("모션 줄이기 설정을 확인하세요.")
             mode = p.get("font_mode", self.settings.get("font_mode", "pretendard"))
+            language = p.get("language", self.settings.get("language", "ko"))
+            if language not in ("ko", "en", "ja"):
+                raise ValueError("지원하는 언어를 선택하세요.")
             if (
                 theme not in THEMES
                 or type(glass) is not bool
@@ -597,6 +602,7 @@ class EngineAPI:
                 glass=glass,
                 reduce_motion=reduce_motion,
                 font_mode=mode,
+                language=language,
                 developer_mode=developer_mode,
                 developer_acknowledged=developer_mode
                 and (

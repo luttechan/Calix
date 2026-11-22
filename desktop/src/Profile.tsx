@@ -1,3 +1,4 @@
+import { t, useLanguage } from "./i18n";
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
@@ -22,6 +23,7 @@ const themes = [
     ["lavender", "라벤더", "#aaa7dc"],
 ] as const;
 export function Onboarding() {
+  useLanguage();
   const { data, mutate } = useCalix(),
     dialog = useRef<HTMLDialogElement>(null);
   const [step, setStep] = useState(0),
@@ -85,17 +87,17 @@ export function Onboarding() {
             <img src="/assets/icons/calix.svg" alt="" />
           )}
         </div>
-        <h1>{step === 0 ? "닉네임 설정" : "테마 선택"}</h1>
+        <h1>{step === 0 ? t("닉네임 설정") : t("테마 선택")}</h1>
         {step === 0 ? (
           <label className="setup-name">
             <input
-              aria-label="닉네임"
+              aria-label={t("닉네임")}
               autoFocus
               required
               maxLength={30}
               value={nickname}
               onChange={(event) => setNickname(event.target.value)}
-              placeholder="닉네임"
+              placeholder={t("닉네임")}
               autoComplete="nickname"
             />
           </label>
@@ -115,7 +117,7 @@ export function Onboarding() {
                   <span style={{ background: color }}>
                     {theme === id && <Check size={22} />}
                   </span>
-                  {label}
+                  {t(label)}
                 </button>
               ))}
             </div>
@@ -128,23 +130,21 @@ export function Onboarding() {
               disabled={saving}
               onClick={() => setStep(0)}
             >
-              <ArrowLeft size={17} />
-              이전
-            </button>
+              <ArrowLeft size={17} />{t("이전")}{" "}</button>
           )}
           <span />
           <button className="primary" disabled={!nickname.trim() || saving}>
             {saving ? (
               <LoaderCircle size={18} className="spin" />
             ) : step === 0 ? (
-              "계속"
+              t("계속")
             ) : (
-              "시작하기"
+              t("시작하기")
             )}
             <ArrowRight size={17} />
           </button>
         </div>
-        <div className="setup-progress" aria-label={`${step + 1}/2 단계`}>
+        <div className="setup-progress" aria-label={t("{0}/2 단계", [String(step + 1)])}>
           <i className={step === 0 ? "active" : ""} />
           <i className={step === 1 ? "active" : ""} />
         </div>
@@ -153,6 +153,7 @@ export function Onboarding() {
   );
 }
 export function ProfileSettings() {
+  useLanguage();
   const photoInput = useRef<HTMLInputElement>(null);
   const photoRevision = useRef(0);
   const [avatar, setAvatar] = useState("");
@@ -183,7 +184,7 @@ export function ProfileSettings() {
         notify(
           error instanceof Error
             ? error.message
-            : "사진을 불러오지 못했습니다.",
+            : t("사진을 불러오지 못했습니다."),
         );
     } finally {
       if (generation === photoRevision.current) setPhotoLoading(false);
@@ -203,11 +204,11 @@ export function ProfileSettings() {
   return (
     <>
       <section className="glass settings-panel profile-settings">
-        <div className="settings-heading"><UserRound aria-hidden="true" /><h2>내 프로필</h2></div>
+        <div className="settings-heading"><UserRound aria-hidden="true" /><h2>{t("내 프로필")}</h2></div>
         <div className="profile-photo-editor">
           <span className="profile-photo-preview">
             {avatar ? (
-              <img src={avatar} alt="내 프로필 사진" />
+              <img src={avatar} alt={t("내 프로필 사진")} />
             ) : (
               <UserRound size={30} />
             )}
@@ -218,7 +219,7 @@ export function ProfileSettings() {
               disabled={photoLoading}
               onClick={() => photoInput.current?.click()}
             >
-              {photoLoading ? "불러오는 중" : "사진 선택"}
+              {photoLoading ? t("불러오는 중") : t("사진 선택")}
             </button>
             {avatar && (
               <button
@@ -226,16 +227,14 @@ export function ProfileSettings() {
                 className="quiet"
                 disabled={photoLoading}
                 onClick={() => setAvatar("")}
-              >
-                사진 삭제
-              </button>
+              >{t("사진 삭제")}{" "}</button>
             )}
           </div>
           <input
             ref={photoInput}
             type="file"
             accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
-            aria-label="프로필 사진 선택"
+            aria-label={t("프로필 사진 선택")}
             hidden
             onChange={(event) => {
               void choosePhoto(event.target.files?.[0]);
@@ -249,19 +248,15 @@ export function ProfileSettings() {
             void save();
           }}
         >
-          <label>
-            닉네임
-            <input
+          <label>{t("닉네임")}{" "}<input
               required
               maxLength={30}
               value={nickname}
               onChange={(event) => setNickname(event.target.value)}
             />
           </label>
-          <label>
-            홈 문구
-            <textarea
-              aria-label="홈 문구"
+          <label>{t("홈 문구")}{" "}<textarea
+              aria-label={t("홈 문구")}
               required
               maxLength={120}
               rows={2}
@@ -270,8 +265,7 @@ export function ProfileSettings() {
             />
           </label>
           <p className="muted profile-placeholder">
-            {"{닉네임}"} 은 닉네임으로 바뀝니다.
-          </p>
+            {t("{닉네임}")}{" "}{t("은 닉네임으로 바뀝니다.")}{" "}</p>
           <div className="greeting-preview">
             {greeting.replaceAll("{닉네임}", nickname || "나")}
           </div>
@@ -282,9 +276,7 @@ export function ProfileSettings() {
               disabled={
                 saving || photoLoading || !nickname.trim() || !greeting.trim()
               }
-            >
-              저장
-            </button>
+            >{t("저장")}{" "}</button>
           </div>
         </form>
       </section>
@@ -293,6 +285,7 @@ export function ProfileSettings() {
 }
 
 export function ResetSettings() {
+  useLanguage();
   const { mutate, resetView, notify } = useCalix();
   const [reset, setReset] = useState(false),
     [confirmed, setConfirmed] = useState(false),
@@ -314,8 +307,8 @@ export function ResetSettings() {
     <>
       <section className="glass settings-panel reset-panel">
         <div>
-          <h2>DB 초기화</h2>
-          <p>일정, 체크리스트, 시간표와 일기를 삭제합니다.</p>
+          <h2>{t("DB 초기화")}</h2>
+          <p>{t("일정, 체크리스트, 시간표와 일기를 삭제합니다.")}</p>
         </div>
         <button
           className="danger-button"
@@ -324,24 +317,19 @@ export function ResetSettings() {
             setReset(true);
           }}
         >
-          <Trash2 size={16} />
-          초기화
-        </button>
+          <Trash2 size={16} />{t("초기화")}{" "}</button>
       </section>
       {reset && (
         <Modal
-          title="모든 자료를 삭제하시겠습니까?"
+          title={t("모든 자료를 삭제하시겠습니까?")}
           onClose={() => {
             if (!resetting) setReset(false);
           }}
         >
           <div className="reset-warning">
             <Trash2 size={30} />
-            <strong>초기화 후 복구할 수 없습니다.</strong>
-            <p>
-              모든 계정의 앱 자료와 로그인 정보가 삭제됩니다. 별도로 내보낸 백업
-              파일은 유지됩니다.
-            </p>
+            <strong>{t("초기화 후 복구할 수 없습니다.")}</strong>
+            <p>{t("모든 계정의 앱 자료와 로그인 정보가 삭제됩니다. 별도로 내보낸 백업 파일은 유지됩니다.")}{" "}</p>
           </div>
           <label className="reset-confirm">
             <input
@@ -349,20 +337,16 @@ export function ResetSettings() {
               checked={confirmed}
               disabled={resetting}
               onChange={(event) => setConfirmed(event.target.checked)}
-            />
-            복구할 수 없음을 확인했습니다.
-          </label>
+            />{t("복구할 수 없음을 확인했습니다.")}{" "}</label>
           <div className="dialog-actions">
             <span />
-            <button disabled={resetting} onClick={() => setReset(false)}>
-              취소
-            </button>
+            <button disabled={resetting} onClick={() => setReset(false)}>{t("취소")}{" "}</button>
             <button
               className="danger-button"
               disabled={!confirmed || resetting}
               onClick={() => void erase()}
             >
-              {resetting ? "초기화 중" : "DB 초기화"}
+              {resetting ? t("초기화 중") : t("DB 초기화")}
             </button>
           </div>
         </Modal>

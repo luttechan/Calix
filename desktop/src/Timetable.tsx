@@ -1,3 +1,4 @@
+import { semesterName, t, useLanguage } from "./i18n";
 import {sessionLanes} from "./planningState";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Sun, Trash2, Monitor, ArrowUpRight } from "lucide-react";
@@ -12,6 +13,7 @@ const minute = (value: string) => {
   return h * 60 + m;
 };
 export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
+  useLanguage();
   const { data, mutate } = useCalix();
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
@@ -76,8 +78,8 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
     return (
       s.course_id > 0 && (
         <div className="session-work">
-          <span>과제 {count.assignment}</span>
-          <span>영상 {count.movie}</span>
+          <span>{t("과제")}{" "}{count.assignment}</span>
+          <span>{t("영상")}{" "}{count.movie}</span>
         </div>
       )
     );
@@ -86,11 +88,11 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
     <>
       <div className="page-heading">
         <div>
-          <p className="eyebrow">이번 주</p>
-          <h1>시간표</h1>
+          <p className="eyebrow">{t("이번 주")}</p>
+          <h1>{t("시간표")}</h1>
         </div>
         <div className="toolbar">
-          <div className="segmented" aria-label="시간표 모드">
+          <div className="segmented" aria-label={t("시간표 모드")}>
             <button
               aria-pressed={mode === "view"}
               className={mode === "view" ? "selected" : ""}
@@ -99,9 +101,7 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
                 setEdit(undefined);
                 setOff(false);
               }}
-            >
-              열람 모드
-            </button>
+            >{t("열람 모드")}{" "}</button>
             <button
               aria-pressed={mode === "edit"}
               className={mode === "edit" ? "selected" : ""}
@@ -109,9 +109,7 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
                 setMode("edit");
                 setViewing(null);
               }}
-            >
-              편집 모드
-            </button>
+            >{t("편집 모드")}{" "}</button>
           </div>
           <div className="segmented">
             {[5, 7].map((n) => (
@@ -120,7 +118,7 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
                 className={days === n ? "selected" : ""}
                 onClick={() => setDays(n)}
               >
-                {n === 5 ? "주중" : "주간"}
+                {n === 5 ? t("주중") : t("주간")}
               </button>
             ))}
           </div>
@@ -131,22 +129,16 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
                   setSelectedDays(offDays);
                   setOff(true);
                 }}
-              >
-                공강 설정
-              </button>
+              >{t("공강 설정")}{" "}</button>
               <button className="primary" onClick={() => setEdit(null)}>
-                <Plus size={17} />
-                수업 추가
-              </button>
+                <Plus size={17} />{t("수업 추가")}{" "}</button>
             </>
           )}
         </div>
       </div>
       <div className="semester-toolbar">
-        <label>
-          학기
-        <select
-          aria-label="시간표 학기"
+        <label>{t("학기")}{" "}<select
+          aria-label={t("시간표 학기")}
           value={term.name}
           onChange={(event) => {
             setSemester(event.target.value);
@@ -155,22 +147,22 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
             setOff(false);
           }}
         >
-          {data.timetableTerms.map((t) => (
-            <option key={t.name} value={t.name}>
-              {t.name}
-              {t.name === data.mainTerm ? " (메인)" : ""}
+          {data.timetableTerms.map((termOption) => (
+            <option key={termOption.name} value={termOption.name}>
+              {semesterName(termOption.name)}
+              {termOption.name === data.mainTerm ? t(" (메인)") : ""}
             </option>
           ))}
         </select>
         </label>
-        <label>시간 간격<select aria-label="시간표 시간 간격" value={density} onChange={e=>setDensity(Number(e.target.value))}><option value={0}>화면에 맞춤</option><option value={64}>보통</option><option value={80}>넓게</option><option value={104}>아주 넓게</option></select></label>
+        <label>{t("시간 간격")}<select aria-label={t("시간표 시간 간격")} value={density} onChange={e=>setDensity(Number(e.target.value))}><option value={0}>{t("화면에 맞춤")}</option><option value={64}>{t("보통")}</option><option value={80}>{t("넓게")}</option><option value={104}>{t("아주 넓게")}</option></select></label>
         {data.timetableConfigured && term.name === data.mainTerm &&
-          <span className="count-pill">메인 학기</span>}
+          <span className="count-pill">{t("메인 학기")}</span>}
       </div>
       {!data.timetableConfigured ? (
         <section className="glass empty">
-          <p>홈에서 메인 학기를 설정하세요.</p>
-          <button type="button" onClick={onOpenHome}>홈으로</button>
+          <p>{t("홈에서 메인 학기를 설정하세요.")}</p>
+          <button type="button" onClick={onOpenHome}>{t("홈으로")}</button>
         </section>
       ) : (
         <div className="timetable-layout">
@@ -187,8 +179,8 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
                   key={day}
                   className={offDays.includes(i) ? "off-header" : ""}
                 >
-                  {day}
-                  <small>{offDays.includes(i) ? "공강" : ""}</small>
+                  {t(day)}
+                  <small>{offDays.includes(i) ? t("공강") : ""}</small>
                 </div>
               ))}
             </div>
@@ -218,7 +210,7 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
                       <span>
                         <Sun size={30} />
                       </span>
-                      <strong>공강</strong>
+                      <strong>{t("공강")}</strong>
                     </div>
                   ) : (
                     scheduled
@@ -265,13 +257,13 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
             </div>
           </section>
           {online.length > 0 && (
-            <section className="glass online-courses" aria-label="비대면 수업">
+            <section className="glass online-courses" aria-label={t("비대면 수업")}>
               <header>
                 <span>
                   <Monitor size={17} />
-                  <strong>비대면 수업</strong>
+                  <strong>{t("비대면 수업")}</strong>
                 </span>
-                <small>{online.length}개</small>
+                <small>{online.length}{t("개")}</small>
               </header>
               <div className="online-course-list">
                 {online.map((s) => (
@@ -284,7 +276,7 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
                       } as React.CSSProperties
                     }
                     onClick={() => choose(s)}
-                    title={`${name(s)} ${mode === "edit" ? "수정" : "일정 보기"}`}
+                    title={`${name(s)} ${mode === "edit" ? t("수정") : t("일정 보기")}`}
                   >
                     <span className="online-course-title">
                       <strong>{name(s)}</strong>
@@ -318,7 +310,7 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
         />
       )}
       {off && (
-        <Modal title="공강 설정" onClose={() => setOff(false)}>
+        <Modal title={t("공강 설정")} onClose={() => setOff(false)}>
           <div className="off-choices">
             {weekdays.map((day, i) => (
               <button
@@ -332,7 +324,7 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
                   )
                 }
               >
-                {day}
+                {t(day)}
                 <Sun size={16} />
               </button>
             ))}
@@ -349,17 +341,15 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
                   .then(() => setOff(false))
                   .catch(() => {})
               }
-            >
-              저장
-            </button>
+            >{t("저장")}{" "}</button>
           </div>
         </Modal>
       )}
       {deleteId !== null && (
-        <Modal title="정말 삭제하시겠습니까?" onClose={() => setDeleteId(null)}>
+        <Modal title={t("정말 삭제하시겠습니까?")} onClose={() => setDeleteId(null)}>
           <div className="dialog-actions">
             <span />
-            <button onClick={() => setDeleteId(null)}>취소</button>
+            <button onClick={() => setDeleteId(null)}>{t("취소")}</button>
             <button
               className="danger"
               onClick={() =>
@@ -370,9 +360,7 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
                   })
                   .catch(() => {})
               }
-            >
-              삭제
-            </button>
+            >{t("삭제")}{" "}</button>
           </div>
         </Modal>
       )}
@@ -389,6 +377,7 @@ function SessionViewer({
   name: string;
   onClose: () => void;
 }) {
+  useLanguage();
   const { data, openEvent } = useCalix();
   const [filter, setFilter] = useState<"pending" | "all" | "done">("pending");
   const courseEvents = data.events.filter(
@@ -401,16 +390,16 @@ function SessionViewer({
     (e) => filter === "all" || e.completed === (filter === "done"),
   );
   const schedule = session.is_online
-    ? "정해진 시간 없음"
-    : `${weekdays[session.day]}요일 ${session.start_time}–${session.end_time}`;
+    ? t("정해진 시간 없음")
+    : t("{0}요일 {1}–{2}", [t(weekdays[session.day]), session.start_time, session.end_time]);
   return (
     <Modal title={name} onClose={onClose} wide={courseEvents.length > 0} className="session-viewer">
       <dl className="session-facts">
-        <div><dt>교수명</dt><dd>{session.professor?.trim() || "미등록"}</dd></div>
-        <div><dt>시간</dt><dd>{schedule}</dd></div>
-        <div><dt>강의실</dt><dd>{session.room?.trim() || (session.is_online ? "온라인" : "미등록")}</dd></div>
+        <div><dt>{t("교수명")}</dt><dd>{session.professor?.trim() || t("미등록")}</dd></div>
+        <div><dt>{t("시간")}</dt><dd>{schedule}</dd></div>
+        <div><dt>{t("강의실")}</dt><dd>{session.room?.trim() || (session.is_online ? t("온라인") : t("미등록"))}</dd></div>
       </dl>
-      {courseEvents.length > 0 && <div className="segmented session-event-filters" aria-label="수업 일정 상태">
+      {courseEvents.length > 0 && <div className="segmented session-event-filters" aria-label={t("수업 일정 상태")}>
         {(
           [
             ["pending", "미완료"],
@@ -424,7 +413,7 @@ function SessionViewer({
             className={filter === id ? "selected" : ""}
             onClick={() => setFilter(id)}
           >
-            {label}
+            {t(label)}
           </button>
         ))}
       </div>}
@@ -434,7 +423,7 @@ function SessionViewer({
           return (
             <section key={kind}>
               <h3>
-                {kind === "assignment" ? "과제" : "영상"}{" "}
+                {kind === "assignment" ? t("과제") : t("영상")}{" "}
                 <span className="count-pill">{rows.length}</span>
               </h3>
               {rows.map((e) => (
@@ -470,7 +459,7 @@ function SessionViewer({
           );
         })}
       </div> : <p className="session-events-empty" role="status">
-        {session.course_id <= 0 ? "연결된 강의 없음" : courseEvents.length === 0 ? "과제, 영상 없음" : filter === "pending" ? "미완료 일정 없음" : "완료 일정 없음"}
+        {session.course_id <= 0 ? t("연결된 강의 없음") : courseEvents.length === 0 ? t("과제, 영상 없음") : filter === "pending" ? t("미완료 일정 없음") : t("완료 일정 없음")}
       </p>}
     </Modal>
   );
@@ -487,6 +476,7 @@ function SessionEditor({
   onClose: () => void;
   onDelete: () => void;
 }) {
+  useLanguage();
   const { data, mutate } = useCalix();
   const [form, setForm] = useState({
     course_id: session?.course_id || 0,
@@ -512,7 +502,7 @@ function SessionEditor({
     value: string,
   ) => setForm((previous) => ({ ...previous, [key]: value }));
   return (
-    <Modal title={session ? "수업 수정" : "수업 추가"} onClose={onClose}>
+    <Modal title={session ? t("수업 수정") : t("수업 추가")} onClose={onClose}>
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -543,10 +533,8 @@ function SessionEditor({
             .finally(() => setSaving(false));
         }}
       >
-        <label>
-          연결 수업
-          <select
-            aria-label="연결 수업"
+        <label>{t("연결 수업")}{" "}<select
+            aria-label={t("연결 수업")}
             value={form.course_id}
             onChange={(event) => {
               const id = Number(event.target.value);
@@ -560,7 +548,7 @@ function SessionEditor({
               }));
             }}
           >
-            <option value={0}>직접 입력</option>
+            <option value={0}>{t("직접 입력")}</option>
             {data.courses.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -568,15 +556,13 @@ function SessionEditor({
             ))}
           </select>
         </label>
-        <label>
-          수업명
-          <input
-            aria-label="수업명"
+        <label>{t("수업명")}{" "}<input
+            aria-label={t("수업명")}
             value={form.title}
             onChange={(event) => field("title", event.target.value)}
             maxLength={120}
             required
-            placeholder="수업명"
+            placeholder={t("수업명")}
           />
         </label>
         <label className="online-toggle">
@@ -591,18 +577,16 @@ function SessionEditor({
             }
           />
           <span>
-            <strong>비대면 수업</strong>
-            <small>시간표 하단에 표시</small>
+            <strong>{t("비대면 수업")}</strong>
+            <small>{t("시간표 하단에 표시")}</small>
           </span>
           <Monitor size={19} />
         </label>
         {!form.is_online && (
           <>
             <div className="form-grid">
-              <label>
-                요일
-                <select
-                  aria-label="요일"
+              <label>{t("요일")}{" "}<select
+                  aria-label={t("요일")}
                   value={form.day}
                   onChange={(event) =>
                     setForm((previous) => ({
@@ -613,15 +597,12 @@ function SessionEditor({
                 >
                   {weekdays.map((day, i) => (
                     <option key={day} value={i}>
-                      {day}요일
-                    </option>
+                      {t(day)}{t("요일")}{" "}</option>
                   ))}
                 </select>
               </label>
-              <label>
-                강의실
-                <input
-                  aria-label="강의실"
+              <label>{t("강의실")}{" "}<input
+                  aria-label={t("강의실")}
                   value={form.room}
                   maxLength={100}
                   onChange={(event) => field("room", event.target.value)}
@@ -629,8 +610,8 @@ function SessionEditor({
               </label>
             </div>
             <div className="form-grid">
-              <TimeField label="시작" value={form.start_time} onChange={(value) => field("start_time", value)} />
-              <TimeField label="종료" value={form.end_time} onChange={(value) => field("end_time", value)} />
+              <TimeField label={t("시작")} value={form.start_time} onChange={(value) => field("start_time", value)} />
+              <TimeField label={t("종료")} value={form.end_time} onChange={(value) => field("end_time", value)} />
             </div>
           </>
         )}
@@ -638,12 +619,10 @@ function SessionEditor({
           <div className="additional-slots">
             {extra.map((slot, index) => (
               <fieldset key={slot.key} className="slot-editor">
-                <legend>시간 {index + 2}</legend>
+                <legend>{t("시간")}{" "}{index + 2}</legend>
                 <div className="form-grid">
-                  <label>
-                    요일
-                    <select
-                      aria-label={`시간 ${index + 2} 요일`}
+                  <label>{t("요일")}{" "}<select
+                      aria-label={t("시간 {0} 요일", [String(index + 2)])}
                       value={slot.day}
                       onChange={(e) =>
                         setExtra((rows) =>
@@ -657,15 +636,12 @@ function SessionEditor({
                     >
                       {weekdays.map((day, i) => (
                         <option key={day} value={i}>
-                          {day}요일
-                        </option>
+                          {t(day)}{t("요일")}{" "}</option>
                       ))}
                     </select>
                   </label>
-                  <label>
-                    강의실
-                    <input
-                      aria-label={`시간 ${index + 2} 강의실`}
+                  <label>{t("강의실")}{" "}<input
+                      aria-label={t("시간 {0} 강의실", [String(index + 2)])}
                       value={slot.room}
                       maxLength={100}
                       onChange={(e) =>
@@ -681,8 +657,8 @@ function SessionEditor({
                 <div className="form-grid">
                   {(["start_time", "end_time"] as const).map((key, i) => (
                     <TimeField key={key}
-                      caption={i ? "종료" : "시작"}
-                      label={`시간 ${index + 2} ${i ? "종료" : "시작"}`}
+                      caption={i ? t("종료") : t("시작")}
+                      label={t("시간 {0} {1}", [String(index + 2), String(i ? "종료" : "시작")])}
                       value={slot[key]}
                       onChange={(value) => setExtra((rows) =>
                         rows.map((row) => row.key === slot.key ? { ...row, [key]: value } : row),
@@ -695,9 +671,7 @@ function SessionEditor({
                   onClick={() =>
                     setExtra((rows) => rows.filter((_, i) => i !== index))
                   }
-                >
-                  시간 삭제
-                </button>
+                >{t("시간 삭제")}{" "}</button>
               </fieldset>
             ))}
             <button
@@ -720,26 +694,20 @@ function SessionEditor({
                 ]);
               }}
             >
-              <Plus size={16} />
-              시간 추가
-            </button>
+              <Plus size={16} />{t("시간 추가")}{" "}</button>
           </div>
         )}
         <div className="form-grid">
-          <label>
-            담당 교수
-            <input
-              aria-label="담당 교수"
+          <label>{t("담당 교수")}{" "}<input
+              aria-label={t("담당 교수")}
               value={form.professor}
               maxLength={120}
               onChange={(event) => field("professor", event.target.value)}
             />
           </label>
-          <label>
-            색상
-            <input
+          <label>{t("색상")}{" "}<input
               type="color"
-              aria-label="색상"
+              aria-label={t("색상")}
               value={form.color}
               onChange={(event) => field("color", event.target.value)}
             />
@@ -748,13 +716,11 @@ function SessionEditor({
         <div className="dialog-actions">
           {session && (
             <button type="button" className="danger" onClick={onDelete}>
-              <Trash2 size={16} />
-              삭제
-            </button>
+              <Trash2 size={16} />{t("삭제")}{" "}</button>
           )}
           <span />
           <button className="primary" disabled={saving}>
-            {saving ? "저장 중" : "저장"}
+            {saving ? t("저장 중") : t("저장")}
           </button>
         </div>
       </form>

@@ -58,6 +58,8 @@ import { GradesPage } from "./Grades";
 import { ProtectedSection, SecurityMonitor, UnlockView } from "./Security";
 import { UpdateDialog } from "./UpdateDialog";
 import { WindowControls } from "./WindowControls";
+import { dragWindow } from "./windowDrag";
+import { currentLanguage, locale, setLanguage, t, useLanguage } from "./i18n";
 import { rpc, subscribe, stopEngine } from "./bridge";
 import { DateField } from "./ChecklistDeadline";
 import {
@@ -65,6 +67,7 @@ import {
   dueText,
   localInput,
   monthGrid,
+  monthName,
   remaining,
   shiftMonth,
   status,
@@ -115,6 +118,7 @@ export function Modal({
   closeLabel?: string;
   className?: string;
 }) {
+  useLanguage();
   const ref = useRef<HTMLDialogElement>(null);
   const closing = useRef<Animation | null>(null);
   const latestClose = useRef(onClose);
@@ -167,8 +171,8 @@ export function Modal({
         <h2>{title}</h2>
         <button
           className="icon-button"
-          title={closeLabel}
-          aria-label={closeLabel}
+          title={t(closeLabel)}
+          aria-label={t(closeLabel)}
           onClick={requestClose}
         >
           <X size={20} />
@@ -179,6 +183,7 @@ export function Modal({
   );
 }
 export function TypeBadge({ event }: { event: EventItem }) {
+  useLanguage();
   return (
     <span
       className={`type-badge ${event.type_id ? "custom" : event.kind}`}
@@ -194,10 +199,10 @@ export function TypeBadge({ event }: { event: EventItem }) {
     >
       {event.type_name ||
         (event.kind === "movie"
-          ? "영상"
+          ? t("영상")
           : event.kind === "assignment"
-            ? "과제"
-            : "일정")}
+            ? t("과제")
+            : t("일정"))}
     </span>
   );
 }
@@ -208,6 +213,7 @@ export function EventRows({
   events: EventItem[];
   limit?: number;
 }) {
+  useLanguage();
   const { openEvent } = useCalix(),
     [index, setIndex] = useState(0);
   const count = Math.ceil(events.length / limit),
@@ -216,11 +222,11 @@ export function EventRows({
   return (
     <div className="event-table">
       <div className="event-table-head">
-        <span>유형</span>
-        <span>과목</span>
-        <span>일정</span>
-        <span>기한</span>
-        <span>남은 시간</span>
+        <span>{t("유형")}</span>
+        <span>{t("과목")}</span>
+        <span>{t("일정")}</span>
+        <span>{t("기한")}</span>
+        <span>{t("남은 시간")}</span>
       </div>
       {events.slice(start, start + limit).map((e) => (
         <button
@@ -229,7 +235,7 @@ export function EventRows({
           onClick={() => openEvent(e.key)}
         >
           <TypeBadge event={e} />
-          <span className="muted ellipsis">{e.course_name || "개인 일정"}</span>
+          <span className="muted ellipsis">{e.course_name || t("개인 일정")}</span>
           <span className="event-name ellipsis">{e.title}</span>
           <span className="muted nowrap">{dueText(e.due_at)}</span>
           <span
@@ -247,7 +253,7 @@ export function EventRows({
           </span>
         </button>
       ))}
-      {!events.length && <div className="empty">일정 없음</div>}
+      {!events.length && <div className="empty">{t("일정 없음")}</div>}
       {limit >= 50 && count > 1 && (
         <div className="pagination">
           <span>
@@ -256,7 +262,7 @@ export function EventRows({
           </span>
           <button
             className="icon-button"
-            aria-label="이전 목록"
+            aria-label={t("이전 목록")}
             disabled={!page}
             onClick={() => setIndex(page - 1)}
           >
@@ -264,7 +270,7 @@ export function EventRows({
           </button>
           <button
             className="icon-button"
-            aria-label="다음 목록"
+            aria-label={t("다음 목록")}
             disabled={page >= count - 1}
             onClick={() => setIndex(page + 1)}
           >
@@ -290,7 +296,10 @@ const navigation: [Page, string, typeof Home][] = [
   ["courses", "과목별 현황", ChartNoAxesColumn],
 ];
 const pageOrder = [...navigation.map(([id]) => id), "settings"];
+const pageLabel = (id: Page, title: string) =>
+  id === "grades" && currentLanguage() !== "ko" ? "GPA" : t(title);
 export function App() {
+  useLanguage();
   const [appVersion, setAppVersion] = useState(__CALIX_VERSION__);
   useEffect(() => {
     let active = true;
@@ -354,7 +363,7 @@ export function App() {
     if (!errorSound.current.enabled || reminders?.volume === 0) stopErrorCue();
   }, [reminders?.enabled, reminders?.sound, reminders?.volume]);
   const notify = useCallback((message: string, error = false) => {
-    setToast({message, error});
+    setToast({message: t(message), error});
     if (error) {
       soundError();
       window.dispatchEvent(new CustomEvent("calix:ui-error", { detail: message }));
@@ -378,6 +387,7 @@ export function App() {
       await invoke("auth_open", {
         theme: document.documentElement.dataset.theme || "pink",
         font: document.documentElement.dataset.font || "pretendard",
+        language: currentLanguage(),
       });
     } catch (error) {
       await rpc("session.cancel").catch(() => {});
@@ -426,7 +436,7 @@ export function App() {
       .catch(() => {});
     const unsubscribe = subscribe((message) => {
       if (message.event === "reminder" && isTauri() && !privacyLocked.current) {
-        void invoke("reminder_show", { payload: message.payload }).catch(
+        void invoke("reminder_show", { payload: { ...message.payload as object, language: currentLanguage() } }).catch(
           (error) => notify(String(error), true),
         );
       }
@@ -561,6 +571,10 @@ export function App() {
     data?.preferences.theme_palette,
   ]);
   const reduceMotion = data?.preferences.reduce_motion;
+  const language = data?.preferences.language;
+  useLayoutEffect(() => {
+    if (data) setLanguage(language ?? "ko");
+  }, [Boolean(data), language]);
   const pageReady = Boolean(data && !data.security?.locked);
   const mainView = useRef<HTMLElement>(null);
   const sidebarNav = useRef<HTMLElement>(null);
@@ -675,7 +689,7 @@ export function App() {
       if (key === "?") { event.preventDefault(); setShortcuts(true); return; }
       if (!event.altKey || event.ctrlKey || event.metaKey) return;
       if (key === "n") { event.preventDefault(); setAddDate(dateKey()); }
-      if (key === "r") { event.preventDefault(); document.querySelector<HTMLButtonElement>('[aria-label="동기화"], [aria-label="동기화 중단"]')?.click(); }
+      if (key === "r") { event.preventDefault(); document.querySelector<HTMLButtonElement>("[data-sync-action]")?.click(); }
       if (key === "l") { event.preventDefault(); void lockScreen(); }
       const pages: Page[] = ["home", "calendar", "assignments", "videos", "timetable", "grades"];
       if (/^[1-6]$/.test(key)) { event.preventDefault(); void navigate(pages[Number(key)-1]); }
@@ -781,15 +795,15 @@ export function App() {
   };
   const exitDialog = exit && (
     <Modal
-      title={exitAction === "restart" ? "재시작하시겠습니까?" : exitAction === "install" ? "업데이트를 설치하시겠습니까?" : "종료하시겠습니까?"}
+      title={exitAction === "restart" ? t("재시작하시겠습니까?") : exitAction === "install" ? t("업데이트를 설치하시겠습니까?") : t("종료하시겠습니까?")}
       onClose={closeExit}
     >
       {exitError && <p role="alert" className="danger">{exitError}</p>}
       <div className="dialog-actions">
         <span />
-        <button type="button" disabled={exiting} onClick={closeExit}>취소</button>
+        <button type="button" disabled={exiting} onClick={closeExit}>{t("취소")}</button>
         <button type="button" className="primary" disabled={exiting} onClick={() => void confirmExit()}>
-          {exitAction === "restart" ? "저장하고 재시작" : exitAction === "install" ? "설치하고 종료" : locked ? "종료" : "저장하고 종료"}
+          {exitAction === "restart" ? t("저장하고 재시작") : exitAction === "install" ? t("설치하고 종료") : locked ? t("종료") : t("저장하고 종료")}
         </button>
       </div>
     </Modal>
@@ -798,6 +812,7 @@ export function App() {
     lockScreenShown.current = true;
     return <Context.Provider value={context}>
       <div className="security-app-lock">
+        <div className="lock-window-drag" onMouseDown={dragWindow} />
         <WindowControls />
         <UnlockView onExit={() => setExit(true)} />
         {exitDialog}
@@ -841,7 +856,7 @@ export function App() {
             {appVersion}
           </small>
         </a>
-        <div className="nav-label">워크스페이스</div>
+        <div className="nav-label">{t("워크스페이스")}</div>
         <nav ref={sidebarNav}>
           <span className="nav-motion-marker" aria-hidden="true" />
           {navigation.filter(([id]) => id !== "attendance" || attendanceVisible).map(([id, title, Icon]) => (
@@ -850,10 +865,10 @@ export function App() {
               className={page === id ? "active" : ""}
               onClick={() => void navigate(id)}
               aria-current={page === id ? "page" : undefined}
-              title={title}
+              title={pageLabel(id, title)}
             >
               <Icon size={19} />
-              <span>{title}</span>
+              <span>{pageLabel(id, title)}</span>
               {id === "assignments" && data && (
                 <small>
                   {pending.filter((e) => e.kind === "assignment").length}
@@ -866,16 +881,16 @@ export function App() {
           <button
             className={page === "settings" ? "active" : ""}
             onClick={() => void navigate("settings")}
-            title="설정"
+            title={t("설정")}
           >
             <Settings size={19} />
-            <span>설정</span>
+            <span>{t("설정")}</span>
           </button>
           <button
             className="creator user-profile"
             onClick={() => void navigate("settings")}
-            title="내 프로필"
-            aria-label="내 프로필"
+            title={t("내 프로필")}
+            aria-label={t("내 프로필")}
           >
             {data?.preferences.avatar ? (
               <img src={data.preferences.avatar} alt="" />
@@ -885,26 +900,26 @@ export function App() {
               </span>
             )}
             <span>
-              <strong>{data?.preferences.nickname || "사용자"}</strong>
-              <small>내 프로필</small>
+              <strong>{data?.preferences.nickname || t("사용자")}</strong>
+              <small>{t("내 프로필")}</small>
             </span>
             <Settings size={15} />
           </button>
         </div>
       </aside>
       <div className="workspace">
-        <header className="topbar" data-tauri-drag-region>
-          <div className="breadcrumb" data-tauri-drag-region>
+        <header className="topbar" onMouseDown={dragWindow}>
+          <div className="breadcrumb">
             Calix <span>/</span>{" "}
-            {navigation.find((n) => n[0] === page)?.[1] || "설정"}
+            {pageLabel(page, navigation.find((n) => n[0] === page)?.[1] ?? "설정")}
           </div>
           <div className="top-actions">
-            <div className="search-box">
+            <div className="search-box" data-no-window-drag>
               <Search size={16} />
               <input
                 ref={searchRef}
-                placeholder="일정 검색"
-                aria-label="일정 검색"
+                placeholder={t("일정 검색")}
+                aria-label={t("일정 검색")}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
@@ -920,14 +935,15 @@ export function App() {
                       </span>
                     </button>
                   ))}
-                  {!found.length && <p>검색 결과 없음</p>}
+                  {!found.length && <p>{t("검색 결과 없음")}</p>}
                 </div>
               )}
             </div>
             <button
               className="icon-button"
-              title={busy ? "동기화 중단" : "동기화"}
-              aria-label={busy ? "동기화 중단" : "동기화"}
+              data-sync-action
+              title={busy ? t("동기화 중단") : t("동기화")}
+              aria-label={busy ? t("동기화 중단") : t("동기화")}
               onClick={() => {
                 if (!busy && !loggedIn) { notify("학교 로그인 후 동기화하세요.", true); return; }
                 const cancelling = busy;
@@ -953,20 +969,18 @@ export function App() {
               }
             >
               {loggedIn ? <LogOut size={16} /> : <LogIn size={16} />}
-              <span>{loggedIn ? "로그아웃" : "로그인"}</span>
+              <span>{loggedIn ? t("로그아웃") : t("로그인")}</span>
             </button>
             <button
               className="primary"
               onClick={() => setAddDate(today)}
               disabled={!data}
             >
-              <Plus size={17} />
-              일정 추가
-            </button>
+              <Plus size={17} />{t("일정 추가")}{" "}</button>
             <button
               className="icon-button"
-              title={data?.security?.configured ? "잠금" : "비밀번호 설정 후 잠금"}
-              aria-label="잠금"
+              title={data?.security?.configured ? t("잠금") : t("비밀번호 설정 후 잠금")}
+              aria-label={t("잠금")}
               aria-busy={locking}
               disabled={!data?.security?.configured || locking}
               onClick={() => void lockScreen()}
@@ -975,8 +989,8 @@ export function App() {
             </button>
             <button
               className="icon-button"
-              title="종료"
-              aria-label="종료"
+              title={t("종료")}
+              aria-label={t("종료")}
               onClick={() => setExit(true)}
             >
               <Power size={16} />
@@ -989,15 +1003,13 @@ export function App() {
             <div className="loading-state">
               {error ? (
                 <>
-                  <h2>연결 오류</h2>
+                  <h2>{t("연결 오류")}</h2>
                   <p>{error}</p>
                   <button
                     onClick={() =>
                       void refresh().catch((e) => setError(e.message))
                     }
-                  >
-                    다시 시도
-                  </button>
+                  >{t("다시 시도")}{" "}</button>
                 </>
               ) : (
                 <>
@@ -1015,7 +1027,7 @@ export function App() {
                   <section className="welcome">
                     <div>
                       <p className="eyebrow">
-                        {new Intl.DateTimeFormat("ko-KR", {
+                        {new Intl.DateTimeFormat(locale(), {
                           timeZone: "Asia/Seoul",
                           month: "long",
                           day: "numeric",
@@ -1023,9 +1035,9 @@ export function App() {
                         }).format(new Date())}
                       </p>
                       <h1 className="home-greeting">
-                        {data.preferences.greeting.replaceAll(
+                        {(data.preferences.greeting === "{닉네임}님, 오셨군요!" ? t(data.preferences.greeting) : data.preferences.greeting).replaceAll(
                           "{닉네임}",
-                          data.preferences.nickname || "나",
+                          data.preferences.nickname || t("나"),
                         )}
                       </h1>
                     </div>
@@ -1041,12 +1053,11 @@ export function App() {
                       className="stat glass"
                       onClick={() => void navigate("calendar")}
                     >
-                      <span>
-                        오늘까지 할 일 <ArrowUpRight size={18} />
+                      <span>{t("오늘까지 할 일")}{" "}<ArrowUpRight size={18} />
                       </span>
                       <strong>
                         {todayEvents.length}
-                        <small>건</small>
+                        <small>{t("건")}</small>
                       </strong>
                       <div className="stat-track">
                         <i
@@ -1058,23 +1069,20 @@ export function App() {
                       className="stat glass"
                       onClick={() => void navigate("assignments")}
                     >
-                      <span>
-                        남은 일정 <ArrowUpRight size={18} />
+                      <span>{t("남은 일정")}{" "}<ArrowUpRight size={18} />
                       </span>
                       <strong>
                         {pending.length}
-                        <small>개</small>
+                        <small>{t("개")}</small>
                       </strong>
                       <div className="mini-tags">
-                        <span>
-                          과제{" "}
+                        <span>{t("과제")}{" "}
                           {
                             pending.filter((e) => e.kind === "assignment")
                               .length
                           }
                         </span>
-                        <span>
-                          영상{" "}
+                        <span>{t("영상")}{" "}
                           {pending.filter((e) => e.kind === "movie").length}
                         </span>
                       </div>
@@ -1083,19 +1091,18 @@ export function App() {
                   <div className="home-content">
                     <section className="glass upcoming-panel">
                       <div className="section-heading">
-                        <h2>남은 일정</h2>
+                        <h2>{t("남은 일정")}</h2>
                         <button
                           className="text-button"
                           onClick={() => void navigate("calendar")}
-                        >
-                          전체 보기 <ArrowUpRight size={15} />
+                        >{t("전체 보기")}{" "}<ArrowUpRight size={15} />
                         </button>
                       </div>
                       <EventRows events={pending} limit={7} />
                     </section>
                     <section className="glass today-panel">
                       <div className="section-heading">
-                        <h2>오늘 할 일</h2>
+                        <h2>{t("오늘 할 일")}</h2>
                         <span className="count-pill">{todayEvents.length}</span>
                       </div>
                       {todayEvents.length ? (
@@ -1123,13 +1130,12 @@ export function App() {
                       ) : (
                         <div className="empty">
                           <Sun size={30} />
-                          <p>오늘 마감 없음</p>
+                          <p>{t("오늘 마감 없음")}</p>
                         </div>
                       )}
                       <div className="today-footer">
                         <CalendarDays size={17} />
-                        {today.slice(5).replace("-", "월 ")}일
-                      </div>
+                        {today.slice(5).replace("-", "월 ")}{t("일")}{" "}</div>
                     </section>
                   </div>
                 </>
@@ -1178,17 +1184,17 @@ export function App() {
           <span className={`connection-dot ${loggedIn ? "online" : ""}`} />
           <span>
             {busy
-              ? "동기화 중"
+              ? t("동기화 중")
               : data?.lastSync
-                ? `최근 동기화 ${dueText(data.lastSync)}`
-                : "동기화 기록 없음"}
+                ? t("최근 동기화 {0}", [String(dueText(data.lastSync))])
+                : t("동기화 기록 없음")}
           </span>
-          <button className="quiet" title="단축키 (?)" onClick={() => setShortcuts(true)}>단축키</button>
+          <button className="quiet" title={t("단축키 (?)")} onClick={() => setShortcuts(true)}>{t("단축키")}</button>
           <span className="status-version">{`v${appVersion}`}</span>
         </footer>
       </div>
-      {shortcuts && <Modal title="단축키" onClose={() => setShortcuts(false)}>
-        <dl className="shortcut-list">{[["Alt + N", "일정 추가"], ["Alt + R", "동기화 / 중단"], ["Alt + L", "화면 잠금"], ["Alt + 1~6", "홈 / 달력 / 과제 / 영상 / 시간표 / 학점"], ["Ctrl + K", "일정 검색"], ["?", "단축키 안내"]].map(([key, label]) => <div key={key}><dt><kbd>{key}</kbd></dt><dd>{label}</dd></div>)}</dl>
+      {shortcuts && <Modal title={t("단축키")} onClose={() => setShortcuts(false)}>
+        <dl className="shortcut-list">{[["Alt + N", "일정 추가"], ["Alt + R", "동기화 / 중단"], ["Alt + L", "화면 잠금"], ["Alt + 1~6", "홈 / 달력 / 과제 / 영상 / 시간표 / 학점"], ["Ctrl + K", "일정 검색"], ["?", "단축키 안내"]].map(([key, label]) => <div key={key}><dt><kbd>{key}</kbd></dt><dd>{t(label)}</dd></div>)}</dl>
       </Modal>}
       <SyncNotice
         sound={Boolean(
@@ -1202,7 +1208,7 @@ export function App() {
         <div className={`toast${toast.error ? " toast-error" : ""}`} role={toast.error ? "alert" : "status"}>
           {toast.error ? <X size={17} /> : <Check size={17} />}
           {toast.message}
-          <button aria-label="알림 닫기" onClick={() => setToast(null)}>
+          <button aria-label={t("알림 닫기")} onClick={() => setToast(null)}>
             <X size={15} />
           </button>
         </div>
@@ -1290,6 +1296,7 @@ function EventListPage({
   kind: string;
   events: EventItem[];
 }) {
+  useLanguage();
   const [filter, setFilter] = useState<EventFilter>("all");
   const [view, setView] = useState<"all" | "course">("all");
   const [course, setCourse] = useState("all");
@@ -1316,14 +1323,14 @@ function EventListPage({
     <>
       <div className="page-heading">
         <div>
-          <p className="eyebrow">수업 일정</p>
-          <h1>{kind === "assignment" ? "과제" : "영상"}</h1>
+          <p className="eyebrow">{t("수업 일정")}</p>
+          <h1>{kind === "assignment" ? t("과제") : t("영상")}</h1>
         </div>
-        <span className="count-pill">{filtered.length}개</span>
+        <span className="count-pill">{filtered.length}{t("개")}</span>
       </div>
       <div className="event-filter-bar">
         <div className="event-view-toolbar">
-          <div className="segmented" aria-label="일정 보기">
+          <div className="segmented" aria-label={t("일정 보기")}>
             {(
               [
                 ["all", "전체 보기"],
@@ -1336,16 +1343,16 @@ function EventListPage({
                 className={view === id ? "selected" : ""}
                 onClick={() => setView(id)}
               >
-                {label}
+                {t(label)}
               </button>
             ))}
           </div>
           <select
-            aria-label="강의 선택"
+            aria-label={t("강의 선택")}
             value={course}
             onChange={(event) => setCourse(event.target.value)}
           >
-            <option value="all">전체 강의</option>
+            <option value="all">{t("전체 강의")}</option>
             {courses.map((group) => (
               <option key={group.id} value={group.id}>
                 {group.name}
@@ -1353,7 +1360,7 @@ function EventListPage({
             ))}
           </select>
         </div>
-        <div className="event-status-filters" aria-label="일정 상태">
+        <div className="event-status-filters" aria-label={t("일정 상태")}>
           {options.map(([value, label]) => (
             <button
               key={value}
@@ -1361,7 +1368,7 @@ function EventListPage({
               aria-pressed={filter === value}
               onClick={() => setFilter(value)}
             >
-              {label}
+              {t(label)}
               <span>
                 {
                   rows.filter((event) => matchesEventFilter(event, value, now))
@@ -1382,13 +1389,13 @@ function EventListPage({
             <details className="glass course-event-group" key={group.id} open>
               <summary>
                 <strong>{group.name}</strong>
-                <span className="count-pill">{group.events.length}개</span>
+                <span className="count-pill">{group.events.length}{t("개")}</span>
               </summary>
               <EventRows key={`${course}:${filter}`} events={group.events} />
             </details>
           ))}
           {!filtered.length && (
-            <div className="glass empty">일정 없음</div>
+            <div className="glass empty">{t("일정 없음")}</div>
           )}
         </div>
       )}
@@ -1407,6 +1414,7 @@ function CalendarPage({
   events: EventItem[];
   onAdd: (date: string) => void;
 }) {
+  useLanguage();
   const { data, openEvent, notify } = useCalix(),
     [month, setMonth] = useState(dateKey().slice(0, 7)),
     [day, setDay] = useState(dateKey()),
@@ -1461,29 +1469,29 @@ function CalendarPage({
   return (
     <>
       <div className="page-heading calendar-heading">
-        <h1>달력</h1>
+        <h1>{t("달력")}</h1>
         <div className="toolbar calendar-navigation">
           <button
             className="icon-button"
-            aria-label="이전 달"
-            title="이전 달"
+            aria-label={t("이전 달")}
+            title={t("이전 달")}
             disabled={month === `${firstCalendarYear}-01`}
             onClick={() => moveMonth(shiftMonth(month, -1))}
           >
             <ChevronLeft size={19} />
           </button>
           <div className="calendar-jump">
-            <select aria-label="달력 연도" value={year} onChange={(event) => moveMonth(`${event.target.value}-${monthNumber}`)}>
-              {calendarYears.map((option) => <option key={option} value={option}>{option}년</option>)}
+            <select aria-label={t("달력 연도")} value={year} onChange={(event) => moveMonth(`${event.target.value}-${monthNumber}`)}>
+              {calendarYears.map((option) => <option key={option} value={option}>{option}{t("년")}</option>)}
             </select>
-            <select className="calendar-month" aria-label="달력 월" value={monthNumber} onChange={(event) => moveMonth(`${year}-${event.target.value}`)}>
-              {calendarMonths.map((option) => <option key={option} value={option}>{Number(option)}월</option>)}
+            <select className="calendar-month" aria-label={t("달력 월")} value={monthNumber} onChange={(event) => moveMonth(`${year}-${event.target.value}`)}>
+              {calendarMonths.map((option) => <option key={option} value={option}>{monthName(Number(option))}</option>)}
             </select>
           </div>
           <button
             className="icon-button"
-            aria-label="다음 달"
-            title="다음 달"
+            aria-label={t("다음 달")}
+            title={t("다음 달")}
             disabled={month === `${lastCalendarYear}-12`}
             onClick={() => moveMonth(shiftMonth(month, 1))}
           >
@@ -1494,9 +1502,7 @@ function CalendarPage({
               setMonth(dateKey().slice(0, 7));
               setDay(dateKey());
             }}
-          >
-            오늘
-          </button>
+          >{t("오늘")}{" "}</button>
         </div>
       </div>
       <div className="calendar-toolbar">
@@ -1512,7 +1518,7 @@ function CalendarPage({
               aria-pressed={kind === value}
               onClick={() => setKind(value)}
             >
-              {label}
+              {t(label)}
             </button>
           ))}
         </div>
@@ -1522,15 +1528,13 @@ function CalendarPage({
               (sum, [day, items]) => day.startsWith(month) ? sum + items.length : sum,
               0,
             )
-          }
-          개 일정
-        </span>
+          }{t("개 일정")}{" "}</span>
       </div>
       <section className="glass calendar-panel">
         <div className="weekday-row">
           {weekdays.map((name, i) => (
             <span key={name} className={i === 6 ? "sunday" : ""}>
-              {name}
+              {t(name)}
             </span>
           ))}
         </div>
@@ -1546,7 +1550,7 @@ function CalendarPage({
             >
               <div className="day-heading">
                 <button
-                  aria-label={`${key} 일정 추가`}
+                  aria-label={t("{0} 일정 추가", [String(key)])}
                   className={key === dateKey() ? "date-today" : ""}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -1574,7 +1578,7 @@ function CalendarPage({
                   >
                     <i />
                     <span className="calendar-event-title">{e.title}</span>
-                    {isExcusedMovie(e) && <small className="calendar-attendance">공결</small>}
+                    {isExcusedMovie(e) && <small className="calendar-attendance">{t("공결")}</small>}
                   </button>
                 ))}
                 {(buckets.get(key)?.length || 0) > 3 && (
@@ -1589,8 +1593,7 @@ function CalendarPage({
                       );
                     }}
                   >
-                    +{buckets.get(key)!.length - 3}개
-                  </button>
+                    +{buckets.get(key)!.length - 3}{t("개")}{" "}</button>
                 )}
               </div>
             </div>
@@ -1600,12 +1603,9 @@ function CalendarPage({
       <section className="glass day-detail">
         <div className="section-heading">
           <h2>
-            {Number(day.slice(5, 7))}월 {Number(day.slice(8))}일
-          </h2>
+            {Number(day.slice(5, 7))}{t("월")}{" "}{Number(day.slice(8))}{t("일")}{" "}</h2>
           <button className="text-button" onClick={() => onAdd(day)}>
-            <Plus size={16} />
-            일정 추가
-          </button>
+            <Plus size={16} />{t("일정 추가")}{" "}</button>
         </div>
         <EventRows events={buckets.get(day) || []} />
       </section>
@@ -1619,6 +1619,7 @@ function EventDetails({
   event: EventItem;
   onClose: () => void;
 }) {
+  useLanguage();
   const { data, mutate, notify, draft } = useCalix();
   const [saving, setSaving] = useState(false),
     [dirty, setDirty] = useState(false),
@@ -1677,10 +1678,10 @@ function EventDetails({
   };
   return (
     <>
-      <Modal title="상세 일정" onClose={close}>
+      <Modal title={t("상세 일정")} onClose={close}>
         <div className="detail-context">
           <TypeBadge event={event} />
-          <span>{event.course_name || "개인 일정"}</span>
+          <span>{event.course_name || t("개인 일정")}</span>
           <span className={isExcusedMovie(event) ? "count-pill attendance-status excused" : "count-pill"}>{status(event)}</span>
         </div>
         <form
@@ -1689,9 +1690,7 @@ function EventDetails({
             void save();
           }}
         >
-          <label>
-            일정 이름
-            <input
+          <label>{t("일정 이름")}{" "}<input
               autoFocus
               maxLength={200}
               required
@@ -1706,7 +1705,7 @@ function EventDetails({
           <div className="detail-due">
             {event.manual ? (
               <DateField
-                label="기한"
+                label={t("기한")}
                 value={due}
                 disabled={saving}
                 withTime
@@ -1724,14 +1723,11 @@ function EventDetails({
             <section className="submission-feedback">
               <h3>{status(event)}</h3>
               {event.lms_data.grade && (
-                <p>
-                  평가 <strong>{event.lms_data.grade}</strong>
+                <p>{t("평가")}{" "}<strong>{event.lms_data.grade}</strong>
                 </p>
               )}
               {event.lms_data.feedback_available === false && (
-                <p className="muted">
-                  코멘트 확인 실패, 다시 동기화
-                </p>
+                <p className="muted">{t("코멘트 확인 실패, 다시 동기화")}{" "}</p>
               )}
               {event.lms_data.rubric?.map((r, i) => (
                 <blockquote key={`rubric-${i}`}>
@@ -1743,16 +1739,14 @@ function EventDetails({
                 <blockquote key={i}>
                   <p>{c.text}</p>
                   <footer>
-                    {c.author || "작성자 미표시"}
+                    {c.author || t("작성자 미표시")}
                     {c.created_at ? ` / ${dueText(c.created_at)}` : ""}
                   </footer>
                 </blockquote>
               ))}
             </section>
           )}
-          <label>
-            유형
-            <select
+          <label>{t("유형")}{" "}<select
               disabled={saving}
               value={type}
               onChange={(e) => {
@@ -1762,8 +1756,7 @@ function EventDetails({
             >
               {!event.manual && (
                 <option value="">
-                  {event.kind === "movie" ? "영상" : "과제"} (기본)
-                </option>
+                  {event.kind === "movie" ? t("영상") : t("과제")}{" "}{t("(기본)")}{" "}</option>
               )}
               {data.types.map((t) => (
                 <option key={t.id} value={t.id}>
@@ -1772,10 +1765,8 @@ function EventDetails({
               ))}
             </select>
           </label>
-          <label>
-            메모
-            <textarea
-              aria-label="메모"
+          <label>{t("메모")}{" "}<textarea
+              aria-label={t("메모")}
               rows={5}
               disabled={saving}
               maxLength={20000}
@@ -1784,7 +1775,7 @@ function EventDetails({
                 setNote(e.target.value);
                 setDirty(true);
               }}
-              placeholder="메모"
+              placeholder={t("메모")}
             />
           </label>
           {!event.manual && (
@@ -1801,7 +1792,7 @@ function EventDetails({
               }
             >
               {added ? <Check size={17} /> : <Plus size={17} />}{" "}
-              {added ? "체크리스트에 추가됨" : "체크리스트에 추가"}
+              {added ? t("체크리스트에 추가됨") : t("체크리스트에 추가")}
             </button>
           )}
           <div className="dialog-actions">
@@ -1813,8 +1804,7 @@ function EventDetails({
                     notify(e.message, true),
                   )
                 }
-              >
-                원본 열기 <ArrowUpRight size={15} />
+              >{t("원본 열기")}{" "}<ArrowUpRight size={15} />
               </button>
             )}
             {event.manual && (
@@ -1822,9 +1812,7 @@ function EventDetails({
                 type="button"
                 className="danger"
                 onClick={() => setRemove(true)}
-              >
-                삭제
-              </button>
+              >{t("삭제")}{" "}</button>
             )}
             {event.manual && (
               <button
@@ -1836,23 +1824,23 @@ function EventDetails({
                   }).catch(() => {})
                 }
               >
-                {event.completed ? "완료 취소" : "완료"}
+                {event.completed ? t("완료 취소") : t("완료")}
               </button>
             )}
             <span />
-            {dirty && <small>수정 중</small>}
+            {dirty && <small>{t("수정 중")}</small>}
             <button type="submit" className="primary" disabled={saving}>
-              {saving ? "저장 중" : "저장"}
+              {saving ? t("저장 중") : t("저장")}
             </button>
           </div>
         </form>
       </Modal>
       {remove && (
-        <Modal title="정말 삭제하시겠습니까?" onClose={() => setRemove(false)}>
+        <Modal title={t("정말 삭제하시겠습니까?")} onClose={() => setRemove(false)}>
           <p>{title}</p>
           <div className="dialog-actions">
             <span />
-            <button onClick={() => setRemove(false)}>취소</button>
+            <button onClick={() => setRemove(false)}>{t("취소")}</button>
             <button
               className="primary"
               onClick={() =>
@@ -1860,9 +1848,7 @@ function EventDetails({
                   .then(onClose)
                   .catch(() => {})
               }
-            >
-              삭제
-            </button>
+            >{t("삭제")}{" "}</button>
           </div>
         </Modal>
       )}
@@ -1876,6 +1862,7 @@ function AddEvent({
   initialDate: string;
   onClose: () => void;
 }) {
+  useLanguage();
   const { data, mutate, draft } = useCalix();
   const [saving, setSaving] = useState(false);
   const formRef = useRef<HTMLFormElement>(null),
@@ -1925,7 +1912,7 @@ function AddEvent({
     };
   }, [draft]);
   return (
-    <Modal title="일정 추가" onClose={onClose}>
+    <Modal title={t("일정 추가")} onClose={onClose}>
       <form
         ref={formRef}
         onSubmit={(e) => {
@@ -1933,20 +1920,16 @@ function AddEvent({
           void save().catch(() => {});
         }}
       >
-        <label>
-          일정 이름
-          <input
+        <label>{t("일정 이름")}{" "}<input
             name="title"
             autoFocus
             required
             maxLength={200}
-            placeholder="일정 이름"
+            placeholder={t("일정 이름")}
           />
         </label>
         <div className="form-grid">
-          <label>
-            유형
-            <select name="type">
+          <label>{t("유형")}{" "}<select name="type">
               {data.types.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.name}
@@ -1954,10 +1937,8 @@ function AddEvent({
               ))}
             </select>
           </label>
-          <label>
-            과목
-            <select name="course">
-              <option value="0">개인 일정</option>
+          <label>{t("과목")}{" "}<select name="course">
+              <option value="0">{t("개인 일정")}</option>
               {data.courses.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -1966,22 +1947,14 @@ function AddEvent({
             </select>
           </label>
         </div>
-        <label>
-          기한
-          <DateField label="기한" name="due" defaultValue={`${initialDate}T23:59`} withTime allowClear disabled={saving} />
+        <label>{t("기한")}{" "}<DateField label={t("기한")} name="due" defaultValue={`${initialDate}T23:59`} withTime allowClear disabled={saving} />
         </label>
-        <label>
-          메모
-          <textarea name="note" rows={4} maxLength={20000} />
+        <label>{t("메모")}{" "}<textarea name="note" rows={4} maxLength={20000} />
         </label>
         <div className="dialog-actions">
           <span />
-          <button type="button" onClick={onClose}>
-            취소
-          </button>
-          <button className="primary" disabled={saving}>
-            추가
-          </button>
+          <button type="button" onClick={onClose}>{t("취소")}{" "}</button>
+          <button className="primary" disabled={saving}>{t("추가")}{" "}</button>
         </div>
       </form>
     </Modal>

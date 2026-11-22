@@ -4,7 +4,7 @@
 
 <p align="center"><a href="https://github.com/luttechan/Calix/releases/latest"><strong>Windows 다운로드</strong></a>　<a href="https://luttechan.github.io/calix/guide/">사용 설명서</a>　<a href="https://luttechan.github.io/calix/">공식 사이트</a></p>
 
-<p align="center">Windows 10 / 11 x64　|　공개 버전 1.7.4</p>
+<p align="center">Windows 10 / 11 x64　|　공개 버전 1.7.5</p>
 
 <p align="center"><img src="docs/images/calendar.webp" alt="Calix 달력 화면. 예시 일정이 과제와 영상 색상으로 구분되어 있습니다." width="1040"></p>
 
@@ -16,6 +16,10 @@
 | 일정 | 달력, 마감 보드, 체크리스트, 학기별 시간표, 사용자 카테고리 |
 | 학습 | 학점 계산, 뽀모도로, 공부 기록, 주간 통계, Anki |
 | 보관 | 일기장, 저장 데이터 암호화, 백업과 복원 |
+
+## 1.7.5
+
+영어와 일본어를 추가했습니다. 설정 → 화면 → 언어에서 변경할 수 있습니다. 마감 알림의 구성을 정리하고 상단 바에서 창이 이동하지 않던 문제를 수정했습니다.
 
 ## 1.7.4
 

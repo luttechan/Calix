@@ -152,6 +152,7 @@ def check(api, trigger, now=None):
         title=title,
         message=f"{label}를 확인해 주세요.",
         urgent=urgent,
+        due_today=today,
         theme=api.settings.get("theme", "pink"),
         glass=api.settings.get("glass", True),
         sound=("crit" if urgent else settings["track"]) if settings["sound"] else "",

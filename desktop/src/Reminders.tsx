@@ -1,3 +1,4 @@
+import { t, useLanguage } from "./i18n";
 import { NumberField } from "./NumberField";
 import { useEffect, useRef, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
@@ -8,6 +9,7 @@ import { defaultSyncTrack, syncCuePath } from "./syncCue";
 import type { ReminderSettings } from "./types";
 
 export function ReminderSettingsPanel({ active = true }: { active?: boolean }) {
+  useLanguage();
   const { data, mutate, notify } = useCalix();
   const [form, setForm] = useState<ReminderSettings>(
     data.preferences.reminders,
@@ -107,18 +109,16 @@ export function ReminderSettingsPanel({ active = true }: { active?: boolean }) {
       <div className="alarm-panel-heading">
         <div className="settings-heading">
           <Bell aria-hidden="true" />
-          <h2>알림과 소리</h2>
+          <h2>{t("알림과 소리")}</h2>
         </div>
         <label className="alarm-enable">
           <input
             type="checkbox"
             checked={form.enabled}
             onChange={(e) => change("enabled", e.target.checked)}
-          />
-          알림 켜기
-        </label>
+          />{t("알림 켜기")}{" "}</label>
       </div>
-      <div className="alarm-tabs" role="tablist" aria-label="알림 설정 구분">
+      <div className="alarm-tabs" role="tablist" aria-label={t("알림 설정 구분")}>
         {(
           [
             ["rules", "알림 조건"],
@@ -134,7 +134,7 @@ export function ReminderSettingsPanel({ active = true }: { active?: boolean }) {
             id={`alarm-tab-${id}`}
             onClick={() => setSection(id)}
           >
-            {label}
+            {t(label)}
           </button>
         ))}
       </div>
@@ -160,7 +160,7 @@ export function ReminderSettingsPanel({ active = true }: { active?: boolean }) {
             hidden={section !== "rules"}
           >
             <section className="alarm-group">
-              <h3>표시 시점</h3>
+              <h3>{t("표시 시점")}</h3>
               <div className="alarm-choice-grid">
                 {(
                   [
@@ -174,13 +174,13 @@ export function ReminderSettingsPanel({ active = true }: { active?: boolean }) {
                       checked={form[key]}
                       onChange={(e) => change(key, e.target.checked)}
                     />
-                    <span>{label}</span>
+                    <span>{t(label)}</span>
                   </label>
                 ))}
               </div>
             </section>
             <section className="alarm-group">
-              <h3>알림 대상</h3>
+              <h3>{t("알림 대상")}</h3>
               <div className="alarm-choice-grid">
                 {(
                   [
@@ -194,13 +194,13 @@ export function ReminderSettingsPanel({ active = true }: { active?: boolean }) {
                       checked={form[key]}
                       onChange={(e) => change(key, e.target.checked)}
                     />
-                    <span>{label}</span>
+                    <span>{t(label)}</span>
                   </label>
                 ))}
               </div>
             </section>
             <section className="alarm-group">
-              <h3>마감 알림</h3>
+              <h3>{t("마감 알림")}</h3>
               <div className="alarm-deadline-grid">
                 <div className="alarm-deadline">
                   <label className="alarm-choice alarm-rule-title">
@@ -209,10 +209,10 @@ export function ReminderSettingsPanel({ active = true }: { active?: boolean }) {
                       checked={form.urgent}
                       onChange={(e) => change("urgent", e.target.checked)}
                     />
-                    <strong>긴급 REMIND</strong>
+                    <strong>{t("긴급 REMIND")}</strong>
                   </label>
                   <select
-                    aria-label="긴급 알림 시간"
+                    aria-label={t("긴급 알림 시간")}
                     disabled={!form.urgent}
                     value={
                       urgentCustom ? "custom" : String(form.urgent_minutes)
@@ -224,16 +224,16 @@ export function ReminderSettingsPanel({ active = true }: { active?: boolean }) {
                         change("urgent_minutes", Number(e.target.value));
                     }}
                   >
-                    <option value="10">10분 전</option>
-                    <option value="60">1시간 전</option>
-                    <option value="180">3시간 전</option>
-                    <option value="300">5시간 전</option>
-                    <option value="custom">직접 입력</option>
+                    <option value="10">{t("10분 전")}</option>
+                    <option value="60">{t("1시간 전")}</option>
+                    <option value="180">{t("3시간 전")}</option>
+                    <option value="300">{t("5시간 전")}</option>
+                    <option value="custom">{t("직접 입력")}</option>
                   </select>
                   {urgentCustom && (
                     <div className="alarm-number">
                       <NumberField
-                        aria-label="긴급 알림 분"
+                        aria-label={t("긴급 알림 분")}
 
                         min={1}
                         max={10080}
@@ -243,10 +243,10 @@ export function ReminderSettingsPanel({ active = true }: { active?: boolean }) {
                         value={form.urgent_minutes}
                         onValueChange={value => change("urgent_minutes", value)}
                       />
-                      <span>분 전</span>
+                      <span>{t("분 전")}</span>
                     </div>
                   )}
-                  <small>긴급 음원: {alarmNames.crit}</small>
+                  <small>{t("긴급 음원:")}{" "}{alarmNames.crit}</small>
                 </div>
                 <div className="alarm-deadline">
                   <label className="alarm-choice alarm-rule-title">
@@ -255,10 +255,10 @@ export function ReminderSettingsPanel({ active = true }: { active?: boolean }) {
                       checked={form.general}
                       onChange={(e) => change("general", e.target.checked)}
                     />
-                    <strong>일반 REMIND</strong>
+                    <strong>{t("일반 REMIND")}</strong>
                   </label>
                   <select
-                    aria-label="일반 알림 시간"
+                    aria-label={t("일반 알림 시간")}
                     disabled={!form.general}
                     value={generalCustom ? "custom" : String(form.general_days)}
                     onChange={(e) => {
@@ -268,16 +268,16 @@ export function ReminderSettingsPanel({ active = true }: { active?: boolean }) {
                         change("general_days", Number(e.target.value));
                     }}
                   >
-                    <option value="0">오늘 마감</option>
-                    <option value="1">하루 전</option>
-                    <option value="3">3일 전</option>
-                    <option value="7">7일 전</option>
-                    <option value="custom">직접 입력</option>
+                    <option value="0">{t("오늘 마감")}</option>
+                    <option value="1">{t("하루 전")}</option>
+                    <option value="3">{t("3일 전")}</option>
+                    <option value="7">{t("7일 전")}</option>
+                    <option value="custom">{t("직접 입력")}</option>
                   </select>
                   {generalCustom && (
                     <div className="alarm-number">
                       <NumberField
-                        aria-label="일반 알림 일"
+                        aria-label={t("일반 알림 일")}
 
                         min={0}
                         max={365}
@@ -287,7 +287,7 @@ export function ReminderSettingsPanel({ active = true }: { active?: boolean }) {
                         value={form.general_days}
                         onValueChange={value => change("general_days", value)}
                       />
-                      <span>일 전</span>
+                      <span>{t("일 전")}</span>
                     </div>
                   )}
                 </div>
@@ -301,21 +301,19 @@ export function ReminderSettingsPanel({ active = true }: { active?: boolean }) {
             hidden={section !== "sound"}
           >
             <section className="alarm-group alarm-sound-header">
-              <h3>알림 소리</h3>
+              <h3>{t("알림 소리")}</h3>
               <label className="alarm-choice">
                 <input
                   type="checkbox"
                   checked={form.sound}
                   onChange={(e) => change("sound", e.target.checked)}
-                />
-                소리 켜기
-              </label>
+                />{t("소리 켜기")}{" "}</label>
             </section>
             <div className="alarm-track-row">
               <div>
-                <strong>일반 알람</strong>
+                <strong>{t("일반 알람")}</strong>
                 <select
-                  aria-label="일반 알람 음원"
+                  aria-label={t("일반 알람 음원")}
                   disabled={!form.sound}
                   value={form.track}
                   onChange={(e) => change("track", e.target.value)}
@@ -329,44 +327,43 @@ export function ReminderSettingsPanel({ active = true }: { active?: boolean }) {
               </div>
               <button
                 type="button"
-                aria-label="일반 알람 미리 듣기"
+                aria-label={t("일반 알람 미리 듣기")}
                 disabled={!form.sound || !catalog.tracks.length}
                 onClick={() => testSound(normalPath)}
               >
                 <Volume2 size={16} />
-                {playing === normalPath ? "중지" : "미리 듣기"}
+                {playing === normalPath ? t("중지") : t("미리 듣기")}
               </button>
             </div>
             <div className="alarm-track-row">
               <div>
-                <strong>긴급 알람</strong>
+                <strong>{t("긴급 알람")}</strong>
                 <span className="alarm-file">{alarmNames.crit}</span>
               </div>
               <button
                 type="button"
-                aria-label="긴급 알람 미리 듣기"
+                aria-label={t("긴급 알람 미리 듣기")}
                 disabled={!form.sound || !catalog.critical}
                 onClick={() => testSound(urgentPath)}
               >
                 <Volume2 size={16} />
-                {playing === urgentPath ? "중지" : "미리 듣기"}
+                {playing === urgentPath ? t("중지") : t("미리 듣기")}
               </button>
             </div>
             <div className="alarm-track-row">
               <div>
-                <strong>동기화 완료음</strong>
-                <select aria-label="동기화 완료음" value={syncTrack} disabled={!form.sound} onChange={(event) => change("sync_track", event.target.value)}>
+                <strong>{t("동기화 완료음")}</strong>
+                <select aria-label={t("동기화 완료음")} value={syncTrack} disabled={!form.sound} onChange={(event) => change("sync_track", event.target.value)}>
                   {syncTracks.map((track) => <option value={String(track)} key={track}>Notification {track}</option>)}
                 </select>
               </div>
-              <button type="button" aria-label="동기화 완료음 미리 듣기" disabled={!form.sound} onClick={() => testSound(syncPath)}>
-                <Volume2 size={16} /> {playing === syncPath ? "중지" : "미리 듣기"}
+              <button type="button" aria-label={t("동기화 완료음 미리 듣기")} disabled={!form.sound} onClick={() => testSound(syncPath)}>
+                <Volume2 size={16} /> {playing === syncPath ? t("중지") : t("미리 듣기")}
               </button>
             </div>
-            <label className="alarm-volume">
-              음량 <output>{Math.round(form.volume * 100)}%</output>
+            <label className="alarm-volume">{t("음량")}{" "}<output>{Math.round(form.volume * 100)}%</output>
               <input
-                aria-label="알람 음량"
+                aria-label={t("알람 음량")}
                 type="range"
                 min={0}
                 max={1}
@@ -380,10 +377,10 @@ export function ReminderSettingsPanel({ active = true }: { active?: boolean }) {
         </fieldset>
         <div className="alarm-save">
           <span aria-live="polite">
-            {dirty ? "저장하지 않은 변경 사항" : ""}
+            {dirty ? t("저장하지 않은 변경 사항") : ""}
           </span>
           <button className="primary" disabled={saving}>
-            {saving ? "저장 중" : "알림 설정 저장"}
+            {saving ? t("저장 중") : t("알림 설정 저장")}
           </button>
         </div>
       </form>

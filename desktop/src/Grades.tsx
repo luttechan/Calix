@@ -1,3 +1,4 @@
+import { semesterName, t, useLanguage } from "./i18n";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
@@ -51,6 +52,7 @@ const GradeRow = memo(function GradeRow({
   onField: (id: string, key: GradeField, value: string | number) => void;
   onDelete: (id: string) => void;
 }) {
+  useLanguage();
   const field = (key: GradeField, value: string | number) =>
     onField(item.id, key, value);
   const error = (key: GradeField) =>
@@ -70,12 +72,12 @@ const GradeRow = memo(function GradeRow({
       data-grade-id={item.id}
     >
       <label className="grade-course grade-field">
-        <span className="grade-field-label">과목</span>
+        <span className="grade-field-label">{t("과목")}</span>
         <span className="grade-course-input">
-          {item.linked && <Link2 size={14} aria-label="Canvas 연결" />}
+          {item.linked && <Link2 size={14} aria-label={t("Canvas 연결")} />}
           <input
             {...attrs("title")}
-            aria-label={`${item.title || "새 과목"} 과목명`}
+            aria-label={t("{0} 과목명", [String(item.title || "새 과목")])}
             title={item.title}
             value={item.title}
             readOnly={item.linked}
@@ -87,13 +89,13 @@ const GradeRow = memo(function GradeRow({
         {error("title")}
       </label>
       <label className="grade-field">
-        <span className="grade-field-label">학점</span>
+        <span className="grade-field-label">{t("학점")}</span>
         <input
           {...attrs("credits")}
           type="text"
           inputMode="decimal"
           maxLength={8}
-          aria-label={`${item.title || "새 과목"} 학점`}
+          aria-label={t("{0} 학점", [String(item.title || "새 과목")])}
           value={item.credits}
           onFocus={(event) => {
             if (creditValue(item.credits) === 0) event.currentTarget.select();
@@ -108,16 +110,16 @@ const GradeRow = memo(function GradeRow({
         {error("credits")}
       </label>
       <label className="grade-field">
-        <span className="grade-field-label">성적</span>
+        <span className="grade-field-label">{t("성적")}</span>
         <select
           {...attrs("grade")}
-          aria-label={`${item.title || "새 과목"} 성적`}
+          aria-label={t("{0} 성적", [String(item.title || "새 과목")])}
           value={item.grade}
           onChange={(event) => field("grade", event.target.value)}
         >
-          <option value="">미입력</option>
+          <option value="">{t("미입력")}</option>
           {item.grade && !options.includes(item.grade) && (
-            <option value={item.grade}>{item.grade} (미지원)</option>
+            <option value={item.grade}>{item.grade}{" "}{t("(미지원)")}</option>
           )}
           {options.map((grade) => (
             <option key={grade}>{grade}</option>
@@ -126,15 +128,15 @@ const GradeRow = memo(function GradeRow({
         {error("grade")}
       </label>
       <label className="grade-field">
-        <span className="grade-field-label">분류</span>
+        <span className="grade-field-label">{t("분류")}</span>
         <select
           {...attrs("category")}
-          aria-label={`${item.title || "새 과목"} 분류`}
+          aria-label={t("{0} 분류", [String(item.title || "새 과목")])}
           value={item.category}
           onChange={(event) => field("category", event.target.value)}
         >
           {["전공", "교양", "일반"].map((category) => (
-            <option key={category}>{category}</option>
+            <option key={category} value={category}>{t(category)}</option>
           ))}
         </select>
         {error("category")}
@@ -147,15 +149,13 @@ const GradeRow = memo(function GradeRow({
             onChange={(event) =>
               field("excluded", Number(event.target.checked))
             }
-          />
-          제외
-        </label>
+          />{t("제외")}{" "}</label>
         {!item.linked && (
           <button
             type="button"
             className="icon-button"
-            title="과목 삭제"
-            aria-label={`${item.title || "새 과목"} 삭제`}
+            title={t("과목 삭제")}
+            aria-label={t("{0} 삭제", [String(item.title || "새 과목")])}
             onClick={() => onDelete(item.id)}
           >
             <Trash2 size={16} />
@@ -167,6 +167,7 @@ const GradeRow = memo(function GradeRow({
 });
 
 export function GradesPage() {
+  useLanguage();
   const { data, notify, leave, soundError } = useCalix();
   const [semester, setSemester] = useState(
       data.mainTerm || data.timetableTerms[0]?.name || "",
@@ -373,8 +374,8 @@ export function GradesPage() {
           ).length;
           notify(
             added
-              ? `과목 ${added}개를 가져왔습니다.`
-              : "추가할 과목이 없습니다.",
+              ? t("과목 {0}개를 가져왔습니다.", [String(added)])
+              : t("추가할 과목이 없습니다."),
           );
         } else notify("학점 기록을 초기화했습니다.");
       } catch (reason) {
@@ -480,15 +481,13 @@ export function GradesPage() {
       <header className="page-heading">
         <div>
           <p className="eyebrow">GRADEBOOK</p>
-          <h1>학점 계산기</h1>
+          <h1>{t("학점 계산기")}</h1>
         </div>
         <Calculator size={26} aria-hidden="true" />
       </header>
       <div className="grades-toolbar">
-        <label>
-          학기
-          <select
-            aria-label="학기"
+        <label>{t("학기")}{" "}<select
+            aria-label={t("학기")}
             value={semester}
             disabled={pending}
             onChange={(event) => {
@@ -504,15 +503,13 @@ export function GradesPage() {
             }}
           >
             {data.timetableTerms.map((term) => (
-              <option key={term.name}>{term.name}</option>
+              <option key={term.name} value={term.name}>{semesterName(term.name)}</option>
             ))}
           </select>
         </label>
         {sheet && (
-          <label>
-            평점 기준
-            <select
-              aria-label="평점 기준"
+          <label>{t("평점 기준")}{" "}<select
+              aria-label={t("평점 기준")}
               value={sheet.scale}
               disabled={pending}
               onChange={(event) => {
@@ -538,8 +535,7 @@ export function GradesPage() {
               setImportIds(new Set(importChoices.map((course) => course.id)))
             }
           >
-            <Download size={16} aria-hidden="true" /> 과목 일괄 가져오기
-          </button>
+            <Download size={16} aria-hidden="true" />{" "}{t("과목 일괄 가져오기")}{" "}</button>
           <button
             className="button"
             type="button"
@@ -568,9 +564,7 @@ export function GradesPage() {
               });
             }}
           >
-            <Plus size={16} />
-            과목 추가
-          </button>
+            <Plus size={16} />{t("과목 추가")}{" "}</button>
         </div>
       </div>
       {error && (
@@ -579,14 +573,12 @@ export function GradesPage() {
           <button
             type="button"
             onClick={() => (count ? setDiscard(true) : void load(semester))}
-          >
-            다시 불러오기
-          </button>
+          >{t("다시 불러오기")}{" "}</button>
         </div>
       )}
       {Object.keys(errors).length > 0 && (
         <div className="grade-error-banner" role="alert">
-          <strong>입력을 확인하세요.</strong>
+          <strong>{t("입력을 확인하세요.")}</strong>
           <ul>
             {Object.entries(errors).flatMap(([id, fields]) =>
               Object.entries(fields).map(([field, message]) => (
@@ -596,7 +588,7 @@ export function GradesPage() {
                     onClick={() => focusField(id, field as GradeField)}
                   >
                     {sheet?.items.find((item) => item.id === id)?.title ||
-                      "새 과목"}
+                      t("새 과목")}
                     : {message}
                   </button>
                 </li>
@@ -606,43 +598,41 @@ export function GradesPage() {
         </div>
       )}
       {loading && !sheet && (
-        <div className="empty" role="status">
-          불러오는 중
-        </div>
+        <div className="empty" role="status">{t("불러오는 중")}{" "}</div>
       )}
       {sheet && summary && (
         <>
-          <div className="grade-summary" aria-label="학점 계산 결과">
+          <div className="grade-summary" aria-label={t("학점 계산 결과")}>
             <article>
-              <span>평점평균</span>
+              <span>{t("평점평균")}</span>
               <strong>
                 {summary.gpa ?? "—"}
                 <small> / {sheet.scale}</small>
               </strong>
             </article>
             <article>
-              <span>취득 학점</span>
+              <span>{t("취득 학점")}</span>
               <strong>
                 {summary.earned_credits}
-                <small> 학점</small>
+                <small>{" "}{t("학점")}</small>
               </strong>
             </article>
             <article>
-              <span>평점 산입</span>
+              <span>{t("평점 산입")}</span>
               <strong>
                 {summary.graded_credits}
-                <small> 학점</small>
+                <small>{" "}{t("학점")}</small>
               </strong>
             </article>
             <article>
-              <span>성적 미입력</span>
+              <span>{t("성적 미입력")}</span>
               <strong>
                 {summary.pending}
-                <small> 과목</small>
+                <small>{" "}{t("과목")}</small>
               </strong>
             </article>
           </div>
-          <p className="grade-policy">P는 취득 학점에만 반영합니다.</p>
+          <p className="grade-policy">{t("P는 취득 학점에만 반영합니다.")}</p>
           <form
             id="grade-form"
             ref={form}
@@ -657,15 +647,15 @@ export function GradesPage() {
               <Search size={16} />
               <input
                 type="search"
-                aria-label="과목 검색"
-                placeholder="과목 검색"
+                aria-label={t("과목 검색")}
+                placeholder={t("과목 검색")}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") event.preventDefault();
                 }}
               />
-              <span>{visible.length}과목</span>
+              <span>{visible.length}{t("과목")}</span>
             </div>
             <fieldset disabled={pending} className="grade-edit-fields">
               <div className="grade-table">
@@ -681,11 +671,11 @@ export function GradesPage() {
                     <button
                       type="button"
                       key={field}
-                      title={`${label} 정렬`}
+                      title={t("{0} 정렬", [String(label)])}
                       onClick={() => sortBy(field)}
-                      aria-label={`${label} ${sort?.field === field && !sort.desc ? "내림차순" : "오름차순"} 정렬`}
+                      aria-label={t("{0} {1} 정렬", [String(label), String(sort?.field === field && !sort.desc ? "내림차순" : "오름차순")])}
                     >
-                      {label}
+                      {t(label)}
                       {sort?.field === field &&
                         (sort.desc ? (
                           <ArrowDown size={12} />
@@ -694,7 +684,7 @@ export function GradesPage() {
                         ))}
                     </button>
                   ))}
-                  <span>관리</span>
+                  <span>{t("관리")}</span>
                 </div>
                 {visible.map((item) => (
                   <GradeRow
@@ -710,7 +700,7 @@ export function GradesPage() {
                 ))}
                 {!visible.length && (
                   <div className="empty">
-                    {sheet.items.length ? "검색 결과 없음" : "등록된 과목 없음"}
+                    {sheet.items.length ? t("검색 결과 없음") : t("등록된 과목 없음")}
                   </div>
                 )}
               </div>
@@ -718,7 +708,7 @@ export function GradesPage() {
           </form>
           <div className="grade-savebar">
             <span role="status">
-              {pending ? "저장 중" : count ? `변경 ${count}건` : "저장됨"}
+              {pending ? t("저장 중") : count ? t("변경 {0}건", [String(count)]) : t("저장됨")}
             </span>
             {sheet.deleted.length > 0 && (
               <button
@@ -733,35 +723,29 @@ export function GradesPage() {
                   });
                 }}
               >
-                <Undo2 size={16} />
-                삭제 취소
-              </button>
+                <Undo2 size={16} />{t("삭제 취소")}{" "}</button>
             )}
             {count > 0 && (
               <button
                 type="button"
                 disabled={pending}
                 onClick={() => setDiscard(true)}
-              >
-                변경 취소
-              </button>
+              >{t("변경 취소")}{" "}</button>
             )}
             <button
               className="primary"
               type="submit"
               form="grade-form"
               disabled={pending || !count}
-              title="전체 저장 (Ctrl+S)"
+              title={t("전체 저장 (Ctrl+S)")}
             >
               <Save size={16} />
-              {pending ? "저장 중" : "전체 저장"}
+              {pending ? t("저장 중") : t("전체 저장")}
             </button>
           </div>
           <details className="grade-sources">
-            <summary>계산 기준</summary>
-            <p>
-              과목별 학점과 평점의 곱을 합산한 뒤 평점 산입 학점으로 나눕니다.
-            </p>
+            <summary>{t("계산 기준")}</summary>
+            <p>{t("과목별 학점과 평점의 곱을 합산한 뒤 평점 산입 학점으로 나눕니다.")}{" "}</p>
             {(
               [
                 ["grade45", "4.5 기준 / 부산외대"],
@@ -779,34 +763,28 @@ export function GradesPage() {
                   )
                 }
               >
-                {label}
+                {t(label)}
               </button>
             ))}
           </details>
-          <div className="grade-reset-actions" aria-label="학점 기록 초기화">
+          <div className="grade-reset-actions" aria-label={t("학점 기록 초기화")}>
             <button
               type="button"
               disabled={pending}
               onClick={() => setReset("semester")}
-            >
-              학기 초기화
-            </button>
+            >{t("학기 초기화")}{" "}</button>
             <button
               type="button"
               disabled={pending}
               onClick={() => setReset("all")}
-            >
-              전체 초기화
-            </button>
+            >{t("전체 초기화")}{" "}</button>
           </div>
         </>
       )}
       {remove && (
-        <Modal title="정말 삭제하시겠습니까?" onClose={() => setRemove(null)}>
+        <Modal title={t("정말 삭제하시겠습니까?")} onClose={() => setRemove(null)}>
           <div className="dialog-actions">
-            <button type="button" onClick={() => setRemove(null)}>
-              취소
-            </button>
+            <button type="button" onClick={() => setRemove(null)}>{t("취소")}{" "}</button>
             <button
               type="button"
               className="danger"
@@ -827,21 +805,17 @@ export function GradesPage() {
                 }
                 setRemove(null);
               }}
-            >
-              삭제
-            </button>
+            >{t("삭제")}{" "}</button>
           </div>
         </Modal>
       )}
       {discard && (
         <Modal
-          title="변경 내용을 취소하시겠습니까?"
+          title={t("변경 내용을 취소하시겠습니까?")}
           onClose={() => setDiscard(false)}
         >
           <div className="dialog-actions">
-            <button type="button" onClick={() => setDiscard(false)}>
-              계속 입력
-            </button>
+            <button type="button" onClick={() => setDiscard(false)}>{t("계속 입력")}{" "}</button>
             <button
               type="button"
               className="danger"
@@ -857,21 +831,19 @@ export function GradesPage() {
                 if (term !== semester) setSemester(term);
                 else void load(term);
               }}
-            >
-              변경 취소
-            </button>
+            >{t("변경 취소")}{" "}</button>
           </div>
         </Modal>
       )}
       {importIds && (
         <Modal
-          title="과목 일괄 가져오기"
+          title={t("과목 일괄 가져오기")}
           className="grade-import-dialog"
           onClose={() => {
             if (!pending) setImportIds(null);
           }}
         >
-          <div className="grade-import-list" aria-label="Canvas 과목">
+          <div className="grade-import-list" aria-label={t("Canvas 과목")}>
             {importChoices.map((course) => (
               <label key={course.id}>
                 <input
@@ -902,58 +874,49 @@ export function GradesPage() {
               }
             >
               {importIds.size === importChoices.length
-                ? "전체 해제"
-                : "전체 선택"}
+                ? t("전체 해제")
+                : t("전체 선택")}
             </button>
             <span />
             <button
               type="button"
               disabled={pending}
               onClick={() => setImportIds(null)}
-            >
-              취소
-            </button>
+            >{t("취소")}{" "}</button>
             <button
               type="button"
               className="primary"
               disabled={!importIds.size || pending}
               onClick={() => void changeCourses("import")}
             >
-              {importIds.size}개 가져오기
-            </button>
+              {importIds.size}{t("개 가져오기")}{" "}</button>
           </div>
         </Modal>
       )}
       {reset && (
         <Modal
           title={
-            reset === "all" ? "전체 학점 기록 초기화" : "학기 학점 기록 초기화"
+            reset === "all" ? t("전체 학점 기록 초기화") : t("학기 학점 기록 초기화")
           }
           onClose={() => {
             if (!pending) setReset(null);
           }}
         >
           <p>
-            {reset === "all" ? "모든 학기" : semester}의 입력한 성적과 평점
-            기준을 초기화합니다.
-          </p>
-          <p className="muted">자동 연결 과목은 빈 성적으로 표시됩니다.</p>
+            {reset === "all" ? t("모든 학기") : semester}{t("의 입력한 성적과 평점 기준을 초기화합니다.")}{" "}</p>
+          <p className="muted">{t("자동 연결 과목은 빈 성적으로 표시됩니다.")}</p>
           <div className="dialog-actions grade-confirm-actions">
             <button
               type="button"
               disabled={pending}
               onClick={() => setReset(null)}
-            >
-              취소
-            </button>
+            >{t("취소")}{" "}</button>
             <button
               type="button"
               className="danger-button"
               disabled={pending}
               onClick={() => void changeCourses("reset")}
-            >
-              초기화
-            </button>
+            >{t("초기화")}{" "}</button>
           </div>
         </Modal>
       )}

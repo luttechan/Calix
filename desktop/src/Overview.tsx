@@ -1,3 +1,4 @@
+import { locale, t, useLanguage } from "./i18n";
 import { useEffect, useMemo, useState } from "react";
 import { TypeBadge, useCalix } from "./App";
 import { ChevronRight, Search } from "lucide-react";
@@ -6,6 +7,7 @@ import { deadlineGroup, orderByDeadline } from "./overviewState";
 import "./overview.css";
 import { PlanningPanel } from "./Planning";
 function Items({ items }: { items: EventItem[] }) {
+  useLanguage();
   const { openEvent } = useCalix();
   return (
     <div className="overview-items">
@@ -29,13 +31,13 @@ function Items({ items }: { items: EventItem[] }) {
               }
             >
               {item.due_at && Number.isFinite(Date.parse(item.due_at))
-                ? new Date(item.due_at).toLocaleString("ko-KR", {
+                ? new Date(item.due_at).toLocaleString(locale(), {
                     month: "numeric",
                     day: "numeric",
                     hour: "2-digit",
                     minute: "2-digit",
                   })
-                : "기한 없음"}
+                : t("기한 없음")}
             </time>
             <ChevronRight
               size={15}
@@ -45,12 +47,13 @@ function Items({ items }: { items: EventItem[] }) {
           </button>
         ))
       ) : (
-        <p className="empty">일정 없음</p>
+        <p className="empty">{t("일정 없음")}</p>
       )}
     </div>
   );
 }
 export function DeadlinePage() {
+  useLanguage();
   const { data } = useCalix();
   const [now, setNow] = useState(() => new Date()),
     [query, setQuery] = useState(""),
@@ -84,7 +87,7 @@ export function DeadlinePage() {
     <section className="overview-page deadline-page">
       <header className="page-heading">
         <div>
-          <h1>마감 보드</h1>
+          <h1>{t("마감 보드")}</h1>
         </div>
         <button
           type="button"
@@ -94,8 +97,7 @@ export function DeadlinePage() {
             setPlanningOpened(true);
             setPlanning((open) => !open);
           }}
-        >
-          학습 계획 <ChevronRight size={16} aria-hidden="true" />
+        >{t("학습 계획")}{" "}<ChevronRight size={16} aria-hidden="true" />
         </button>
       </header>
       <div id="deadline-planning" hidden={!planning}>
@@ -106,20 +108,20 @@ export function DeadlinePage() {
           <label className="deadline-search">
             <Search size={16} aria-hidden="true" />
             <input
-              aria-label="마감 일정 검색"
-              placeholder="일정, 과목 검색"
+              aria-label={t("마감 일정 검색")}
+              placeholder={t("일정, 과목 검색")}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
           </label>
           <select
-            aria-label="일정 종류"
+            aria-label={t("일정 종류")}
             value={kind}
             onChange={(e) => setKind(e.target.value)}
           >
-            <option value="all">전체 유형</option>
-            <option value="assignment">과제</option>
-            <option value="movie">영상</option>
+            <option value="all">{t("전체 유형")}</option>
+            <option value="assignment">{t("과제")}</option>
+            <option value="movie">{t("영상")}</option>
           </select>
         </div>
         {[
@@ -134,7 +136,7 @@ export function DeadlinePage() {
           return (
             <section key={id} className={`deadline-group ${id}`}>
               <h2>
-                {label}
+                {t(label)}
                 <span>{selected.length}</span>
               </h2>
               <Items items={selected} />
@@ -144,8 +146,8 @@ export function DeadlinePage() {
         {!items.length && (
           <p className="deadline-empty" role="status">
             {query.trim() || kind !== "all"
-              ? "검색 결과 없음"
-              : "남은 일정 없음"}
+              ? t("검색 결과 없음")
+              : t("남은 일정 없음")}
           </p>
         )}
       </div>
@@ -153,6 +155,7 @@ export function DeadlinePage() {
   );
 }
 export function CourseOverviewPage() {
+  useLanguage();
   const { data } = useCalix();
   const [query, setQuery] = useState(""),
     [onlyPending, setOnlyPending] = useState(false);
@@ -181,13 +184,13 @@ export function CourseOverviewPage() {
     <section className="overview-page">
       <header className="page-heading">
         <div>
-          <h1>과목별 현황</h1>
+          <h1>{t("과목별 현황")}</h1>
         </div>
       </header>
       <div className="overview-tools">
         <input
-          aria-label="과목 검색"
-          placeholder="과목 검색"
+          aria-label={t("과목 검색")}
+          placeholder={t("과목 검색")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -196,9 +199,7 @@ export function CourseOverviewPage() {
             type="checkbox"
             checked={onlyPending}
             onChange={(e) => setOnlyPending(e.target.checked)}
-          />
-          미완료 있는 과목
-        </label>
+          />{t("미완료 있는 과목")}{" "}</label>
       </div>
       <div className="deadline-grid">
         {groups.map((course) => {
@@ -211,24 +212,21 @@ export function CourseOverviewPage() {
             <article className="overview-card" key={course.id}>
               <h2>{course.name}</h2>
               <div className="course-counts">
-                <span className="type-badge assignment">
-                  과제 {pending.filter((e) => e.kind === "assignment").length}
+                <span className="type-badge assignment">{t("과제")}{" "}{pending.filter((e) => e.kind === "assignment").length}
                 </span>
-                <span className="type-badge movie">
-                  영상 {pending.filter((e) => e.kind === "movie").length}
+                <span className="type-badge movie">{t("영상")}{" "}{pending.filter((e) => e.kind === "movie").length}
                 </span>
-                <span>
-                  완료 {done}/{course.items.length}
+                <span>{t("완료")}{" "}{done}/{course.items.length}
                 </span>
               </div>
               <progress
-                aria-label={`${course.name} 완료율`}
+                aria-label={t("{0} 완료율", [String(course.name)])}
                 max={100}
                 value={percent}
               />
               {pending.length > 0 && (
                 <details>
-                  <summary>미완료 일정 {pending.length}개</summary>
+                  <summary>{t("미완료 일정")}{" "}{pending.length}{t("개")}</summary>
                   <Items items={pending} />
                 </details>
               )}
@@ -236,7 +234,7 @@ export function CourseOverviewPage() {
           );
         })}
       </div>
-      {!groups.length && <p className="empty">과목 없음</p>}
+      {!groups.length && <p className="empty">{t("과목 없음")}</p>}
     </section>
   );
 }

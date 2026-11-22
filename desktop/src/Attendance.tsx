@@ -1,3 +1,4 @@
+import { t, useLanguage } from "./i18n";
 import { useEffect, useMemo, useState } from "react";
 import { RefreshCw, Search, CalendarDays } from "lucide-react";
 import { rpc, subscribe } from "./bridge";
@@ -29,6 +30,7 @@ const labels: Record<string, string> = {
   unknown: "미확인",
 };
 export function AttendancePage() {
+  useLanguage();
   const { data, notify, soundError } = useCalix();
   const [rows, setRows] = useState<AttendanceRow[]>([]),
     [loading, setLoading] = useState(true),
@@ -102,31 +104,29 @@ export function AttendancePage() {
     <section className="learning-page">
       <div className="page-heading">
         <div>
-          <h1>출결 현황</h1>
+          <h1>{t("출결 현황")}</h1>
         </div>
         <button
           onClick={() => void rpc("sync").catch((e) => notify(String(e), true))}
         >
-          <RefreshCw size={16} />
-          동기화
-        </button>
+          <RefreshCw size={16} />{t("동기화")}{" "}</button>
       </div>
       <div className="glass learning-toolbar">
         <label className="search">
           <Search size={16} />
           <input
-            aria-label="출결 검색"
+            aria-label={t("출결 검색")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="수업 검색"
+            placeholder={t("수업 검색")}
           />
         </label>
         <select
-          aria-label="출결 과목"
+          aria-label={t("출결 과목")}
           value={course}
           onChange={(e) => setCourse(e.target.value)}
         >
-          <option value="">전체 과목</option>
+          <option value="">{t("전체 과목")}</option>
           {data.courses.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
@@ -134,34 +134,32 @@ export function AttendancePage() {
           ))}
         </select>
         <select
-          aria-label="출결 항목"
+          aria-label={t("출결 항목")}
           value={source}
           onChange={(e) => setSource(e.target.value)}
         >
-          <option value="canvas">Canvas 기준</option>
-          <option value="lesson">수업별</option>
-          <option value="item">활동별</option>
+          <option value="canvas">{t("Canvas 기준")}</option>
+          <option value="lesson">{t("수업별")}</option>
+          <option value="item">{t("활동별")}</option>
         </select>
         <select
-          aria-label="출결 정렬"
+          aria-label={t("출결 정렬")}
           value={view}
           onChange={(e) => setView(e.target.value)}
         >
-          <option value="date">일자순</option>
-          <option value="week">주차순</option>
-          <option value="lesson">차시순</option>
+          <option value="date">{t("일자순")}</option>
+          <option value="week">{t("주차순")}</option>
+          <option value="lesson">{t("차시순")}</option>
         </select>
       </div>
       {error && <p role="alert">{error}</p>}
       {rows.some((r) => r.stale) && (
-        <p className="attendance-warning">
-          일부 출결 갱신 필요
-        </p>
+        <p className="attendance-warning">{t("일부 출결 갱신 필요")}{" "}</p>
       )}
       <div className="attendance-summary">
         {["attendance", "excused", "late", "absent", "none"].map((s) => (
           <div className={`glass attendance-total ${s}`} key={s}>
-            <span>{labels[s]}</span>
+            <span>{t(labels[s])}</span>
             <strong>
               {
                 selected.filter((r) =>
@@ -178,11 +176,11 @@ export function AttendancePage() {
         <table>
           <thead>
             <tr>
-              <th>일자</th>
-              <th>수업</th>
-              <th>주차 / 차시</th>
-              <th>항목</th>
-              <th>출결</th>
+              <th>{t("일자")}</th>
+              <th>{t("수업")}</th>
+              <th>{t("주차 / 차시")}</th>
+              <th>{t("항목")}</th>
+              <th>{t("출결")}</th>
             </tr>
           </thead>
           <tbody>
@@ -194,28 +192,28 @@ export function AttendancePage() {
                   ) : r.start_at ? (
                     <>
                       {r.start_at.slice(0, 10)}
-                      <small>수강 시작</small>
+                      <small>{t("수강 시작")}</small>
                     </>
                   ) : (
-                    "일자 미지정"
+                    t("일자 미지정")
                   )}
                 </td>
                 <td>{r.course_name}</td>
                 <td>
-                  {r.week === null ? "—" : `${r.week}주차`}
-                  {r.lesson !== null ? ` / ${r.lesson}차시` : ""}
+                  {r.week === null ? "—" : t("{0}주차", [String(r.week)])}
+                  {r.lesson !== null ? t(" / {0}차시", [r.lesson]) : ""}
                 </td>
                 <td>
                   {r.title}
                   {r.source === "item" && r.due_at && (
-                    <small>마감 {dueText(r.due_at)}</small>
+                    <small>{t("마감")}{" "}{dueText(r.due_at)}</small>
                   )}
                 </td>
                 <td>
                   <span className={`attendance-status ${r.status}`}>
-                    {labels[r.status] || "미확인"}
+                    {t(labels[r.status] || "미확인")}
                   </span>
-                  {r.stale && <small>이전 결과</small>}
+                  {r.stale && <small>{t("이전 결과")}</small>}
                 </td>
               </tr>
             ))}
@@ -224,7 +222,7 @@ export function AttendancePage() {
         {!selected.length && (
           <div className="empty">
             <CalendarDays size={32} />
-            <p>{loading ? "출결을 불러오는 중" : "출결 기록 없음"}</p>
+            <p>{loading ? t("출결을 불러오는 중") : t("출결 기록 없음")}</p>
           </div>
         )}
       </div>

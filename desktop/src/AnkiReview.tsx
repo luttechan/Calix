@@ -1,3 +1,4 @@
+import { t, useLanguage } from "./i18n";
 import { useEffect, useState } from "react";
 import { Layers, RefreshCw } from "lucide-react";
 import { rpc } from "./bridge";
@@ -14,6 +15,7 @@ type Review = { decks: Deck[]; totals: Counts };
 const number = new Intl.NumberFormat("ko-KR");
 
 export function AnkiReview() {
+  useLanguage();
   const [attempt, setAttempt] = useState(0);
   const [review, setReview] = useState<Review | null>(null);
   const [error, setError] = useState("");
@@ -29,7 +31,7 @@ export function AnkiReview() {
         .catch((reason: unknown) => {
           if (!active) return;
           setReview(null);
-          setError(reason instanceof Error ? reason.message : "Anki 데이터를 가져오지 못했습니다.");
+          setError(reason instanceof Error ? reason.message : t("Anki 데이터를 가져오지 못했습니다."));
         })
         .finally(() => {
           if (active) setLoading(false);
@@ -50,7 +52,7 @@ export function AnkiReview() {
           setError("");
           setAttempt((value) => value + 1);
         }}>
-          <RefreshCw size={15} aria-hidden="true" /> {loading ? "불러오는 중" : "새로고침"}
+          <RefreshCw size={15} aria-hidden="true" /> {loading ? t("불러오는 중") : t("새로고침")}
         </button>
       </div>
       {error && <p className="muted" role="status">{error}</p>}
@@ -58,15 +60,15 @@ export function AnkiReview() {
         <>
           <dl className="anki-review-totals">
             {columns.map(([key, label]) => (
-              <div key={key}><dt>{label}</dt><dd>{number.format(review.totals[key])}</dd></div>
+              <div key={key}><dt>{t(label)}</dt><dd>{number.format(review.totals[key])}</dd></div>
             ))}
           </dl>
           {review.decks.length ? (
             <details className="anki-review-decks">
-              <summary>덱별 현황 <small>{number.format(review.decks.length)}개</small></summary>
-              <table aria-label="Anki 덱별 현황">
+              <summary>{t("덱별 현황")}{" "}<small>{number.format(review.decks.length)}{t("개")}</small></summary>
+              <table aria-label={t("Anki 덱별 현황")}>
                 <thead>
-                  <tr><th scope="col">덱</th>{columns.map(([key, label]) => <th key={key} scope="col">{label}</th>)}</tr>
+                  <tr><th scope="col">{t("덱")}</th>{columns.map(([key, label]) => <th key={key} scope="col">{t(label)}</th>)}</tr>
                 </thead>
                 <tbody>
                   {review.decks.map((deck) => (
@@ -78,7 +80,7 @@ export function AnkiReview() {
                 </tbody>
               </table>
             </details>
-          ) : <p className="muted">집계할 덱 없음</p>}
+          ) : <p className="muted">{t("집계할 덱 없음")}</p>}
         </>
       )}
     </section>

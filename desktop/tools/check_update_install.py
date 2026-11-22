@@ -57,7 +57,7 @@ def main():
         raise RuntimeError(
             "Installer registry tests are restricted to disposable Windows CI runners"
         )
-    setup = ROOT / "desktop/.build/packages/Calix-1.7.4-Setup-x64.exe"
+    setup = ROOT / "desktop/.build/packages/Calix-1.7.5-Setup-x64.exe"
     expected = ROOT / "desktop/src-tauri/target/release/calix-desktop.exe"
     # NSIS changes the Tauri marker when embedding the UI into its payload.
     expected_ui = expected.read_bytes().replace(

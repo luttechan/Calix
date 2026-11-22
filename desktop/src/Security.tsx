@@ -1,3 +1,4 @@
+import { locale, t, useLanguage } from "./i18n";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { LockKeyhole, ShieldCheck, TriangleAlert, UserRound } from "lucide-react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
@@ -8,10 +9,10 @@ import { playLogonCue, stopErrorCue } from "./errorCue";
 import type { SecurityState } from "./types";
 import "./security-grades.css";
 
-const lockTime = new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-const lockDate = new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric", weekday: "long" });
-
 function LockClock() {
+  useLanguage();
+  const lockTime = new Intl.DateTimeFormat(locale(), { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  const lockDate = new Intl.DateTimeFormat(locale(), { month: "long", day: "numeric", weekday: "long" });
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
@@ -26,29 +27,28 @@ function LockClock() {
 }
 
 function LockedResetDialog({ onClose }: { onClose: () => void }) {
+  useLanguage();
   const { mutate, notify } = useCalix();
   const [confirmation, setConfirmation] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const close = () => { if (!pending) onClose(); };
-  return <Modal title="데이터 초기화" className="lock-reset-dialog" onClose={close}>
+  return <Modal title={t("데이터 초기화")} className="lock-reset-dialog" onClose={close}>
     <div className="lock-reset-warning" id="lock-reset-warning">
       <TriangleAlert size={19} aria-hidden="true" />
-      <div><strong>삭제한 데이터는 복구할 수 없습니다.</strong><p>일정, 시간표, 학점, 일기와 비밀번호가 삭제됩니다.</p></div>
+      <div><strong>{t("삭제한 데이터는 복구할 수 없습니다.")}</strong><p>{t("일정, 시간표, 학점, 일기와 비밀번호가 삭제됩니다.")}</p></div>
     </div>
-    <label className="lock-reset-field">
-      계속하려면 ‘초기화’를 입력하세요.
-      <input autoFocus aria-label="초기화 확인 문구" aria-describedby="lock-reset-warning" autoComplete="off" maxLength={32} value={confirmation} disabled={pending} onChange={event => setConfirmation(event.target.value)} />
+    <label className="lock-reset-field">{t("계속하려면 ‘초기화’를 입력하세요.")}{" "}<input autoFocus aria-label={t("초기화 확인 문구")} aria-describedby="lock-reset-warning" autoComplete="off" maxLength={32} value={confirmation} disabled={pending} onChange={event => setConfirmation(event.target.value)} />
     </label>
-    {error && <p role="alert" className="danger">{error}</p>}
+    {error && <p role="alert" className="danger">{t(error)}</p>}
     <div className="dialog-actions lock-reset-actions">
-      <button type="button" disabled={pending} onClick={close}>취소</button>
+      <button type="button" disabled={pending} onClick={close}>{t("취소")}</button>
       <button type="button" className="danger-button" disabled={confirmation !== "초기화" || pending} onClick={() => {
         setPending(true);
         setError("");
         void mutate("data.reset", { confirmation }).then(() => { onClose(); notify("초기화됨"); })
           .catch((reason: Error) => setError(reason.message)).finally(() => setPending(false));
-      }}>{pending ? "초기화 중" : "초기화"}</button>
+      }}>{pending ? t("초기화 중") : t("초기화")}</button>
     </div>
   </Modal>;
 }
@@ -57,6 +57,7 @@ export function UnlockView({ scope = "main", onExit }: {
   scope?: "main" | "timetable" | "grades";
   onExit?: () => void;
 }) {
+  useLanguage();
   const { data, mutate } = useCalix();
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
@@ -69,7 +70,7 @@ export function UnlockView({ scope = "main", onExit }: {
       {main ? <><LockClock /><div className="lock-profile" data-checking={pending}>
         <div className="lock-avatar">{data.preferences.avatar ? <img src={data.preferences.avatar} alt="" /> : <UserRound size={48} aria-hidden="true" />}</div>
         <h1 id="unlock-title">{data.preferences.nickname || "Calix"}</h1>
-      </div></> : <><span className="security-symbol"><LockKeyhole size={26} /></span><h1 id="unlock-title">{title}</h1></>}
+      </div></> : <><span className="security-symbol"><LockKeyhole size={26} /></span><h1 id="unlock-title">{t(title)}</h1></>}
       <form onSubmit={event => {
         event.preventDefault();
         if (pending) return;
@@ -83,13 +84,13 @@ export function UnlockView({ scope = "main", onExit }: {
         })
           .catch(reason => setError(reason.message)).finally(() => setPending(false));
       }}>
-        <label>비밀번호<input type="password" autoComplete="current-password" value={password} maxLength={1024} required autoFocus onChange={event => setPassword(event.target.value)} /></label>
-        {error && <p role="alert">{error}</p>}
-        <button className="button primary" disabled={pending}>{pending ? "확인 중" : "잠금 해제"}</button>
+        <label>{t("비밀번호")}<input type="password" autoComplete="current-password" value={password} maxLength={1024} required autoFocus onChange={event => setPassword(event.target.value)} /></label>
+        {error && <p role="alert">{t(error)}</p>}
+        <button className="button primary" disabled={pending}>{pending ? t("확인 중") : t("잠금 해제")}</button>
       </form>
       {main && <div className="lock-actions">
-        <button type="button" className="text-button" disabled={pending} onClick={() => setReset(true)}>비밀번호를 잊으셨나요?</button>
-        {onExit && <button type="button" className="text-button" onClick={onExit}>종료</button>}
+        <button type="button" className="text-button" disabled={pending} onClick={() => setReset(true)}>{t("비밀번호를 잊으셨나요?")}</button>
+        {onExit && <button type="button" className="text-button" onClick={onExit}>{t("종료")}</button>}
       </div>}
     </section>
     {reset && <LockedResetDialog onClose={() => setReset(false)} />}
@@ -97,11 +98,12 @@ export function UnlockView({ scope = "main", onExit }: {
 }
 
 export function ProtectedSection({ scope, children }: { scope: "timetable" | "grades"; children: ReactNode }) {
+  useLanguage();
   const { data } = useCalix();
   const security = data.security;
   if (scope === "grades" && !security?.configured) {
     return <section className="grade-password-required">
-      <header className="page-heading"><div><h1>학점 메뉴</h1><p className="muted">학점 계산에는 비밀번호가 필요합니다.</p></div></header>
+      <header className="page-heading"><div><h1>{t("학점 메뉴")}</h1><p className="muted">{t("학점 계산에는 비밀번호가 필요합니다.")}</p></div></header>
       <SecuritySettings />
     </section>;
   }
@@ -110,6 +112,7 @@ export function ProtectedSection({ scope, children }: { scope: "timetable" | "gr
 }
 
 export function SecuritySettings() {
+  useLanguage();
   const { data, mutate, notify } = useCalix();
   const current = data.security;
   const [policy, setPolicy] = useState(current?.policy ?? { main: false, timetable: false, grades: false, idle_minutes: 5 });
@@ -122,7 +125,7 @@ export function SecuritySettings() {
   const [custom, setCustom] = useState(![1, 5, 10, 15, 30, 60].includes(policy.idle_minutes));
   return (
     <section className="glass settings-panel security-settings">
-      <div className="settings-heading"><ShieldCheck aria-hidden="true" /><h2>비밀번호와 잠금</h2>{configured && <span className="security-status">암호화 사용 중</span>}</div>
+      <div className="settings-heading"><ShieldCheck aria-hidden="true" /><h2>{t("비밀번호와 잠금")}</h2>{configured && <span className="security-status">{t("암호화 사용 중")}</span>}</div>
       <form onSubmit={event => {
         event.preventDefault();
         if (newPassword && newPassword !== confirm) { notify("새 비밀번호가 일치하지 않습니다.", true); return; }
@@ -133,29 +136,29 @@ export function SecuritySettings() {
           .catch(() => {}).finally(() => setPending(false));
       }}>
         <fieldset disabled={pending}>
-          <label>{configured ? "현재 비밀번호" : "비밀번호"}
+          <label>{configured ? t("현재 비밀번호") : t("비밀번호")}
             <input type="password" autoComplete={configured ? "current-password" : "new-password"} value={password} minLength={configured ? undefined : 12} maxLength={1024} required onChange={event => setPassword(event.target.value)} />
           </label>
-          {configured && <label>새 비밀번호<input type="password" autoComplete="new-password" minLength={12} maxLength={1024} value={replacement} onChange={event => setReplacement(event.target.value)} placeholder="변경할 때 입력" /></label>}
-          {(!configured || replacement) && <label>비밀번호 확인<input type="password" autoComplete="new-password" value={confirm} required minLength={12} maxLength={1024} onChange={event => setConfirm(event.target.value)} /></label>}
-          <p className="muted">12자 이상. 다시 실행할 때 비밀번호가 필요합니다.</p>
+          {configured && <label>{t("새 비밀번호")}<input type="password" autoComplete="new-password" minLength={12} maxLength={1024} value={replacement} onChange={event => setReplacement(event.target.value)} placeholder={t("변경할 때 입력")} /></label>}
+          {(!configured || replacement) && <label>{t("비밀번호 확인")}<input type="password" autoComplete="new-password" value={confirm} required minLength={12} maxLength={1024} onChange={event => setConfirm(event.target.value)} /></label>}
+          <p className="muted">{t("12자 이상. 다시 실행할 때 비밀번호가 필요합니다.")}</p>
           <div className="security-options">
             {([["main", "메인 화면 자동 잠금"], ["timetable", "시간표 잠금"], ["grades", "학점 메뉴 잠금"]] as const).map(([key, label]) =>
               <div className="setting-row security-option" key={key}>
-                <strong>{label}</strong>
-                <button type="button" role="switch" aria-label={label} aria-checked={policy[key]} className={`switch ${policy[key] ? "on" : ""}`} onClick={() => setPolicy(previous => ({ ...previous, [key]: !previous[key] }))}><i /></button>
+                <strong>{t(label)}</strong>
+                <button type="button" role="switch" aria-label={t(label)} aria-checked={policy[key]} className={`switch ${policy[key] ? "on" : ""}`} onClick={() => setPolicy(previous => ({ ...previous, [key]: !previous[key] }))}><i /></button>
               </div>)}
           </div>
           {policy.main && <div className="security-time">
-            <label>미사용 시간<select aria-label="미사용 시간" value={custom ? "custom" : String(policy.idle_minutes)} onChange={event => {
+            <label>{t("미사용 시간")}<select aria-label={t("미사용 시간")} value={custom ? "custom" : String(policy.idle_minutes)} onChange={event => {
               setCustom(event.target.value === "custom");
               if (event.target.value !== "custom") setPolicy(previous => ({ ...previous, idle_minutes: Number(event.target.value) }));
-            }}>{[1, 5, 10, 15, 30, 60].map(minutes => <option key={minutes} value={minutes}>{minutes}분</option>)}<option value="custom">직접 입력</option></select></label>
-            {custom && <label>분<NumberField aria-label="자동 잠금 분" min={1} max={1440} required value={policy.idle_minutes} onValueChange={value => setPolicy(previous => ({ ...previous, idle_minutes: value }))} /></label>}
+            }}>{[1, 5, 10, 15, 30, 60].map(minutes => <option key={minutes} value={minutes}>{minutes}{t("분")}</option>)}<option value="custom">{t("직접 입력")}</option></select></label>
+            {custom && <label>{t("분")}<NumberField aria-label={t("자동 잠금 분")} min={1} max={1440} required value={policy.idle_minutes} onValueChange={value => setPolicy(previous => ({ ...previous, idle_minutes: value }))} /></label>}
           </div>}
-          <p className="security-warning">초기화하면 저장 데이터가 삭제됩니다.</p>
-          <p className="muted">암호화 자료는 1.6.0 이상에서 열 수 있습니다.</p>
-          <div className="dialog-actions security-actions"><button type="submit" className="button primary">{pending ? "저장 중" : configured ? "설정 저장" : "비밀번호 설정"}</button></div>
+          <p className="security-warning">{t("초기화하면 저장 데이터가 삭제됩니다.")}</p>
+          <p className="muted">{t("암호화 자료는 1.6.0 이상에서 열 수 있습니다.")}</p>
+          <div className="dialog-actions security-actions"><button type="submit" className="button primary">{pending ? t("저장 중") : configured ? t("설정 저장") : t("비밀번호 설정")}</button></div>
         </fieldset>
       </form>
     </section>

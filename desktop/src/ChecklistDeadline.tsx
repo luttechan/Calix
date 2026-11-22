@@ -1,3 +1,4 @@
+import { t, useLanguage } from "./i18n";
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
@@ -7,6 +8,7 @@ import {
   dueText,
   localInput,
   monthGrid,
+  monthTitle,
   shiftMonth,
   weekdays,
 } from "./dates";
@@ -32,6 +34,7 @@ export function ChecklistDeadline({
   value: string | null;
   onCommit: (value: string | null) => void;
 }) {
+  useLanguage();
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
   return (
@@ -39,7 +42,7 @@ export function ChecklistDeadline({
       <button
         type="button"
         className={`cell-value checklist-deadline${value ? "" : " cell-empty"}`}
-        aria-label="기한"
+        aria-label={t("기한")}
         title={dueText(value)}
         onClick={() => setOpen(true)}
       >
@@ -48,7 +51,7 @@ export function ChecklistDeadline({
       </button>
       {open && (
         <DateEditor
-          title="기한"
+          title={t("기한")}
           value={localInput(value)}
           withTime
           allowClear
@@ -140,6 +143,7 @@ function DateEditor({
   onClose: () => void;
   onSave: (value: string) => void;
 }) {
+  useLanguage();
   const today = dateKey();
   const [date, setDate] = useState(value.slice(0, 10));
   const [month, setMonth] = useState((value || today).slice(0, 7));
@@ -165,28 +169,27 @@ function DateEditor({
           <button
             type="button"
             className="icon-button"
-            aria-label="이전 달"
+            aria-label={t("이전 달")}
             disabled={month <= "1900-01"}
             onClick={() => setMonth(shiftMonth(month, -1))}
           >
             <ChevronLeft size={18} />
           </button>
           <strong aria-live="polite">
-            {year}년 {number}월
-          </strong>
+            {monthTitle(year, number)}</strong>
           <button
             type="button"
             className="icon-button"
-            aria-label="다음 달"
+            aria-label={t("다음 달")}
             disabled={month >= "9999-12"}
             onClick={() => setMonth(shiftMonth(month, 1))}
           >
             <ChevronRight size={18} />
           </button>
         </div>
-        <div className="deadline-calendar-days" aria-label="날짜 선택">
+        <div className="deadline-calendar-days" aria-label={t("날짜 선택")}>
           {weekdays.map((day) => (
-            <span key={day}>{day}</span>
+            <span key={day}>{t(day)}</span>
           ))}
           {monthGrid(month).map((day) => (
             <button
@@ -206,10 +209,8 @@ function DateEditor({
         <div
           className={`deadline-editor-fields${withTime ? "" : " date-only"}`}
         >
-          <label>
-            날짜
-            <input
-              aria-label={withTime ? "기한 날짜" : "날짜 입력"}
+          <label>{t("날짜")}{" "}<input
+              aria-label={withTime ? t("기한 날짜") : t("날짜 입력")}
               placeholder="YYYY-MM-DD"
               autoComplete="off"
               maxLength={10}
@@ -224,10 +225,8 @@ function DateEditor({
           </label>
           {withTime && (
             <>
-              <label>
-                시
-                <select
-                  aria-label="기한 시"
+              <label>{t("시")}{" "}<select
+                  aria-label={t("기한 시")}
                   value={hour}
                   onChange={(event) => setHour(event.target.value)}
                 >
@@ -236,10 +235,8 @@ function DateEditor({
                   ))}
                 </select>
               </label>
-              <label>
-                분
-                <select
-                  aria-label="기한 분"
+              <label>{t("분")}{" "}<select
+                  aria-label={t("기한 분")}
                   value={minute}
                   onChange={(event) => setMinute(event.target.value)}
                 >
@@ -258,15 +255,11 @@ function DateEditor({
               className="text-button"
               onClick={() => onSave("")}
             >
-              {withTime ? "기한 삭제" : "지우기"}
+              {withTime ? t("기한 삭제") : t("지우기")}
             </button>
           )}
-          <button type="button" onClick={() => pick(today)}>
-            오늘
-          </button>
-          <button type="submit" className="primary" disabled={!valid}>
-            적용
-          </button>
+          <button type="button" onClick={() => pick(today)}>{t("오늘")}{" "}</button>
+          <button type="submit" className="primary" disabled={!valid}>{t("적용")}{" "}</button>
         </div>
       </form>
     </Modal>,
