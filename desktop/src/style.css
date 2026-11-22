@@ -1496,39 +1496,50 @@ label textarea {
   color: var(--accent);
 }
 .settings-heading > h2 { margin: 0; font-size: 19px; font-weight: 650; line-height: 1.3; }
-.language-panel { text-align: start; }
+.language-panel {
+  inline-size: min(100%, 34rem);
+  text-align: start;
+}
+.language-panel .settings-heading { margin-bottom: 16px; }
 .language-options {
   display: grid;
-  gap: 6px;
-  width: min(100%, 32rem);
   min-width: 0;
   margin: 0;
-  padding: 0;
-  border: 0;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
 }
 .language-option {
-  display: flex;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   min-height: 44px;
-  gap: 10px;
+  column-gap: 10px;
   margin: 0;
-  padding: 7px 12px;
-  border: 1px solid var(--line);
-  border-radius: 9px;
+  padding: 8px 12px;
+  border-radius: 8px;
   cursor: pointer;
 }
-.language-option input {
-  width: 16px;
-  height: 16px;
-  flex: none;
+.language-option > input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   margin: 0;
-  accent-color: var(--accent);
+  opacity: 0;
+  cursor: inherit;
 }
 .language-option:hover { background: var(--ui-hover); }
-.language-option:has(:checked) {
+.language-option:has(> input:checked) {
   background: var(--accent-soft);
-  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
   font-weight: 650;
+}
+.language-option-mark { visibility: hidden; color: var(--accent); }
+.language-option:has(> input:checked) .language-option-mark { visibility: visible; }
+.language-option:has(> input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 .theme-picker {
   display: flex;
@@ -2855,8 +2866,8 @@ label textarea {
 }
 .settings-categories {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 128px), 1fr));
-  gap: 5px clamp(4px, 0.8cqi, 12px);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px clamp(4px, 0.7cqi, 10px);
   min-width: 0;
   margin-bottom: 18px;
   padding-bottom: 10px;
@@ -2874,6 +2885,7 @@ label textarea {
   color: var(--muted);
   font-weight: 600;
   white-space: normal;
+  line-height: 1.35;
 }
 .settings-categories [role="tab"] svg { width: 15px; height: 15px; flex: none; }
 .settings-categories [role="tab"] span { min-width: 0; text-align: start; word-break: keep-all; overflow-wrap: anywhere; }
@@ -3132,6 +3144,7 @@ label textarea {
   overflow: hidden;
 }
 @container settings (max-width: 520px) {
+  .settings-categories { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .reset-panel { align-items: flex-start; flex-wrap: wrap; gap: 12px; }
 }
 .settings-panel .theme-picker {

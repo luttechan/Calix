@@ -772,7 +772,11 @@ export function SettingsPage() {
             <Languages aria-hidden="true" />
             <h2 id="language-heading">{t("언어")}</h2>
           </div>
-          <fieldset className="language-options" aria-labelledby="language-heading" disabled={languageSaving !== null}>
+          <fieldset
+            className="language-options"
+            aria-labelledby="language-heading"
+            disabled={languageSaving !== null}
+          >
             {([["ko", "한국어"], ["en", "English"], ["ja", "日本語"]] as const).map(([language, name]) => (
               <label className="language-option" key={language}>
                 <input
@@ -788,6 +792,7 @@ export function SettingsPage() {
                   }}
                 />
                 <span lang={language}>{name}</span>
+                <Check className="language-option-mark" size={17} aria-hidden="true" />
               </label>
             ))}
           </fieldset>
