@@ -31,6 +31,7 @@ fn validate(value: &Value) -> Result<(),String> {
             if event[key].as_str().is_none_or(|s| s.len()>limit) { return Err("알림 일정을 확인하세요.".into()); }
         }
         if !["assignment","movie"].contains(&event["kind"].as_str().unwrap_or("")) { return Err("일정 유형을 확인하세요.".into()); }
+        if event.get("urgent").is_some_and(|value| !value.is_boolean()) { return Err("알림 일정을 확인하세요.".into()); }
     }
     Ok(())
 }
@@ -64,7 +65,8 @@ fn show(app:&AppHandle,payload:Value)->Result<u64,String>{
     let rows = payload["events"].as_array().map_or(0, Vec::len);
     let available = monitor.as_ref()
         .map_or(528.0, |m| (m.work_area().size.height as f64 / m.scale_factor() - 40.0).clamp(220.0, 528.0));
-    let height = (174.0 + 63.0 * rows.clamp(1, 6) as f64).min(available);
+    let countdown = if payload["urgent"] == true { 46.0 } else { 0.0 };
+    let height = (174.0 + countdown + 63.0 * rows.clamp(1, 6) as f64).min(available);
     let position = monitor.as_ref().map(|m| {
         let scale = m.scale_factor();
         let area = m.work_area();

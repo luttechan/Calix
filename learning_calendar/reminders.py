@@ -10,6 +10,7 @@ DEFAULTS = dict(
     sync=True,
     urgent=True,
     urgent_minutes=60,
+    urgent_unit="hours",
     general=True,
     general_days=1,
     assignments=True,
@@ -40,6 +41,10 @@ def validate(value):
     for key, low, high in [("urgent_minutes", 1, 10080), ("general_days", 0, 365)]:
         if type(result[key]) is not int or not low <= result[key] <= high:
             raise ValueError("알림 시간을 확인하세요.")
+    unit = value.get("urgent_unit", "hours" if result["urgent_minutes"] % 60 == 0 else "minutes")
+    if unit not in ("minutes", "hours") or (unit == "hours" and result["urgent_minutes"] % 60):
+        raise ValueError("알림 시간을 확인하세요.")
+    result["urgent_unit"] = unit
     if not isinstance(result["track"], str) or result["track"] not in {
         str(n) for n in range(1, 11)
     }:
@@ -165,7 +170,8 @@ def check(api, trigger, now=None):
                 course_name=e.course_name,
                 kind=e.kind,
                 due_at=e.due_at,
+                urgent=stage == "urgent",
             )
-            for e, _, _ in selected[:50]
+            for e, stage, _ in selected[:50]
         ],
     )

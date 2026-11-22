@@ -16,7 +16,7 @@ body.reminder-surface {
   border-top: 3px solid var(--reminder-accent);
   background: var(--surface);
 }
-.reminder-card.urgent { --reminder-accent: var(--danger, #c84e64); }
+.reminder-card.urgent { --reminder-accent: light-dark(#a33c51, #ff9db0); }
 .reminder-brand, .reminder-intro, .reminder-card > footer {
   display: flex;
   flex: none;
@@ -64,6 +64,21 @@ body.reminder-surface {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
+.reminder-countdown {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  flex: none;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 5px 9px;
+  border: 1px solid color-mix(in srgb, var(--reminder-accent) 28%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--reminder-accent) 10%, var(--surface));
+  color: var(--reminder-accent);
+  font-size: 12px;
+}
+.reminder-countdown strong { font-size: 13px; font-variant-numeric: tabular-nums; }
 .reminder-events {
   flex: 0 1 auto;
   min-height: 0;
@@ -89,6 +104,10 @@ body.reminder-surface {
   text-align: start;
 }
 .reminder-events > button:hover { border-color: var(--accent); background: var(--accent-soft); }
+.reminder-events > button[data-urgent="true"] {
+  box-shadow: inset 2px 0 var(--reminder-accent);
+}
+.reminder-events > button[data-urgent="true"] time strong { color: var(--reminder-accent); }
 .reminder-events > button:focus-visible, .reminder-events:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;

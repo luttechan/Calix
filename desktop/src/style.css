@@ -2957,6 +2957,25 @@ label textarea {
 .alarm-rule-title strong {
   font-size: 13px;
 }
+.alarm-deadline-urgent {
+  --urgent-color: light-dark(#a33c51, #ff9db0);
+}
+.alarm-deadline-urgent .alarm-rule-title svg {
+  margin-inline-start: auto;
+  flex: none;
+  color: var(--urgent-color);
+}
+.alarm-urgent-interval {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(7rem, 0.8fr);
+  gap: 8px;
+}
+.alarm-urgent-interval input {
+  min-width: 0;
+  width: 100%;
+  min-height: 42px;
+  font-size: 14px;
+}
 .alarm-deadline select,
 .alarm-number input {
   width: 100%;

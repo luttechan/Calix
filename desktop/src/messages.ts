@@ -1,5 +1,14 @@
 // The Korean source string is the fallback. Translations are English and Japanese.
 export const messages: Readonly<Record<string, readonly [string, string]>> = {
+  "긴급 마감": ["Urgent deadline", "緊急の締切"],
+  "시간 단위": ["Time unit", "時間の単位"],
+  "시간 전": ["hours before", "時間前"],
+  "가장 가까운 마감": ["Next deadline", "直近の締切"],
+  "1분 미만": ["Under 1 min", "1分未満"],
+  "{0}분 남음": ["{0} min left", "残り{0}分"],
+  "{0}시간 남음": ["{0} hr left", "残り{0}時間"],
+  "{0}시간 {1}분 남음": ["{0} hr {1} min left", "残り{0}時間{1}分"],
+  "{0}일 {1}시간 남음": ["{0} d {1} hr left", "残り{0}日{1}時間"],
   " / {0}차시": [" / Session {0}", " / 第{0}回"],
   "다운로드 중": ["Downloading", "ダウンロード中"],
   "최신 버전입니다.": ["Calix is up to date.", "最新バージョンです。"],

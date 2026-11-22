@@ -62,9 +62,13 @@ def read_settings(path: str | Path) -> dict:
         settings = json.loads(Path(path).read_text(encoding="utf-8"))
         if isinstance(settings, dict):
             try:
-                defaults["reminders"] = validate_reminders(
-                    settings.get("reminders", {})
-                )
+                reminders = validate_reminders(settings.get("reminders", {}))
+                unit = settings.get("reminder_urgent_unit")
+                if unit == "minutes" or (
+                    unit == "hours" and reminders["urgent_minutes"] % 60 == 0
+                ):
+                    reminders["urgent_unit"] = unit
+                defaults["reminders"] = reminders
             except (ValueError, TypeError):
                 pass
             for key in ("window_width", "window_height"):
@@ -170,6 +174,10 @@ def write_settings(path: str | Path, settings: dict):
             "avatar",
         }
     }
+    reminders = safe.get("reminders")
+    if isinstance(reminders, dict) and "urgent_unit" in reminders:
+        safe["reminder_urgent_unit"] = reminders["urgent_unit"]
+        safe["reminders"] = {key: value for key, value in reminders.items() if key != "urgent_unit"}
     temp = path.with_suffix(".tmp")
     temp.write_text(json.dumps(safe, ensure_ascii=False, indent=2), encoding="utf-8")
     temp.replace(path)

@@ -146,6 +146,34 @@ def test_settings_persist_and_reject_invalid_partial_updates(tmp_path):
     api.close()
 
 
+def test_urgent_unit_persistence_and_legacy_settings(tmp_path):
+    assert validate({"urgent_minutes": 35})["urgent_unit"] == "minutes"
+    assert validate({"urgent_minutes": 120})["urgent_unit"] == "hours"
+    with pytest.raises(ValueError):
+        validate({"urgent_minutes": 35, "urgent_unit": "hours"})
+
+    api = EngineAPI(tmp_path)
+    api.dispatch("reminders.save", {"urgent_minutes": 60, "urgent_unit": "minutes"})
+    persisted = json.loads(api.settings_path.read_text(encoding="utf-8"))
+    assert persisted["reminders"]["urgent_minutes"] == 60
+    assert "urgent_unit" not in persisted["reminders"]
+    api.close()
+    api = EngineAPI(tmp_path)
+    try:
+        assert api.bootstrap()["preferences"]["reminders"]["urgent_unit"] == "minutes"
+    finally:
+        api.close()
+
+
+def test_mixed_reminder_marks_only_urgent_rows(api):
+    save(api, [event("soon", 45), event("later", 90, "movie")])
+    payload = check(api, "startup", NOW)
+    assert payload["urgent"]
+    assert [(row["key"], row["urgent"]) for row in payload["events"]] == [
+        ("soon", True), ("later", False),
+    ]
+
+
 def test_ledger_survives_restart_and_new_deadline_is_not_lost(tmp_path):
     api = EngineAPI(tmp_path)
     api.settings.update(onboarding_complete=True, reminders=DEFAULTS.copy())

@@ -68,6 +68,7 @@ export type ReminderSettings = {
   sync: boolean;
   urgent: boolean;
   urgent_minutes: number;
+  urgent_unit?: "minutes" | "hours";
   general: boolean;
   general_days: number;
   assignments: boolean;
@@ -88,10 +89,10 @@ export type ReminderPayload = {
   sound: string;
   volume: number;
   total: number;
-  events: Pick<
+  events: (Pick<
     EventItem,
     "key" | "title" | "course_name" | "kind" | "due_at"
-  >[];
+  > & { urgent?: boolean })[];
 };
 export type PaletteColor = "canvas" | "surface" | "accent" | "muted";
 export type ThemePalette = Partial<Record<PaletteColor, string>>;

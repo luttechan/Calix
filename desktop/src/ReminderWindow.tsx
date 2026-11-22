@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { ArrowRight, Bell, BellRing, ClipboardList, Play, Volume2, X } from "lucide-react";
+import { ArrowRight, Bell, BellRing, ClipboardList, Play, Timer, Volume2, X } from "lucide-react";
 import type { ReminderPayload } from "./types";
 import { acceptReminder } from "./reminderState";
 import { locale, setLanguage, t, useLanguage } from "./i18n";
@@ -39,6 +39,18 @@ function useSound(sound: string, volume: number, signal: unknown) {
   }, [sound, volume, signal]);
   return { blocked, play };
 }
+
+function countdown(due: number, now: number) {
+  if (due <= now) return t("기한 경과");
+  if (due - now < 60000) return t("1분 미만");
+  const minutes = Math.ceil((due - now) / 60000);
+  const hours = Math.floor(minutes / 60);
+  if (hours >= 24) return t("{0}일 {1}시간 남음", [Math.floor(hours / 24), hours % 24]);
+  if (!hours) return t("{0}분 남음", [minutes]);
+  if (minutes % 60 === 0) return t("{0}시간 남음", [hours]);
+  return t("{0}시간 {1}분 남음", [hours, minutes % 60]);
+}
+
 export function ReminderCard({
   payload,
   onClose,
@@ -50,6 +62,19 @@ export function ReminderCard({
 }) {
   useLanguage();
   const { blocked, play } = useSound(payload.sound, payload.volume, payload);
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    if (!payload.urgent) return;
+    setNow(Date.now());
+    const interval = window.setInterval(() => setNow(Date.now()), 15000);
+    return () => window.clearInterval(interval);
+  }, [payload]);
+  const earliest = payload.urgent
+    ? Math.min(...payload.events
+      .filter((event) => event.urgent !== false)
+      .map((event) => Date.parse(event.due_at ?? ""))
+      .filter(Number.isFinite))
+    : Infinity;
   const time = new Intl.DateTimeFormat(locale(), {
     timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
   });
@@ -72,16 +97,23 @@ export function ReminderCard({
       </header>
       <div className="reminder-intro">
         {payload.urgent ? <BellRing size={20} aria-hidden="true" /> : <Bell size={20} aria-hidden="true" />}
-        <h1>{t(payload.urgent ? "마감 임박" : payload.due_today ? "오늘 마감" : "다가오는 마감")}</h1>
+        <h1>{t(payload.urgent ? "긴급 마감" : payload.due_today ? "오늘 마감" : "다가오는 마감")}</h1>
         <span className="reminder-count" aria-label={t("총 {0}건", [count])}>{count}</span>
       </div>
+      {Number.isFinite(earliest) && (
+        <div className="reminder-countdown">
+          <Timer size={17} aria-hidden="true" />
+          <span>{t("가장 가까운 마감")}</span>
+          <strong>{countdown(earliest, now)}</strong>
+        </div>
+      )}
       <div className="reminder-events" role="region" aria-label={t("마감 예정 일정")} tabIndex={0}>
         {payload.events.map((event) => {
           const due = new Date(event.due_at ?? "");
           const valid = Number.isFinite(due.getTime());
           const assignment = event.kind === "assignment";
           return (
-          <button key={event.key} onClick={() => onOpen(event.key)}>
+          <button key={event.key} onClick={() => onOpen(event.key)} data-urgent={event.urgent || undefined}>
             <span className={`reminder-type ${event.kind}`} aria-label={t(assignment ? "과제" : "영상")} title={t(assignment ? "과제" : "영상")}>
               {assignment ? <ClipboardList size={17} aria-hidden="true" /> : <Play size={17} aria-hidden="true" />}
             </span>

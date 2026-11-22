@@ -2,7 +2,7 @@ import { t, useLanguage } from "./i18n";
 import { NumberField } from "./NumberField";
 import { useEffect, useRef, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { Bell, Volume2 } from "lucide-react";
+import { Bell, BellRing, Volume2 } from "lucide-react";
 import { useCalix } from "./App";
 import { alarmNames } from "./alarmNames";
 import { defaultSyncTrack, syncCuePath } from "./syncCue";
@@ -39,16 +39,14 @@ export function ReminderSettingsPanel({ active = true }: { active?: boolean }) {
   }, [form.enabled, form.sound, form.track, syncTrack, form.volume, active]);
   const saved = JSON.stringify(data.preferences.reminders);
   const [section, setSection] = useState<"rules" | "sound">("rules");
-  const [urgentCustom, setUrgentCustom] = useState(
-    ![10, 60, 180, 300].includes(form.urgent_minutes),
-  );
+  const urgentUnit = form.urgent_unit ?? (form.urgent_minutes % 60 ? "minutes" : "hours");
+  const hourUnit = urgentUnit === "hours";
   const [generalCustom, setGeneralCustom] = useState(
     ![0, 1, 3, 7].includes(form.general_days),
   );
   useEffect(() => {
     const value = JSON.parse(saved) as ReminderSettings;
     setForm(value);
-    setUrgentCustom(![10, 60, 180, 300].includes(value.urgent_minutes));
     setGeneralCustom(![0, 1, 3, 7].includes(value.general_days));
   }, [saved]);
   useEffect(() => {
@@ -202,51 +200,54 @@ export function ReminderSettingsPanel({ active = true }: { active?: boolean }) {
             <section className="alarm-group">
               <h3>{t("마감 알림")}</h3>
               <div className="alarm-deadline-grid">
-                <div className="alarm-deadline">
+                <div className="alarm-deadline alarm-deadline-urgent">
                   <label className="alarm-choice alarm-rule-title">
                     <input
                       type="checkbox"
                       checked={form.urgent}
                       onChange={(e) => change("urgent", e.target.checked)}
                     />
-                    <strong>{t("긴급 REMIND")}</strong>
+                    <strong>{t("긴급 마감")}</strong>
+                    <BellRing size={16} aria-hidden="true" />
                   </label>
-                  <select
-                    aria-label={t("긴급 알림 시간")}
-                    disabled={!form.urgent}
-                    value={
-                      urgentCustom ? "custom" : String(form.urgent_minutes)
-                    }
-                    onChange={(e) => {
-                      const custom = e.target.value === "custom";
-                      setUrgentCustom(custom);
-                      if (!custom)
-                        change("urgent_minutes", Number(e.target.value));
-                    }}
-                  >
-                    <option value="10">{t("10분 전")}</option>
-                    <option value="60">{t("1시간 전")}</option>
-                    <option value="180">{t("3시간 전")}</option>
-                    <option value="300">{t("5시간 전")}</option>
-                    <option value="custom">{t("직접 입력")}</option>
-                  </select>
-                  {urgentCustom && (
-                    <div className="alarm-number">
-                      <NumberField
-                        aria-label={t("긴급 알림 분")}
-
-                        min={1}
-                        max={10080}
-                        required
-                        step={1}
-                        disabled={!form.urgent}
-                        value={form.urgent_minutes}
-                        onValueChange={value => change("urgent_minutes", value)}
-                      />
-                      <span>{t("분 전")}</span>
-                    </div>
-                  )}
-                  <small>{t("긴급 음원:")}{" "}{alarmNames.crit}</small>
+                  <div className="alarm-urgent-interval">
+                    <NumberField
+                      key={urgentUnit}
+                      aria-label={t("긴급 알림 시간")}
+                      min={1}
+                      max={hourUnit ? 168 : 10080}
+                      step={1}
+                      required
+                      disabled={!form.urgent}
+                      value={hourUnit ? form.urgent_minutes / 60 : form.urgent_minutes}
+                      onValueChange={(value) => {
+                        if (!Number.isInteger(value) || value < 1 || value > (hourUnit ? 168 : 10080)) return;
+                        setForm((previous) => ({
+                          ...previous,
+                          urgent_unit: urgentUnit,
+                          urgent_minutes: value * (hourUnit ? 60 : 1),
+                        }));
+                      }}
+                    />
+                    <select
+                      aria-label={t("시간 단위")}
+                      disabled={!form.urgent}
+                      value={urgentUnit}
+                      onChange={(event) => {
+                        const unit = event.target.value === "hours" ? "hours" : "minutes";
+                        setForm((previous) => ({
+                          ...previous,
+                          urgent_unit: unit,
+                          urgent_minutes: unit === "hours"
+                            ? Math.max(1, Math.round(previous.urgent_minutes / 60)) * 60
+                            : previous.urgent_minutes,
+                        }));
+                      }}
+                    >
+                      <option value="minutes">{t("분 전")}</option>
+                      <option value="hours">{t("시간 전")}</option>
+                    </select>
+                  </div>
                 </div>
                 <div className="alarm-deadline">
                   <label className="alarm-choice alarm-rule-title">
