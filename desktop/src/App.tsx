@@ -235,9 +235,9 @@ export function EventRows({
           onClick={() => openEvent(e.key)}
         >
           <TypeBadge event={e} />
-          <span className="muted ellipsis">{e.course_name || t("개인 일정")}</span>
-          <span className="event-name ellipsis">{e.title}</span>
-          <span className="muted nowrap">{dueText(e.due_at)}</span>
+          <span className="muted">{e.course_name || t("개인 일정")}</span>
+          <span className="event-name">{e.title}</span>
+          <span className="muted">{dueText(e.due_at)}</span>
           <span
             className={
               isExcusedMovie(e)

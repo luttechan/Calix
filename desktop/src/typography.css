@@ -25,6 +25,20 @@ small { line-height: 1.5; }
 .event-table-head, .home-progress-labels, .today-event small, .today-event em, .license-note { font-size: 12px; }
 .creator strong, .welcome-note, .eyebrow, .muted, .grade-policy { font-size: 13px; }
 .creator strong, .event-course, .task-course { min-width: 0; overflow-wrap: anywhere; }
+.event-row > span, .event-table-head > span { min-width: 0; overflow-wrap: anywhere; }
+.type-badge { white-space: normal; overflow-wrap: anywhere; text-align: start; }
+.sidebar nav button > span:not(.nav-motion-marker) {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: start;
+}
+.page-heading .toolbar, .dialog-actions { flex-wrap: wrap; }
+.page-heading .toolbar button, .dialog-actions button {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
 .home-greeting { letter-spacing: -0.025em; }
 .settings-categories button { font-size: 13px; line-height: 1.5; }
 .checklist-table { font-size: 13px; }
@@ -39,7 +53,6 @@ small { line-height: 1.5; }
 .more-events { font-size: 11px; min-height: 20px; }
 .month-grid { grid-template-rows: repeat(6, minmax(140px, 1fr)); }
 .modal h2 { min-width: 0; line-height: 1.5; }
-.dialog-actions { flex-wrap: wrap; }
 .grade-table-head, .grade-exclude, .grade-sources { font-size: 13px; }
 .grade-row input, .grade-row select { font-size: 14px; }
 .grade-summary small { font-size: 13px; }

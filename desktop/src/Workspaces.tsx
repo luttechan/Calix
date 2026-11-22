@@ -1,4 +1,4 @@
-import { t, useLanguage } from "./i18n";
+import { t, useLanguage, type Language } from "./i18n";
 import { useMemo, useState } from "react";
 import {
   Plus,
@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   Terminal,
   UserRound,
+  Languages,
 } from "lucide-react";
 import { Modal, TypeBadge, useCalix } from "./App";
 import { rpc } from "./bridge";
@@ -516,10 +517,12 @@ export function SettingsPage() {
     [restore, setRestore] = useState<string | null>(null),
     [backupPassword, setBackupPassword] = useState(""),
     [fileBusy, setFileBusy] = useState(false),
+    [languageSaving, setLanguageSaving] = useState<Language | null>(null),
     [ankiSelection, setAnkiSelection] = useState<boolean | null>(null);
   const categories = [
     ["profile", "내 프로필", UserRound],
     ["appearance", "화면", Palette],
+    ["language", "언어", Languages],
     ["alarms", "알림과 소리", Bell],
     ["calendar", "일정", CalendarDays],
     ["semester", "학기", CalendarRange],
@@ -690,19 +693,6 @@ export function SettingsPage() {
             <Palette aria-hidden="true" />
             <h2>{t("화면")}</h2>
           </div>
-          <label className="setting-row">
-            <strong>{t("언어")}</strong>
-            <select
-              value={data.preferences.language ?? "ko"}
-              onChange={(event) => void mutate("preferences.save", {
-                language: event.target.value,
-              }).catch(() => {})}
-            >
-              <option value="ko">한국어</option>
-              <option value="en">English</option>
-              <option value="ja">日本語</option>
-            </select>
-          </label>
           <div className="theme-picker">
             {themes.map(([id, name, color]) => (
               <button
@@ -769,6 +759,38 @@ export function SettingsPage() {
               <option value="windows">{t("Windows 기본")}</option>
             </select>
           </div>
+        </section>
+      </div>
+      <div
+        role="tabpanel"
+        id="settings-pane-language"
+        aria-labelledby="settings-tab-language"
+        hidden={category !== "language"}
+      >
+        <section className="glass settings-panel language-panel">
+          <div className="settings-heading">
+            <Languages aria-hidden="true" />
+            <h2 id="language-heading">{t("언어")}</h2>
+          </div>
+          <fieldset className="language-options" aria-labelledby="language-heading" disabled={languageSaving !== null}>
+            {([["ko", "한국어"], ["en", "English"], ["ja", "日本語"]] as const).map(([language, name]) => (
+              <label className="language-option" key={language}>
+                <input
+                  type="radio"
+                  name="calix-language"
+                  value={language}
+                  checked={(languageSaving ?? data.preferences.language ?? "ko") === language}
+                  onChange={() => {
+                    setLanguageSaving(language);
+                    void mutate("preferences.save", { language })
+                      .catch(() => {})
+                      .finally(() => setLanguageSaving(null));
+                  }}
+                />
+                <span lang={language}>{name}</span>
+              </label>
+            ))}
+          </fieldset>
         </section>
       </div>
       <div

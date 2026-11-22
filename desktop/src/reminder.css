@@ -132,7 +132,16 @@ body.reminder-surface {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.reminder-event-name strong { font-size: 13px; font-weight: 650; }
+.reminder-event-name strong {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.2;
+  font-size: 13px;
+  font-weight: 650;
+}
 .reminder-event-name small, .reminder-events time > span, .reminder-list-more {
   font-size: 11px;
   color: var(--muted);

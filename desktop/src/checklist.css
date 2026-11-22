@@ -3,8 +3,19 @@
 .checklist-tools .checkbox-label { padding: 5px 8px; border-radius: 7px; }
 .checklist-tools .checkbox-label:hover { background: var(--ui-hover); }
 .checklist-table th { position: relative; }
-.checklist-table th button { padding-inline-end: 13px; min-width: 0; }
+.checklist-table th button {
+  padding-inline-end: 13px;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .checklist-table[data-resized="true"] th { width: auto; }
+@media (max-width: 1180px) {
+  .checklist-table:not([data-resized="true"]) { min-width: 690px; }
+  .checklist-table:not([data-resized="true"]) th:first-child { width: 19%; }
+  .checklist-table:not([data-resized="true"]) th:nth-child(2) { width: 17%; }
+  .checklist-table:not([data-resized="true"]) th:nth-child(6) { width: 13%; }
+}
 .checklist-resize { position: absolute; inset: 6px 0 6px auto; width: 9px; cursor: col-resize; touch-action: none; }
 .checklist-resize::after { content: ""; position: absolute; inset: 4px 3px; border-inline-end: 1px solid var(--ui-border); }
 .checklist-resize:is(:hover, :focus-visible)::after { border-inline-end: 2px solid var(--accent); }
