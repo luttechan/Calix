@@ -119,7 +119,7 @@ class EngineAPI:
         palette = self.settings.get("theme_palettes", {}).get(theme, {})
         if state["locked"]:
             return dict(
-                version="1.7.6-beta.3", events=[], courses=[], types=[], sessions=[],
+                version="1.7.7", events=[], courses=[], types=[], sessions=[],
                 timetableTerms=[], mainTerm="", timetableConfigured=False,
                 sections=[], statuses=[], tasks=[], offDays=[], journals=[],
                 holidays={}, specialDates={}, lastSync="", syncSummary="",
@@ -137,7 +137,7 @@ class EngineAPI:
         semesters = self.store.timetable_config()
         year = datetime.now(KST).year
         return dict(
-            version="1.7.6-beta.3",
+            version="1.7.7",
             events=[asdict(e) for e in events],
             courses=[asdict(c) for c in self.store.courses()],
             types=self.store.event_types(),
@@ -237,6 +237,10 @@ class EngineAPI:
         if not isinstance(method, str) or not isinstance(p, dict):
             raise ValueError("요청을 확인하세요.")
         self.security.require(method)
+        if method == "vesper.pairing.preview":
+            from learning_calendar.vesper_pairing import issue_preview
+
+            return issue_preview()
         if method.startswith("security."):
             if method == "security.state":
                 return self.security.state()

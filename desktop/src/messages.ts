@@ -1,5 +1,14 @@
 // The Korean source string is the fallback. Translations are English and Japanese.
 export const messages: Readonly<Record<string, readonly [string, string]>> = {
+  "기기 연동": ["Devices", "デバイス連携"],
+  "연동 준비 중": ["Pairing in preparation", "連携準備中"],
+  "QR 생성": ["Generate QR", "QRを作成"],
+  "QR 다시 생성": ["New QR", "QRを再作成"],
+  "QR 닫기": ["Close QR", "QRを閉じる"],
+  "QR이 만료되었습니다.": ["The QR has expired.", "QRの有効期限が切れました。"],
+  "QR을 생성하지 못했습니다.": ["Unable to generate a QR.", "QRを作成できませんでした。"],
+  "Vesper 연동 준비용 QR": ["Vesper pairing preview QR", "Vesper連携準備用QR"],
+  "남은 유효 시간": ["Expires in", "有効期限まで"],
   "오로라": ["Aurora", "オーロラ"],
   "새벽": ["Dawn", "夜明け"],
   "황혼": ["Dusk", "黄昏"],

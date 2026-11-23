@@ -2913,7 +2913,7 @@ label textarea {
 }
 .settings-categories {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 5px clamp(4px, 0.7cqi, 10px);
   min-width: 0;
   margin-bottom: 18px;
@@ -3190,6 +3190,9 @@ label textarea {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+@container settings (max-width: 780px) {
+  .settings-categories { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 @container settings (max-width: 520px) {
   .settings-categories { grid-template-columns: repeat(2, minmax(0, 1fr)); }

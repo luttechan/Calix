@@ -126,7 +126,7 @@ def test_bootstrap_json_never_loads_qt_widgets_or_private_diary(engine):
     data = engine.dispatch("bootstrap", {})
     json.dumps(data, ensure_ascii=False)
     assert (
-        data["version"] == "1.7.6-beta.3"
+        data["version"] == "1.7.7"
         and len(data["events"]) == 2
         and not data["tasks"]
         and engine.vault is None
@@ -275,7 +275,7 @@ def test_stdio_round_trip_and_clean_exit_use_temporary_data(tmp_path):
     )
     assert result.returncode == 0, result.stderr
     messages = [json.loads(line) for line in result.stdout.splitlines()]
-    assert next(r for r in messages if r.get("id") == 1)["result"]["version"] == "1.7.6-beta.3"
+    assert next(r for r in messages if r.get("id") == 1)["result"]["version"] == "1.7.7"
 
 
 def test_quit_exits_cleanly_while_host_keeps_stdin_open(tmp_path):
@@ -428,3 +428,27 @@ def test_default_aurora_and_existing_theme_are_persisted(engine):
         engine.dispatch("preferences.save", {"theme": theme})
         assert read_settings(engine.settings_path)["theme"] == theme
         assert engine.bootstrap()["preferences"]["theme"] == theme
+
+
+def test_vesper_qr_preview_is_unique_bounded_and_never_persisted(engine, monkeypatch):
+    from learning_calendar import vesper_pairing
+
+    data_folder = set(engine.folder.iterdir())
+    monkeypatch.setattr(vesper_pairing.time, "time", lambda: 1_800_000_000)
+    first = engine.dispatch("vesper.pairing.preview", {})
+    second = engine.dispatch("vesper.pairing.preview", {})
+    assert set(first) == {"expiresAt", "rows"}
+    assert first["expiresAt"] == 1_800_000_300_000
+    assert first["rows"] != second["rows"]
+    assert all(len(row) == len(first["rows"]) and set(row) <= {"0", "1"} for row in first["rows"])
+    assert set(engine.folder.iterdir()) == data_folder
+
+
+def test_vesper_qr_preview_respects_app_lock(engine):
+    engine.dispatch("security.setup", {
+        "password": "Test pairing password 177!",
+        "policy": dict(main=True, timetable=False, grades=False, idle_minutes=5),
+    })
+    engine.dispatch("security.lock", {"scope": "main"})
+    with pytest.raises(ValueError, match="잠금을 해제"):
+        engine.dispatch("vesper.pairing.preview", {})

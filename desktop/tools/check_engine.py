@@ -62,6 +62,7 @@ def check(exe):
         "learning_calendar.app_security",
         "learning_calendar.grades",
         "learning_calendar.anki",
+        "learning_calendar.vesper_pairing",
     ):
         assert required in modules, required
     assert (
@@ -74,7 +75,8 @@ def check(exe):
         requests = [
             dict(id=1, method="bootstrap", params={}),
             dict(id=2, method="vault.state", params={}),
-            dict(id=3, method="quit", params={}),
+            dict(id=3, method="vesper.pairing.preview", params={}),
+            dict(id=4, method="quit", params={}),
         ]
         completed = subprocess.run(
             [str(exe), "--data-dir", folder],
@@ -89,12 +91,17 @@ def check(exe):
         responses = [json.loads(line) for line in completed.stdout.splitlines()]
         assert (
             next(r for r in responses if r.get("id") == 1)["result"]["version"]
-            == "1.7.6-beta.3"
+            == "1.7.7"
         )
         assert (
             next(r for r in responses if r.get("id") == 2)["result"]["initialized"]
             is False
         )
+        pairing = next(r for r in responses if r.get("id") == 3)["result"]
+        qr_rows = pairing["rows"]
+        assert pairing["expiresAt"] > 0 and len(qr_rows) >= 21
+        assert all(len(row) == len(qr_rows) and set(row) <= {"0", "1"} for row in qr_rows)
+        assert (exe.parent / "_internal/licenses/qrcodegen/qrcodegen-MIT.txt").is_file()
     with tempfile.TemporaryDirectory(prefix="calix-encryption-check-") as folder:
         password = "Packaged security fixture 160!"
         policy = dict(main=True, timetable=True, grades=True, idle_minutes=5)

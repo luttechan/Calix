@@ -1,0 +1,39 @@
+.vesper-pairing-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: clamp(14px, 2.6cqi, 26px);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-field);
+}
+.vesper-pairing-copy { flex: 1 1 200px; min-width: 0; }
+.vesper-pairing-product { display: flex; align-items: center; gap: 13px; }
+.vesper-pairing-product h3 { margin: 0; font-size: 19px; font-weight: 680; }
+.vesper-pairing-product div > span { color: var(--muted); font-size: 13px; }
+.vesper-pairing-icon {
+  display: grid;
+  flex: 0 0 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  color: var(--accent);
+}
+.vesper-pairing-status { margin: 16px 0; color: var(--muted); }
+.vesper-pairing-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.vesper-pairing-actions > button { min-height: 40px; gap: 7px; }
+.vesper-pairing-actions svg { flex: none; }
+.vesper-pairing-code { margin: 0; min-width: 0; width: min(100%, 228px); }
+.vesper-pairing-code svg { display: block; width: 100%; border-radius: 10px; background: #fff; }
+.vesper-pairing-code figcaption {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.vesper-pairing-code [role="timer"] { color: var(--ink); font-variant-numeric: tabular-nums; }

@@ -15,6 +15,7 @@ import {
   Terminal,
   UserRound,
   Languages,
+  Link2,
 } from "lucide-react";
 import { Modal, TypeBadge, useCalix } from "./App";
 import { rpc } from "./bridge";
@@ -31,6 +32,7 @@ import { SemesterSettings } from "./SemesterSettings";
 import { dateKey, dueText, status, weekdays } from "./dates";
 import type { Task } from "./types";
 import { ThemePicker } from "./ThemePicker";
+import { VesperPairing } from "./VesperPairing";
 const taskCollator = new Intl.Collator("ko", { numeric: true });
 export function ChecklistPage() {
   useLanguage();
@@ -529,6 +531,7 @@ export function SettingsPage() {
     ["semester", "학기", CalendarRange],
     ["menus", "메뉴 활성화", SlidersHorizontal],
     ["security", "비밀번호와 잠금", ShieldCheck],
+    ["devices", "기기 연동", Link2],
     ["app", "앱 관리", Download],
     ["dev", "Dev", Terminal],
   ] as const;
@@ -613,6 +616,11 @@ export function SettingsPage() {
       {category === "security" && (
         <div role="tabpanel" id="settings-pane-security" aria-labelledby="settings-tab-security">
           <SecuritySettings />
+        </div>
+      )}
+      {category === "devices" && (
+        <div role="tabpanel" id="settings-pane-devices" aria-labelledby="settings-tab-devices">
+          <VesperPairing />
         </div>
       )}
       {category === "menus" && (

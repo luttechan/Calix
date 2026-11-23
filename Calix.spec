@@ -20,8 +20,9 @@ license_data=[(str(root/'desktop/installer/LICENSE-MIT.txt'),'licenses/Tauri-Ins
 license_data.extend([
     (str(root/'asset/licenses/SQLCipher-LICENSE.txt'),'licenses/SQLCipher'),
     (str(root/'asset/licenses/OpenSSL-LICENSE.txt'),'licenses/OpenSSL'),
+    (str(root/'asset/licenses/qrcodegen-MIT.txt'),'licenses/qrcodegen'),
 ])
-for name in ('PySide6','PySide6_Essentials','PySide6_Addons','PySide6_WebEngine','shiboken6','requests','cryptography','keyring','sqlcipher3'):
+for name in ('PySide6','PySide6_Essentials','PySide6_Addons','PySide6_WebEngine','shiboken6','requests','cryptography','keyring','sqlcipher3','qrcodegen'):
     package=distribution(name)
     for item in package.files or ():
         if 'licenses' in item.parts or item.name.lower().startswith(('license','copying')):

@@ -4,6 +4,7 @@ keyring==25.7.0
 tzdata==2026.5
 cryptography==50.0.2
 sqlcipher3==0.6.5
+qrcodegen==1.8.0
 pyinstaller==6.22.3
 pytest==9.1.1
 fonttools==4.67.0
