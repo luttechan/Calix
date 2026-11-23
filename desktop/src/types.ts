@@ -101,6 +101,7 @@ export type Preferences = {
   attendance_sync: boolean;
   anki_sync?: boolean;
   developer_mode: boolean;
+  beta_updates?: boolean;
   reminders: ReminderSettings;
   theme: "pink" | "sky" | "mint" | "purple" | "dark" | "peach" | "amber" | "olive" | "lavender";
   theme_palette?: ThemePalette;

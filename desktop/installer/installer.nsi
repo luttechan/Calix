@@ -1058,7 +1058,7 @@ Function CalixCreateShortcut
           StrCpy $R3 "$R1\$CalixPreviousDisplayName.lnk"
           ${ExitDo}
         ${EndIf}
-        ${StrLoc} $R7 "0123456789." "$R6" ">"
+        ${StrLoc} $R7 "0123456789.-beta" "$R6" ">"
         ${If} $R7 == ""
           ${ExitDo}
         ${EndIf}

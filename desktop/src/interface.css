@@ -92,6 +92,42 @@
 .event-status-filters button {
   min-height: 34px;
 }
+
+.type-badge:is(.assignment, .movie) {
+  display: inline-block;
+  min-width: 0;
+  max-width: 100%;
+  padding-inline: 5px;
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.type-badge:is(.assignment, .movie):lang(en),
+.mini-tags:lang(en),
+.session-work > span:lang(en) {
+  font-size: 9px;
+  letter-spacing: -0.015em;
+}
+
+.mini-tags > span,
+.session-work > span {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.course-counts {
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+.session-event-row .type-badge {
+  align-self: start;
+}
+
 .semester-toolbar {
   align-items: flex-end;
 }

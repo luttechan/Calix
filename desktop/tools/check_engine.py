@@ -89,7 +89,7 @@ def check(exe):
         responses = [json.loads(line) for line in completed.stdout.splitlines()]
         assert (
             next(r for r in responses if r.get("id") == 1)["result"]["version"]
-            == "1.7.6"
+            == "1.7.6-beta.1"
         )
         assert (
             next(r for r in responses if r.get("id") == 2)["result"]["initialized"]

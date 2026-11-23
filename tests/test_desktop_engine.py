@@ -8,7 +8,7 @@ sys.path.insert(0, str(ROOT / "desktop"))
 from engine_api import EngineAPI
 from learning_calendar.models import Course, Event
 from learning_calendar.preferences import read_settings
-from learning_calendar.updates import version_key
+from learning_calendar.updates import BETA_API, LATEST_API, RELEASES, select_release, version_key
 
 
 @pytest.fixture
@@ -64,15 +64,69 @@ def test_reduce_motion_is_opt_in_and_persisted(engine):
 
 
 def test_release_164_follows_legacy_revision_labels():
-    tags = ["1.6.2", "v1.6.30", "v1.6.31", "v1.6.32", "v1.6.4", "v1.7.0", "v1.7.1", "v1.7.2", "v1.7.3", "v1.7.4", "v1.7.5", "v1.7.6"]
+    tags = ["1.6.2", "v1.6.30", "v1.6.31", "v1.6.32", "v1.6.4", "v1.7.0", "v1.7.1", "v1.7.2", "v1.7.3", "v1.7.4", "v1.7.5", "v1.7.6-beta.1", "v1.7.6-beta.2", "v1.7.6-beta.10", "v1.7.6"]
     assert sorted(tags, key=version_key) == tags
+
+
+def test_beta_plan_requires_developer_mode_and_is_cleared_when_disabled(engine):
+    assert engine.bootstrap()["preferences"]["beta_updates"] is False
+    with pytest.raises(ValueError, match="Developer Mode"):
+        engine.dispatch("preferences.save", {"beta_updates": True})
+    engine.dispatch("preferences.save", {"developer_mode": True, "developer_acknowledged": True})
+    engine.dispatch("preferences.save", {"beta_updates": True})
+    from learning_calendar.preferences import read_settings
+
+    assert read_settings(engine.settings_path)["beta_updates"] is True
+    engine.dispatch("preferences.save", {"developer_mode": False})
+    assert read_settings(engine.settings_path)["beta_updates"] is False
+
+
+def test_beta_channel_ignores_unpublished_releases_and_compares_sequences():
+    def release(tag, day, **overrides):
+        return dict(tag_name=tag, html_url=f"{RELEASES}/tag/{tag}",
+                    published_at=f"2026-11-{day:02d}T10:00:00Z",
+                    prerelease="-beta." in tag, **overrides)
+
+    stable = release("v1.7.6", 20)
+    beta1 = release("v1.7.6-beta.1", 21)
+    beta2 = release("v1.7.6-beta.2", 22)
+    beta10 = release("v1.7.6-beta.10", 23)
+    draft = release("v1.7.7-beta.1", 23, draft=True)
+    assert select_release(stable).tag == stable["tag_name"]
+    with pytest.raises(ValueError, match="채널"):
+        select_release(beta1)
+    assert select_release([draft, beta10, beta1, stable, beta2], allow_beta=True).tag == beta10["tag_name"]
+    final = release("v1.7.6", 25)
+    assert select_release([beta10, final], allow_beta=True).tag == final["tag_name"]
+    later_stable = release("v1.7.7", 20)
+    assert select_release([beta10, later_stable], allow_beta=True).tag == later_stable["tag_name"]
+
+
+def test_update_plan_switch_invalidates_beta_candidates(monkeypatch):
+    from PySide6.QtCore import QCoreApplication
+    from engine_updates import UpdateService
+
+    application = QCoreApplication.instance() or QCoreApplication([])
+    service = UpdateService(lambda *args, **kwargs: None)
+    requests = []
+    monkeypatch.setattr(service, "request", requests.append)
+    service.check(automatic=True)
+    service.set_beta_enabled(True)
+    service.check()
+    assert requests == [LATEST_API, BETA_API]
+    service.release = select_release([dict(tag_name="v1.7.6-beta.2", prerelease=True,
+                                           html_url=f"{RELEASES}/tag/v1.7.6-beta.2")], allow_beta=True)
+    service.set_beta_enabled(False)
+    assert service.release is None
+    assert service.phase == "idle"
+    assert QCoreApplication.instance() is application
 
 
 def test_bootstrap_json_never_loads_qt_widgets_or_private_diary(engine):
     data = engine.dispatch("bootstrap", {})
     json.dumps(data, ensure_ascii=False)
     assert (
-        data["version"] == "1.7.6"
+        data["version"] == "1.7.6-beta.1"
         and len(data["events"]) == 2
         and not data["tasks"]
         and engine.vault is None
@@ -221,7 +275,7 @@ def test_stdio_round_trip_and_clean_exit_use_temporary_data(tmp_path):
     )
     assert result.returncode == 0, result.stderr
     messages = [json.loads(line) for line in result.stdout.splitlines()]
-    assert next(r for r in messages if r.get("id") == 1)["result"]["version"] == "1.7.6"
+    assert next(r for r in messages if r.get("id") == 1)["result"]["version"] == "1.7.6-beta.1"
 
 
 def test_quit_exits_cleanly_while_host_keeps_stdin_open(tmp_path):

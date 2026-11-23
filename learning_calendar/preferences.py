@@ -51,6 +51,7 @@ def read_settings(path: str | Path) -> dict:
         "reduce_motion": False,
         "developer_mode": False,
         "developer_acknowledged": False,
+        "beta_updates": False,
         "font_mode": "pretendard",
         "language": "ko",
         "avatar": "",
@@ -85,6 +86,7 @@ def read_settings(path: str | Path) -> dict:
                 "onboarding_complete",
                 "developer_mode",
                 "developer_acknowledged",
+                "beta_updates",
             ):
                 if type(settings.get(key)) is bool:
                     defaults[key] = settings[key]
@@ -141,6 +143,7 @@ def read_settings(path: str | Path) -> dict:
     defaults["developer_mode"] = (
         defaults["developer_mode"] and defaults["developer_acknowledged"]
     )
+    defaults["beta_updates"] = defaults["developer_mode"] and defaults["beta_updates"]
     return defaults
 
 
@@ -166,6 +169,7 @@ def write_settings(path: str | Path, settings: dict):
             "reduce_motion",
             "developer_mode",
             "developer_acknowledged",
+            "beta_updates",
             "font_mode",
             "language",
             "nickname",

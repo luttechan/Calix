@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { ArrowUpRight, Terminal, TriangleAlert } from "lucide-react";
+import { ArrowUpRight, FlaskConical, Terminal, TriangleAlert } from "lucide-react";
 import { Modal, useCalix } from "./App";
 import { rpc } from "./bridge";
 import { DeveloperLab } from "./DeveloperLab";
@@ -19,6 +19,7 @@ export function DevPanel({ active }: { active: boolean }) {
   const [operation, setOperation] = useState<string | null>(null);
   const [maintenance, setMaintenance] = useState(false);
   const unlocked = Boolean(data.preferences.developer_mode);
+  const betaEnabled = Boolean(data.preferences.beta_updates);
   const [developerMode, setDeveloperMode] = useState(
     Boolean(data.preferences.developer_mode),
   );
@@ -217,6 +218,28 @@ export function DevPanel({ active }: { active: boolean }) {
           <span>Developer tools can cause data loss or leave Calix unusable.</span>
         </p>
       </section>
+      {unlocked && (
+        <section className="glass settings-panel dev-access">
+          <div className="settings-heading dev-heading dev-beta-heading">
+            <FlaskConical aria-hidden="true" />
+            <div>
+              <h2>Beta Plan</h2>
+              <p>Include beta releases when checking for updates.</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={betaEnabled}
+              aria-label="Beta Plan"
+              className={`switch${betaEnabled ? " on" : ""}`}
+              disabled={pending || maintenance}
+              onClick={() => void run(async () => {
+                await mutate("preferences.save", { beta_updates: !betaEnabled });
+              })}
+            ><i aria-hidden="true" /></button>
+          </div>
+        </section>
+      )}
       {unlocked && (
         <div className="dev-tools">
           {tools.map(([name, description, action]) => (

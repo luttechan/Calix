@@ -377,6 +377,7 @@ def main():
                         from engine_updates import UpdateService
 
                         self.updates = UpdateService(self.notify, self)
+                        self.updates.set_beta_enabled(api.settings.get("beta_updates") is True)
                     if method == "update.startup":
                         if not self.startup_update_checked or params.get("reopened") is True:
                             self.startup_update_checked = True
@@ -449,6 +450,8 @@ def main():
                     result = api.dispatch(method, params)
                     if api.settings.get("anki_sync") != anki_enabled:
                         self.anki_generation += 1
+                    if self.updates:
+                        self.updates.set_beta_enabled(api.settings.get("beta_updates") is True)
                     if not api.settings.get("developer_mode"):
                         diagnostics.set_enabled(False)
                         if self.maintenance:

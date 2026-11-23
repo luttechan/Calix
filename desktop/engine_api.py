@@ -119,7 +119,7 @@ class EngineAPI:
         palette = self.settings.get("theme_palettes", {}).get(theme, {})
         if state["locked"]:
             return dict(
-                version="1.7.6", events=[], courses=[], types=[], sessions=[],
+                version="1.7.6-beta.1", events=[], courses=[], types=[], sessions=[],
                 timetableTerms=[], mainTerm="", timetableConfigured=False,
                 sections=[], statuses=[], tasks=[], offDays=[], journals=[],
                 holidays={}, specialDates={}, lastSync="", syncSummary="",
@@ -129,6 +129,7 @@ class EngineAPI:
                                  reminders=self.settings.get("reminders", {}), nickname=self.settings.get("nickname", ""), greeting="{닉네임}님, 오셨군요!",
                                  onboarding_complete=True, attendance_visible=False, attendance_sync=False,
                                  developer_mode=False, font_mode=self.settings.get("font_mode", "pretendard"),
+                                 beta_updates=False,
                                  language=self.settings.get("language", "ko"),
                                  catholic=False, birthday=False, avatar=self.settings.get("avatar", "")),
             )
@@ -136,7 +137,7 @@ class EngineAPI:
         semesters = self.store.timetable_config()
         year = datetime.now(KST).year
         return dict(
-            version="1.7.6",
+            version="1.7.6-beta.1",
             events=[asdict(e) for e in events],
             courses=[asdict(c) for c in self.store.courses()],
             types=self.store.event_types(),
@@ -167,6 +168,7 @@ class EngineAPI:
                         ("glass", True),
                         ("reduce_motion", False),
                         ("developer_mode", False),
+                        ("beta_updates", False),
                         ("font_mode", "pretendard"),
                         ("language", "ko"),
                         ("nickname", ""),
@@ -575,6 +577,11 @@ class EngineAPI:
                 and p.get("developer_acknowledged") is not True
             ):
                 raise ValueError("Acknowledge the Developer Mode warning first.")
+            beta_updates = p.get("beta_updates", self.settings.get("beta_updates", False))
+            if type(beta_updates) is not bool:
+                raise ValueError("Beta Plan must be a boolean.")
+            if p.get("beta_updates") is True and not developer_mode:
+                raise ValueError("Enable Developer Mode before joining the Beta Plan.")
             theme = p.get("theme", self.settings.get("theme", "pink"))
             glass = p.get("glass", self.settings.get("glass", True))
             reduce_motion = p.get("reduce_motion", self.settings.get("reduce_motion", False))
@@ -596,7 +603,8 @@ class EngineAPI:
             }
             if any(type(value) is not bool for value in menu_settings.values()):
                 raise ValueError("메뉴 활성화 설정을 확인하세요.")
-            self.settings.update(
+            settings = dict(
+                self.settings,
                 **menu_settings,
                 theme=theme,
                 glass=glass,
@@ -604,13 +612,15 @@ class EngineAPI:
                 font_mode=mode,
                 language=language,
                 developer_mode=developer_mode,
+                beta_updates=developer_mode and beta_updates,
                 developer_acknowledged=developer_mode
                 and (
                     p.get("developer_acknowledged") is True
                     or self.settings.get("developer_acknowledged") is True
                 ),
             )
-            write_settings(self.settings_path, self.settings)
+            write_settings(self.settings_path, settings)
+            self.settings.update(settings)
             return True
         if method == "holiday.save":
             self.holidays.save(p["date"], p["name"], p.get("enabled", True))

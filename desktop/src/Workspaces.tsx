@@ -767,7 +767,7 @@ export function SettingsPage() {
         aria-labelledby="settings-tab-language"
         hidden={category !== "language"}
       >
-        <section className="glass settings-panel language-panel">
+        <section className="glass settings-panel">
           <div className="settings-heading">
             <Languages aria-hidden="true" />
             <h2 id="language-heading">{t("언어")}</h2>

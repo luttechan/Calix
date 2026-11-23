@@ -8,14 +8,15 @@ from pathlib import Path
 from PySide6.QtCore import QObject, QTimer, QUrl
 from PySide6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
 from learning_calendar.updates import (
+    BETA_API,
     LATEST_API,
-    parse_release,
+    select_release,
     trusted_download,
     version_key,
     MAX_INSTALLER,
 )
 
-VERSION = "1.7.6"
+VERSION = "1.7.6-beta.1"
 
 
 class UpdateService(QObject):
@@ -32,6 +33,7 @@ class UpdateService(QObject):
         self.received = 0
         self.redirects = 0
         self.automatic = False
+        self.beta_enabled = False
         self.phase = "idle"
         self.state = dict(phase="idle", current=VERSION, message="")
         self.timer = QTimer(self)
@@ -76,17 +78,27 @@ class UpdateService(QObject):
         self.reply.finished.connect(self.finished)
         self.timer.start(timeout)
 
+    def set_beta_enabled(self, enabled):
+        if self.beta_enabled == enabled:
+            return
+        self.beta_enabled = enabled
+        self.cancel()
+        self.release = None
+        self.publish("idle")
+
     def check(self, automatic=False):
         self.cancel()
+        self.release = None
         self.automatic = automatic
         self.buffer.clear()
         self.publish("checking", "업데이트 확인 중")
-        self.request(LATEST_API)
+        self.request(BETA_API if self.beta_enabled else LATEST_API)
 
     def download(self):
         if (
             not self.release
             or not self.release.installer_url
+            or (self.release.prerelease and not self.beta_enabled)
             or version_key(self.release.tag) <= version_key(VERSION)
         ):
             raise ValueError("업데이트를 먼저 확인하세요.")
@@ -172,7 +184,7 @@ class UpdateService(QObject):
             return
         if self.phase == "checking":
             try:
-                self.release = parse_release(json.loads(self.buffer))
+                self.release = select_release(json.loads(self.buffer), allow_beta=self.beta_enabled)
             except (ValueError, TypeError):
                 self.fail("릴리즈 정보를 확인할 수 없습니다.")
                 return
