@@ -96,6 +96,7 @@ export type ReminderPayload = {
 };
 export type PaletteColor = "canvas" | "surface" | "accent" | "muted";
 export type ThemePalette = Partial<Record<PaletteColor, string>>;
+export type ThemeId = "aurora" | "aurora-dawn" | "aurora-dusk" | "pink" | "sky" | "mint" | "purple" | "dark" | "peach" | "amber" | "olive" | "lavender";
 export type Preferences = {
   attendance_visible: boolean;
   attendance_sync: boolean;
@@ -103,7 +104,7 @@ export type Preferences = {
   developer_mode: boolean;
   beta_updates?: boolean;
   reminders: ReminderSettings;
-  theme: "pink" | "sky" | "mint" | "purple" | "dark" | "peach" | "amber" | "olive" | "lavender";
+  theme: ThemeId;
   theme_palette?: ThemePalette;
   glass: boolean;
   reduce_motion: boolean;

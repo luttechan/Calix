@@ -95,6 +95,50 @@
   --halo2: #403b62;
   color-scheme: dark;
 }
+:root:is(:not([data-theme]), [data-theme="aurora"]) {
+  --bg: #101927;
+  --surface: #1b293b;
+  --ink: #eef6fb;
+  --muted: #afc1d4;
+  --accent: #a0ead7;
+  --accent-soft: #243f49;
+  --line: #c5dced29;
+  --glass: #172638c7;
+  --rail: #111e2cc9;
+  --shadow: 0 12px 45px #0309153d;
+  --halo: #2a6a66;
+  --halo2: #34487b;
+  color-scheme: dark;
+}
+:root[data-theme="aurora-dawn"] {
+  --bg: #edf4f9;
+  --surface: #fcfdff;
+  --ink: #24334b;
+  --muted: #566981;
+  --accent: #456a9d;
+  --accent-soft: #e2eafb;
+  --line: #d5e1ec;
+  --glass: #f8fcffbd;
+  --rail: #f5faffbd;
+  --shadow: 0 10px 45px #41537312;
+  --halo: #a8d8e6;
+  --halo2: #c9bced;
+}
+:root[data-theme="aurora-dusk"] {
+  --bg: #19172c;
+  --surface: #272441;
+  --ink: #f4efff;
+  --muted: #c3b8dd;
+  --accent: #dac2ff;
+  --accent-soft: #3a3158;
+  --line: #e3d2ff27;
+  --glass: #26213cc7;
+  --rail: #1e1a33c9;
+  --shadow: 0 12px 45px #0c091a42;
+  --halo: #654684;
+  --halo2: #344978;
+  color-scheme: dark;
+}
 :root[data-font="windows"] {
   font-family: "Segoe UI", "Malgun Gothic", sans-serif;
 }
@@ -261,7 +305,7 @@ label textarea {
   background: color-mix(in srgb, var(--accent) 88%, #000);
   color: #fff;
 }
-:root[data-theme="dark"] .primary {
+:root:is(:not([data-theme]), [data-theme="dark"], [data-theme="aurora"], [data-theme="aurora-dusk"]) .primary {
   color: #322330;
 }
 .quiet,
@@ -343,7 +387,7 @@ label textarea {
     inset 0 1px 0 #ffffff66;
   backdrop-filter: blur(22px) saturate(1.35);
 }
-:root[data-theme="dark"] .glass {
+:root:is(:not([data-theme]), [data-theme="dark"], [data-theme="aurora"], [data-theme="aurora-dusk"]) .glass {
   border-color: #ffffff13;
   border-top-color: #ffffff26;
   box-shadow:
@@ -1575,43 +1619,72 @@ label textarea {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
-.theme-picker {
-  display: flex;
+.language-option > [lang="ja"] {
+  font-family: "Pretendard JP Variable", "Meiryo", sans-serif;
+}
+.theme-families {
+  display: grid;
   gap: 20px;
-  margin-bottom: 30px;
+  margin-block: 4px 22px;
 }
-.theme-picker > button {
+.theme-family {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.theme-family legend {
+  margin-bottom: 8px;
+  padding: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+.theme-options {
   display: grid;
-  justify-items: center;
-  gap: 9px;
-  padding: 9px;
-  background: transparent;
-  border-color: transparent;
-  font-size: 11px;
-  flex: 1;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, max(9.7rem, (100% - 16px) / 3)), 1fr));
+  gap: 8px;
 }
-.theme-picker > button > span {
-  width: 54px;
-  height: 54px;
-  border-radius: 17px;
-  border: 3px solid transparent;
+.theme-options > button {
   display: grid;
-  place-items: center;
-  color: #fff;
-  box-shadow: 0 3px 10px #3326380a;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 49px;
+  padding: 8px 11px;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-field);
+  text-align: start;
+  white-space: normal;
+  line-height: 1.35;
 }
-.theme-picker > button.selected > span {
-  outline: 2px solid var(--accent);
-  outline-offset: 4px;
+.theme-options > button:hover { background: var(--ui-hover); }
+.theme-options > button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  background: var(--accent-soft);
+  font-weight: 650;
 }
+.theme-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 7px;
+  border: 1px solid color-mix(in srgb, var(--ink) 16%, transparent);
+}
+.theme-label { min-width: 0; word-break: keep-all; overflow-wrap: anywhere; }
+.theme-selection { color: var(--accent); visibility: hidden; }
+.theme-options > button[aria-pressed="true"] .theme-selection { visibility: visible; }
 .setting-row {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 15px;
   border-top: 1px solid var(--line);
   padding: 22px 0;
 }
+.setting-row > :first-child { min-width: 0; overflow-wrap: anywhere; }
+.setting-row > select { min-width: 0; width: min(12rem, 42vw); }
 .setting-row:last-child {
   padding-bottom: 0;
 }
@@ -2005,9 +2078,6 @@ label textarea {
   .journal-paper {
     padding: 24px;
   }
-  .theme-picker {
-    gap: 10px;
-  }
   .checklist-table {
     min-width: 900px;
   }
@@ -2353,7 +2423,7 @@ label textarea {
   z-index: -1;
   background: radial-gradient(
     ellipse at 50% 38%,
-    color-mix(in srgb, var(--setup-color) 25%, transparent),
+    color-mix(in srgb, var(--accent) 25%, transparent),
     transparent 65%
   );
   pointer-events: none;
@@ -2410,39 +2480,6 @@ label textarea {
   margin-top: 10px;
   border-radius: 16px;
   background: var(--surface);
-}
-.setup-themes {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  margin: 34px 0;
-}
-.setup-themes button {
-  display: grid;
-  justify-items: center;
-  gap: 12px;
-  border: 0;
-  background: none;
-  font-size: 12px;
-  color: var(--muted);
-  padding: 8px 4px;
-}
-.setup-themes button > span {
-  display: grid;
-  place-items: center;
-  width: 58px;
-  height: 58px;
-  border-radius: 50%;
-  color: white;
-  transition:
-    transform 0.2s,
-    box-shadow 0.2s;
-}
-.setup-themes button.selected > span {
-  box-shadow:
-    0 0 0 4px var(--bg),
-    0 0 0 6px var(--setup-color);
-  transform: scale(1.03);
 }
 .setup-greeting {
   font-size: 20px;
@@ -2556,9 +2593,6 @@ label textarea {
 @media (prefers-reduced-motion: reduce) {
   .setup-card {
     animation: none;
-  }
-  .setup-themes button > span {
-    transition: none;
   }
 }
 
@@ -2902,6 +2936,7 @@ label textarea {
 }
 .settings-categories [role="tab"] svg { width: 15px; height: 15px; flex: none; }
 .settings-categories [role="tab"] span { min-width: 0; text-align: start; word-break: keep-all; overflow-wrap: anywhere; }
+.settings-categories [role="tab"] span:lang(en) { word-break: normal; }
 .settings-categories [role="tab"]:hover { background: var(--ui-hover); color: var(--ink); }
 .settings-categories [role="tab"][aria-selected="true"] {
   background: color-mix(in srgb, var(--surface) 84%, var(--accent));

@@ -12,6 +12,11 @@ mod taskbar;
 pub struct DeveloperState(pub std::sync::atomic::AtomicBool);
 
 const CONSOLE_WINDOW: &str = "developer-console";
+const DEFAULT_THEME: &str = "aurora";
+const THEMES: &[&str] = &[
+    DEFAULT_THEME, "aurora-dawn", "aurora-dusk", "pink", "sky", "mint", "purple", "dark",
+    "peach", "amber", "olive", "lavender",
+];
 
 fn developer_settings_enabled(value: &serde_json::Value) -> bool {
     value["developer_mode"].as_bool() == Some(true) && value["developer_acknowledged"].as_bool() == Some(true)

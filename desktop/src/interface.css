@@ -203,18 +203,18 @@
 .event-row .attendance-status.excused {
   justify-self: start;
 }
-:root[data-theme="dark"] .type-badge.assignment {
+:root:is([data-theme="dark"], [data-theme="aurora"], [data-theme="aurora-dusk"]) .type-badge.assignment {
   color: #f4cd97;
   background: #49392e;
   border-color: #795944;
 }
-:root[data-theme="dark"] .type-badge.movie {
+:root:is([data-theme="dark"], [data-theme="aurora"], [data-theme="aurora-dusk"]) .type-badge.movie {
   color: #c0dfff;
   background: #2d4057;
   border-color: #486a8b;
 }
 .calendar-event.excused,
-:root[data-theme="dark"] .calendar-event.excused {
+:root:is([data-theme="dark"], [data-theme="aurora"], [data-theme="aurora-dusk"]) .calendar-event.excused {
   background: #c2f5a9;
   color: #185b2d;
 }
@@ -285,19 +285,6 @@
 }
 .journal-list button strong {
   min-width: 0;
-}
-.theme-picker {
-  gap: 10px;
-}
-.theme-picker > button {
-  min-width: 74px;
-  border-radius: 12px;
-}
-.theme-picker > button.selected {
-  background: var(--accent-soft);
-}
-.theme-picker > button[aria-pressed="true"] {
-  border-color: var(--accent);
 }
 
 .menu-option input[role="switch"], button.switch {

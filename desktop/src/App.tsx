@@ -52,6 +52,7 @@ import { SyncNotice } from "./SyncNotice";
 import { animateCalendarMonth, animatePage, motionReduced, saveMotionPreference } from "./motion";
 import { playErrorCue, stopErrorCue } from "./errorCue";
 import { applyThemePalette } from "./themePalette";
+import { defaultTheme } from "./ThemePicker";
 import { defaultSyncTrack } from "./syncCue";
 import { DeadlinePage, CourseOverviewPage } from "./Overview";
 import { GradesPage } from "./Grades";
@@ -385,7 +386,7 @@ export function App() {
     await invoke("campus_cancel").catch(() => {});
     try {
       await invoke("auth_open", {
-        theme: document.documentElement.dataset.theme || "pink",
+        theme: document.documentElement.dataset.theme || defaultTheme,
         font: document.documentElement.dataset.font || "pretendard",
         language: currentLanguage(),
       });

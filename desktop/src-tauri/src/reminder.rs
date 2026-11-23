@@ -17,7 +17,7 @@ fn validate(value: &Value) -> Result<(),String> {
     for (key,limit) in [("title",160),("message",300)] {
         if value[key].as_str().is_none_or(|text| text.is_empty() || text.len()>limit) { return Err("알림 내용을 확인하세요.".into()); }
     }
-    if !["pink","sky","mint","purple","dark","peach","amber","olive","lavender"].contains(&value["theme"].as_str().unwrap_or("")) || value["urgent"].as_bool().is_none() || value["glass"].as_bool().is_none() { return Err("알림 설정을 확인하세요.".into()); }
+    if !crate::THEMES.contains(&value["theme"].as_str().unwrap_or("")) || value["urgent"].as_bool().is_none() || value["glass"].as_bool().is_none() { return Err("알림 설정을 확인하세요.".into()); }
     if let Some(language) = value.get("language") {
         if !matches!(language.as_str(), Some("ko" | "en" | "ja")) { return Err("알림 설정을 확인하세요.".into()); }
     }

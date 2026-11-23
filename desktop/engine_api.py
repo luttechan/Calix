@@ -9,7 +9,7 @@ from learning_calendar.storage import Store
 from learning_calendar.models import KST
 from learning_calendar.checklist_store import ChecklistStore
 from learning_calendar.diary_store import DiaryStore
-from learning_calendar.preferences import THEMES, read_settings, validate_theme_palette, write_settings
+from learning_calendar.preferences import DEFAULT_THEME, THEMES, read_settings, validate_theme_palette, write_settings
 from learning_calendar.holidays import HolidayCalendar
 
 
@@ -115,11 +115,11 @@ class EngineAPI:
 
     def bootstrap(self):
         state = self.security.state()
-        theme = self.settings.get("theme", "pink")
+        theme = self.settings.get("theme", DEFAULT_THEME)
         palette = self.settings.get("theme_palettes", {}).get(theme, {})
         if state["locked"]:
             return dict(
-                version="1.7.6-beta.2", events=[], courses=[], types=[], sessions=[],
+                version="1.7.6-beta.3", events=[], courses=[], types=[], sessions=[],
                 timetableTerms=[], mainTerm="", timetableConfigured=False,
                 sections=[], statuses=[], tasks=[], offDays=[], journals=[],
                 holidays={}, specialDates={}, lastSync="", syncSummary="",
@@ -137,7 +137,7 @@ class EngineAPI:
         semesters = self.store.timetable_config()
         year = datetime.now(KST).year
         return dict(
-            version="1.7.6-beta.2",
+            version="1.7.6-beta.3",
             events=[asdict(e) for e in events],
             courses=[asdict(c) for c in self.store.courses()],
             types=self.store.event_types(),
@@ -160,7 +160,7 @@ class EngineAPI:
                 {
                     k: self.settings.get(k, d)
                     for k, d in [
-                        ("theme", "pink"),
+                        ("theme", DEFAULT_THEME),
                         ("reminders", {}),
                         ("attendance_visible", False),
                         ("attendance_sync", False),
@@ -285,7 +285,7 @@ class EngineAPI:
             greeting = p.get(
                 "greeting", self.settings.get("greeting", "{닉네임}님, 오셨군요!")
             )
-            theme = p.get("theme", self.settings.get("theme", "pink"))
+            theme = p.get("theme", self.settings.get("theme", DEFAULT_THEME))
             for value, limit in ((nickname, 30), (greeting, 120)):
                 if (
                     not isinstance(value, str)
@@ -582,7 +582,7 @@ class EngineAPI:
                 raise ValueError("Beta Plan must be a boolean.")
             if p.get("beta_updates") is True and not developer_mode:
                 raise ValueError("Enable Developer Mode before joining the Beta Plan.")
-            theme = p.get("theme", self.settings.get("theme", "pink"))
+            theme = p.get("theme", self.settings.get("theme", DEFAULT_THEME))
             glass = p.get("glass", self.settings.get("glass", True))
             reduce_motion = p.get("reduce_motion", self.settings.get("reduce_motion", False))
             if type(reduce_motion) is not bool:

@@ -126,7 +126,7 @@ def test_bootstrap_json_never_loads_qt_widgets_or_private_diary(engine):
     data = engine.dispatch("bootstrap", {})
     json.dumps(data, ensure_ascii=False)
     assert (
-        data["version"] == "1.7.6-beta.2"
+        data["version"] == "1.7.6-beta.3"
         and len(data["events"]) == 2
         and not data["tasks"]
         and engine.vault is None
@@ -275,7 +275,7 @@ def test_stdio_round_trip_and_clean_exit_use_temporary_data(tmp_path):
     )
     assert result.returncode == 0, result.stderr
     messages = [json.loads(line) for line in result.stdout.splitlines()]
-    assert next(r for r in messages if r.get("id") == 1)["result"]["version"] == "1.7.6-beta.2"
+    assert next(r for r in messages if r.get("id") == 1)["result"]["version"] == "1.7.6-beta.3"
 
 
 def test_quit_exits_cleanly_while_host_keeps_stdin_open(tmp_path):
@@ -421,3 +421,10 @@ def test_update_download_only_becomes_installable_after_digest_check(tmp_path, v
     service.cancel()
     assert not list(tmp_path.rglob("setup.part"))
     assert not list(tmp_path.rglob("*.exe"))
+def test_default_aurora_and_existing_theme_are_persisted(engine):
+    assert engine.bootstrap()["preferences"]["theme"] == "aurora"
+    assert read_settings(engine.settings_path)["theme"] == "aurora"
+    for theme in ("aurora-dawn", "aurora-dusk", "lavender"):
+        engine.dispatch("preferences.save", {"theme": theme})
+        assert read_settings(engine.settings_path)["theme"] == theme
+        assert engine.bootstrap()["preferences"]["theme"] == theme

@@ -64,10 +64,10 @@ small { line-height: 1.5; }
 .reminder-events strong { font-size: 14px; }
 .reminder-events small { font-size: 12px; }
 .reminder-type { font-size: 12px; }
-:root[data-theme="dark"] .holiday-name { color: #e6abc0; }
-:root[data-theme="dark"] .calendar-event.assignment { color: #e4bc80; }
-:root[data-theme="dark"] .calendar-event.movie { color: #a9c8ed; }
-:root[data-theme="dark"] .calendar-event.late { color: #f0a9bb; }
+:root:is([data-theme="dark"], [data-theme="aurora"], [data-theme="aurora-dusk"]) .holiday-name { color: #e6abc0; }
+:root:is([data-theme="dark"], [data-theme="aurora"], [data-theme="aurora-dusk"]) .calendar-event.assignment { color: #e4bc80; }
+:root:is([data-theme="dark"], [data-theme="aurora"], [data-theme="aurora-dusk"]) .calendar-event.movie { color: #a9c8ed; }
+:root:is([data-theme="dark"], [data-theme="aurora"], [data-theme="aurora-dusk"]) .calendar-event.late { color: #f0a9bb; }
 @media (max-width: 1000px) {
   .calendar-event { font-size: 11px; }
   .day-cell { padding-inline: 5px; }

@@ -5,6 +5,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ArrowUpRight, Check, LoaderCircle, RefreshCw, X } from "lucide-react";
 import { setLanguage, t, useLanguage } from "./i18n";
 import { dragWindow } from "./windowDrag";
+import { defaultTheme } from "./ThemePicker";
 
 export function AuthWindow() {
   useLanguage();
@@ -18,7 +19,7 @@ export function AuthWindow() {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     if (params.has("language")) setLanguage(params.get("language"));
-    document.documentElement.dataset.theme = params.get("theme") || "pink";
+    document.documentElement.dataset.theme = params.get("theme") || defaultTheme;
     document.documentElement.dataset.font = params.get("font") || "pretendard";
     document.documentElement.dataset.glass = "true";
     if (!isTauri()) {

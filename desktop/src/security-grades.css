@@ -44,7 +44,7 @@
 .grade-savebar { position: sticky; bottom: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: 0 -5px 22px #20152b08; }
 .grade-savebar > span { margin-right: auto; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
 .grades-page { --grade-error: #ad354c; }
-:root[data-theme="dark"] .grades-page { --grade-error: #f0a9bb; }
+:root:is([data-theme="dark"], [data-theme="aurora"], [data-theme="aurora-dusk"]) .grades-page { --grade-error: #f0a9bb; }
 .grade-field-error { color: var(--grade-error); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .grade-row [aria-invalid="true"] { border-color: var(--grade-error); box-shadow: 0 0 0 1px var(--grade-error); }
 .grade-error-banner { padding: 14px 16px; margin-bottom: 14px; border: 1px solid var(--grade-error); border-radius: 12px; color: var(--grade-error); background: var(--surface); font-size: 13px; }

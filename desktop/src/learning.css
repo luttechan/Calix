@@ -385,8 +385,8 @@
 .attendance-status.excused { color:#185b2d; background:#c2f5a9; border:1px solid #8bd66b; }
 .attendance-summary > .attendance-total.excused { background:#ddf8d0; color:#185b2d; border-color:#8bd66b; }
 .attendance-summary > .attendance-total.absent strong { color:#b52a42; }
-:root[data-theme="dark"] .attendance-status.excused { background:#b6f29a; color:#164523; border-color:#89d76a; }
-:root[data-theme="dark"] .attendance-summary > .attendance-total.excused { background:#233e29; color:#b6f29a; border-color:#558950; }
-:root[data-theme="dark"] .attendance-status.absent { background:#5b2732; color:#ffb6c0; }
-:root[data-theme="dark"] .attendance-summary > .attendance-total.absent strong { color:#ffb6c0; }
+:root:is([data-theme="dark"], [data-theme="aurora"], [data-theme="aurora-dusk"]) .attendance-status.excused { background:#b6f29a; color:#164523; border-color:#89d76a; }
+:root:is([data-theme="dark"], [data-theme="aurora"], [data-theme="aurora-dusk"]) .attendance-summary > .attendance-total.excused { background:#233e29; color:#b6f29a; border-color:#558950; }
+:root:is([data-theme="dark"], [data-theme="aurora"], [data-theme="aurora-dusk"]) .attendance-status.absent { background:#5b2732; color:#ffb6c0; }
+:root:is([data-theme="dark"], [data-theme="aurora"], [data-theme="aurora-dusk"]) .attendance-summary > .attendance-total.absent strong { color:#ffb6c0; }
 .attendance-summary { grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); }

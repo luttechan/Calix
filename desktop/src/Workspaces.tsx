@@ -29,7 +29,8 @@ import { DevPanel } from "./DevPanel";
 import { SecuritySettings } from "./Security";
 import { SemesterSettings } from "./SemesterSettings";
 import { dateKey, dueText, status, weekdays } from "./dates";
-import type { Task, Preferences } from "./types";
+import type { Task } from "./types";
+import { ThemePicker } from "./ThemePicker";
 const taskCollator = new Intl.Collator("ko", { numeric: true });
 export function ChecklistPage() {
   useLanguage();
@@ -556,17 +557,6 @@ export function SettingsPage() {
       setFileBusy(false);
     }
   };
-  const themes: [Preferences["theme"], string, string][] = [
-    ["pink", "핑크", "#d09bb7"],
-    ["sky", "스카이블루", "#9bb8db"],
-    ["mint", "민트", "#9bcdb9"],
-    ["purple", "퍼플", "#b7a0d4"],
-    ["dark", "다크", "#333242"],
-    ["peach", "피치", "#deaa92"],
-    ["amber", "앰버", "#d7b16a"],
-    ["olive", "올리브", "#a7b580"],
-    ["lavender", "라벤더", "#aaa7dc"],
-  ];
   return (
     <>
       <div className="page-heading">
@@ -693,23 +683,9 @@ export function SettingsPage() {
             <Palette aria-hidden="true" />
             <h2>{t("화면")}</h2>
           </div>
-          <div className="theme-picker">
-            {themes.map(([id, name, color]) => (
-              <button
-                key={id}
-                aria-pressed={data.preferences.theme === id}
-                className={data.preferences.theme === id ? "selected" : ""}
-                onClick={() =>
-                  void mutate("preferences.save", { theme: id }).catch(() => {})
-                }
-              >
-                <span style={{ background: color }}>
-                  {data.preferences.theme === id && <Check size={20} />}
-                </span>
-                {t(name)}
-              </button>
-            ))}
-          </div>
+          <ThemePicker value={data.preferences.theme} onChange={theme => {
+            void mutate("preferences.save", { theme }).catch(() => {});
+          }} />
           <div className="setting-row">
             <div>
               <strong>{t("글래스")}</strong>

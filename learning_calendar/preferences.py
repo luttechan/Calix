@@ -6,7 +6,8 @@ from pathlib import Path
 SERVICE = "Calix"
 LEGACY_SERVICE = "BUFS Learning Calendar"
 ACCOUNT_KEY = "__account_id__"
-THEMES = ("pink", "sky", "mint", "purple", "dark", "peach", "amber", "olive", "lavender")
+DEFAULT_THEME = "aurora"
+THEMES = (DEFAULT_THEME, "aurora-dawn", "aurora-dusk", "pink", "sky", "mint", "purple", "dark", "peach", "amber", "olive", "lavender")
 PALETTE_COLORS = {"canvas", "surface", "accent", "muted"}
 _credential_backend_ready = False
 
@@ -44,7 +45,7 @@ def read_settings(path: str | Path) -> dict:
         "window_width": 1240,
         "window_height": 840,
         "active_db": "learning.db",
-        "theme": "sky",
+        "theme": DEFAULT_THEME,
         "theme_palettes": {},
         "notifications": False,
         "glass": True,

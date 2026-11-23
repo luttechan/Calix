@@ -1,5 +1,8 @@
 // The Korean source string is the fallback. Translations are English and Japanese.
 export const messages: Readonly<Record<string, readonly [string, string]>> = {
+  "오로라": ["Aurora", "オーロラ"],
+  "새벽": ["Dawn", "夜明け"],
+  "황혼": ["Dusk", "黄昏"],
   "긴급 마감": ["Urgent deadline", "緊急の締切"],
   "시간 단위": ["Time unit", "時間の単位"],
   "시간 전": ["hours before", "時間前"],

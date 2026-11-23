@@ -57,8 +57,8 @@
 .startup-content {
   display: grid;
   justify-items: center;
-  gap: 13px;
-  width: min(100% - 48px, 640px);
+  gap: 10px;
+  width: min(100% - 48px, 650px);
   text-align: center;
   font-family: "Segoe UI Variable Display", "Segoe UI", sans-serif;
   animation: aurora-arrive .9s cubic-bezier(.18,.7,.18,1) both;
@@ -69,42 +69,37 @@
   margin-block-end: 4px;
   filter: drop-shadow(0 8px 19px #6cbdff3b);
 }
-.startup-title {
-  margin: 0;
-  font-size: clamp(38px, 7vw, 86px);
-  font-weight: 650;
-  line-height: 1.04;
-  letter-spacing: -.057em;
+.startup-signature {
+  display: block;
+  width: min(100%, 540px);
+  height: auto;
+  stroke: url(#startup-ink);
+  stroke-width: 3.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
-.startup-title span {
-  color: #c4ffed;
-  background: linear-gradient(110deg, #d5ffee 10%, #bfe5ff 48%, #ccc4ff 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-.startup-phrase {
-  margin: 0;
-  color: #c9d7ee;
-  font-size: clamp(15px, 2.2vw, 21px);
-  line-height: 1.45;
-  letter-spacing: .025em;
+.startup-signature path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: aurora-write var(--duration) var(--start) cubic-bezier(.25,.12,.48,1) forwards;
 }
 .startup-track {
-  width: 80px;
-  height: 2px;
-  margin-block-start: 12px;
+  width: 108px;
+  height: 3px;
+  margin-block-start: 5px;
   border-radius: 8px;
   background: #e2edff25;
   overflow: hidden;
 }
 .startup-track i {
   display: block;
-  width: 80px;
+  width: 44%;
   height: 100%;
   background: linear-gradient(90deg, transparent, #b7f8e6, #b6acff, transparent);
-  animation: aurora-loading 1.65s ease-in-out infinite;
+  border-radius: inherit;
+  animation: aurora-loading 1.15s ease-in-out infinite alternate;
 }
+@keyframes aurora-write { to { stroke-dashoffset: 0; } }
 @keyframes aurora-sweep {
   from { opacity: .75; transform: translate3d(-4%, -8%, 0) rotate(-14deg); }
   to { opacity: .92; transform: translate3d(3%, 5%, 0) rotate(-7deg); }
@@ -114,15 +109,17 @@
   to { opacity: 1; transform: none; }
 }
 @keyframes aurora-loading {
-  from { transform: translateX(-100%); }
-  to { transform: translateX(100%); }
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(127%, 0, 0); }
 }
 @media (prefers-reduced-motion: reduce) {
   #calix-startup { transition: none; }
   .startup-aurora::before, .startup-aurora::after, .startup-content, .startup-track i { animation: none; }
+  .startup-signature path { animation: none; stroke-dashoffset: 0; }
 }
 :root[data-reduce-motion] #calix-startup { transition: none; }
 :root[data-reduce-motion] .startup-aurora::before,
 :root[data-reduce-motion] .startup-aurora::after,
 :root[data-reduce-motion] .startup-content,
 :root[data-reduce-motion] .startup-track i { animation: none; }
+:root[data-reduce-motion] .startup-signature path { animation: none; stroke-dashoffset: 0; }

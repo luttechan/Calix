@@ -124,9 +124,6 @@
 .sidebar-bottom {
   flex-shrink: 0;
 }
-.setup-themes {
-  grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
-}
 
 .planning-panel {
   margin: 0 0 16px;
@@ -241,7 +238,7 @@
 .deadline-group.overdue h2 {
   color: #ad3d54;
 }
-:root[data-theme="dark"] .deadline-group.overdue h2 {
+:root:is([data-theme="dark"], [data-theme="aurora"], [data-theme="aurora-dusk"]) .deadline-group.overdue h2 {
   color: #ff9bab;
 }
 .deadline-group .overview-items {
@@ -271,9 +268,6 @@
 }
 .timetable-panel.with-online {
   max-height: max(300px, calc(100dvh - 290px));
-}
-.theme-picker {
-  flex-wrap: wrap;
 }
 .overview-items > button > span:nth-child(2) {
   min-width: 0;

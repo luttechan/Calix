@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   ArrowLeft,
-  Check,
   LoaderCircle,
   UserRound,
   Trash2,
@@ -11,17 +10,7 @@ import {
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { Modal, useCalix } from "./App";
 import { readAvatar } from "./avatar";
-const themes = [
-  ["pink", "핑크", "#d09bb7"],
-  ["sky", "스카이블루", "#9bb8db"],
-  ["mint", "민트", "#9bcdb9"],
-  ["purple", "퍼플", "#b7a0d4"],
-  ["dark", "다크", "#333242"],
-    ["peach", "피치", "#deaa92"],
-    ["amber", "앰버", "#d7b16a"],
-    ["olive", "올리브", "#a7b580"],
-    ["lavender", "라벤더", "#aaa7dc"],
-] as const;
+import { ThemePicker } from "./ThemePicker";
 export function Onboarding() {
   useLanguage();
   const { data, mutate } = useCalix(),
@@ -61,11 +50,6 @@ export function Onboarding() {
       ref={dialog}
       className="onboarding"
       onCancel={(event) => event.preventDefault()}
-      style={
-        {
-          "--setup-color": themes.find((row) => row[0] === theme)?.[2],
-        } as React.CSSProperties
-      }
     >
       <div className="setup-orbit" aria-hidden="true" />
       <div className="setup-brand">
@@ -102,25 +86,10 @@ export function Onboarding() {
             />
           </label>
         ) : (
-            <div className="setup-themes">
-              {themes.map(([id, label, color]) => (
-                <button
-                  type="button"
-                  key={id}
-                  aria-pressed={theme === id}
-                  className={theme === id ? "selected" : ""}
-                  onClick={() => {
-                    setTheme(id);
-                    document.documentElement.dataset.theme = id;
-                  }}
-                >
-                  <span style={{ background: color }}>
-                    {theme === id && <Check size={22} />}
-                  </span>
-                  {t(label)}
-                </button>
-              ))}
-            </div>
+          <ThemePicker value={theme} onChange={value => {
+            setTheme(value);
+            document.documentElement.dataset.theme = value;
+          }} />
         )}
         <div className="setup-actions">
           {step === 1 && (
