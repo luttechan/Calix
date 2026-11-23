@@ -2,6 +2,7 @@ import importlib.util
 from pathlib import Path
 import json
 import pytest
+from zipfile import ZipFile
 
 ROOT=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('package_current_desktop',ROOT/'desktop/tools/package_desktop.py')
@@ -16,6 +17,7 @@ def prepare(tmp_path):
         'desktop/src-tauri/engine/_internal/runtime.txt':'current-runtime',
         'desktop/src-tauri/target/release/bundle/nsis/Calix_1.4.21_x64-setup.exe':'old-cached-installer',
         'LICENSE':'license','asset/style/Pretendard-OFL.txt':'font license',
+        'asset/style/PretendardJP-OFL.txt':'Japanese font license',
     }
     for name,text in files.items():
         path=tmp_path/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_text(text,encoding='utf-8')
@@ -26,6 +28,8 @@ def test_cached_installer_from_old_version_is_never_selected(tmp_path,monkeypatc
     monkeypatch.setattr(packager,'ROOT',tmp_path)
     packager.main()
     assert (tmp_path/'desktop/.build/packages/Calix-1.5.0-Setup-x64.exe').read_bytes()==b'current-installer'
+    with ZipFile(tmp_path/'desktop/.build/packages/Calix-1.5.0-Windows-x64.zip') as archive:
+        assert archive.read('Calix 1.5.0/PretendardJP-OFL.txt') == b'Japanese font license'
 
 def test_missing_current_installer_never_falls_back_to_old_version(tmp_path,monkeypatch):
     prepare(tmp_path);monkeypatch.setattr(packager,'ROOT',tmp_path)

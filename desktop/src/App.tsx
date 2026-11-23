@@ -812,8 +812,9 @@ export function App() {
     lockScreenShown.current = true;
     return <Context.Provider value={context}>
       <div className="security-app-lock">
-        <div className="lock-window-drag" onMouseDown={dragWindow} />
-        <WindowControls />
+        <header className="lock-window-drag" onMouseDown={dragWindow}>
+          <WindowControls />
+        </header>
         <UnlockView onExit={() => setExit(true)} />
         {exitDialog}
       </div>
@@ -837,9 +838,13 @@ export function App() {
           }}
         >
           <img src="/assets/icons/calix.svg" alt="" />
-          <span>Calix</span>
-          {data?.preferences.developer_mode && <b className="dev-badge">Dev</b>}
+          <span className="brand-name">
+            <span>Calix</span>
+            {data?.preferences.developer_mode && <b className="dev-badge">Dev</b>}
+          </span>
           <small
+            className="brand-version"
+            title={appVersion}
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();

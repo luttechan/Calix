@@ -1,6 +1,13 @@
 @import "./learning.css";
 @import "./motion.css";
 @font-face {
+  font-family: "Pretendard JP Variable";
+  src: url("/assets/fonts/PretendardJPVariable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
   font-family: Calix;
   src: url("/assets/fonts/CalixVariable.woff2") format("woff2");
   font-weight: 100 900;
@@ -90,6 +97,10 @@
 }
 :root[data-font="windows"] {
   font-family: "Segoe UI", "Malgun Gothic", sans-serif;
+}
+:root:lang(ja):not([data-font="windows"]) {
+  font-family: "Pretendard JP Variable", Calix, "Segoe UI", Meiryo, sans-serif;
+  font-synthesis: style;
 }
 * {
   box-sizing: border-box;
@@ -360,28 +371,42 @@ label textarea {
   border-right: 1px solid #ffffff75;
 }
 .brand {
-  display: flex;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
-  padding: 0 11px 37px;
+  gap: 4px 10px;
+  min-width: 0;
+  padding: 0 11px 27px;
 }
 .brand img {
+  grid-row: span 2;
   width: 34px;
   height: 34px;
   filter: drop-shadow(0 3px 5px #30233316);
 }
-.brand > span {
+.brand-name {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  gap: 6px;
   font-size: 25px;
   font-weight: 650;
   letter-spacing: -1.3px;
+  line-height: 1.05;
 }
-.brand small {
+.brand .brand-version {
+  justify-self: start;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   color: var(--muted);
   font-size: 10px;
-  margin: 5px 0 0 auto;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
   border: 1px solid var(--line);
   padding: 1px 5px;
   border-radius: 5px;
+  cursor: pointer;
 }
 .nav-label {
   font-size: 10px;
@@ -1210,10 +1235,19 @@ label textarea {
     padding: 30px 9px 15px;
   }
   .brand {
-    padding: 0 8px 33px;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: 5px;
+    padding: 0 0 20px;
   }
-  .brand > span,
-  .brand small,
+  .brand img { grid-row: auto; }
+  .brand .brand-version {
+    justify-self: center;
+    padding-inline: 3px;
+    text-align: center;
+  }
+  .brand-name:not(:has(.dev-badge)),
+  .brand-name > span,
   .nav-label,
   .sidebar nav button > span,
   .sidebar nav small,
@@ -2528,13 +2562,6 @@ label textarea {
   }
 }
 
-/* Always retain the complete running version. */
-.brand small {
-  flex-shrink: 0;
-  white-space: nowrap;
-  min-width: max-content;
-  cursor: pointer;
-}
 .online-courses {
   flex: 0 0 auto;
   display: grid;
@@ -2664,20 +2691,6 @@ label textarea {
   font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
-@media (max-width: 900px) {
-  .brand {
-    flex-wrap: wrap;
-    justify-content: center;
-    padding: 0 0 20px;
-    gap: 5px;
-  }
-  .brand small {
-    display: block;
-    margin: 0;
-    font-size: 10px;
-  }
-}
-
 .online-course .session-work {
   justify-content: flex-start;
 }

@@ -42,6 +42,8 @@ def main():
         z.write(
             ROOT / "asset/style/Pretendard-OFL.txt", f"Calix {version}/Pretendard-OFL.txt"
         )
+        jp_license = ROOT / "asset/style/PretendardJP-OFL.txt"
+        z.write(jp_license, f"Calix {version}/{jp_license.name}")
         z.writestr(
             f"Calix {version}/run.bat",
             '@echo off\r\nstart "" /D "%~dp0" "%~dp0Calix.exe"\r\n',
