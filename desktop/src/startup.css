@@ -73,16 +73,19 @@
   display: block;
   width: min(100%, 540px);
   height: auto;
-  stroke: url(#startup-ink);
-  stroke-width: 3.7;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
+.stroke-calix-capital { --start: .05s; --duration: .41s; }
+.stroke-calix-letters { --start: .44s; --duration: .52s; }
+.stroke-calix-detail { --start: .93s; --duration: .11s; }
+.stroke-aurora-capital { --start: 1s; --duration: .29s; }
+.stroke-aurora-crossbar { --start: 1.22s; --duration: .16s; }
+.stroke-aurora-letters { --start: 1.35s; --duration: .65s; }
 .startup-signature path {
   stroke-dasharray: 1;
-  stroke-dashoffset: 1;
-  animation: aurora-write var(--duration) var(--start) cubic-bezier(.25,.12,.48,1) forwards;
+  stroke-dashoffset: 0;
+  animation: aurora-write var(--duration) var(--start) cubic-bezier(.25,.12,.48,1) both;
 }
+.startup-signature-complete .startup-signature path { animation: none; }
 .startup-track {
   width: 108px;
   height: 3px;
@@ -99,7 +102,10 @@
   border-radius: inherit;
   animation: aurora-loading 1.15s ease-in-out infinite alternate;
 }
-@keyframes aurora-write { to { stroke-dashoffset: 0; } }
+@keyframes aurora-write {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
 @keyframes aurora-sweep {
   from { opacity: .75; transform: translate3d(-4%, -8%, 0) rotate(-14deg); }
   to { opacity: .92; transform: translate3d(3%, 5%, 0) rotate(-7deg); }
