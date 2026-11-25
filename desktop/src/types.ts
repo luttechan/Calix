@@ -106,6 +106,7 @@ export type Preferences = {
   reminders: ReminderSettings;
   theme: ThemeId;
   theme_palette?: ThemePalette;
+  timetable_colors?: TimetableColors;
   glass: boolean;
   reduce_motion: boolean;
   font_mode: string;
@@ -119,11 +120,15 @@ export type Preferences = {
 };
 export type SecurityState = {
   configured: boolean;
+  credential_mode?: "legacy" | CredentialMode;
+  pin_supported?: boolean;
   locked: boolean;
   policy: { main: boolean; timetable: boolean; grades: boolean; idle_minutes: number };
   unlocked: string[];
   retry_after: number;
 };
+export type CredentialMode = "pin4" | "pin6" | "password";
+export type TimetableColors = { active: string; presets: Record<string, string[]> };
 export type Snapshot = {
   security?: SecurityState;
   version: string;

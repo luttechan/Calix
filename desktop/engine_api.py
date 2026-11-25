@@ -9,7 +9,7 @@ from learning_calendar.storage import Store
 from learning_calendar.models import KST
 from learning_calendar.checklist_store import ChecklistStore
 from learning_calendar.diary_store import DiaryStore
-from learning_calendar.preferences import DEFAULT_THEME, THEMES, read_settings, validate_theme_palette, write_settings
+from learning_calendar.preferences import DEFAULT_THEME, THEMES, read_settings, validate_theme_palette, validate_timetable_colors, write_settings
 from learning_calendar.holidays import HolidayCalendar
 
 
@@ -119,7 +119,7 @@ class EngineAPI:
         palette = self.settings.get("theme_palettes", {}).get(theme, {})
         if state["locked"]:
             return dict(
-                version="1.7.7", events=[], courses=[], types=[], sessions=[],
+                version="1.7.8", events=[], courses=[], types=[], sessions=[],
                 timetableTerms=[], mainTerm="", timetableConfigured=False,
                 sections=[], statuses=[], tasks=[], offDays=[], journals=[],
                 holidays={}, specialDates={}, lastSync="", syncSummary="",
@@ -137,7 +137,7 @@ class EngineAPI:
         semesters = self.store.timetable_config()
         year = datetime.now(KST).year
         return dict(
-            version="1.7.7",
+            version="1.7.8",
             events=[asdict(e) for e in events],
             courses=[asdict(c) for c in self.store.courses()],
             types=self.store.event_types(),
@@ -161,6 +161,7 @@ class EngineAPI:
                     k: self.settings.get(k, d)
                     for k, d in [
                         ("theme", DEFAULT_THEME),
+                        ("timetable_colors", {"active": "manual", "presets": {}}),
                         ("reminders", {}),
                         ("attendance_visible", False),
                         ("attendance_sync", False),
@@ -253,17 +254,17 @@ class EngineAPI:
                 policy = self.security.validate(p.get("policy"))
                 self._close_stores()
                 try:
-                    self.security.initialize(p.get("password"), policy)
+                    self.security.initialize(p.get("password"), policy, p.get("mode", "legacy"))
                 finally:
                     self._open_stores()
             elif method == "security.unlock":
                 was_cold = self.security.key is None
-                self.security.unlock(p.get("password"), p.get("scope", "main"))
+                self.security.unlock(p.get("password"), p.get("scope", "main"), p.get("replacement"), p.get("mode"))
                 if was_cold:
                     self._close_stores()
                     self._open_stores()
             elif method == "security.configure":
-                self.security.configure(p.get("password"), p.get("policy"), p.get("replacement"))
+                self.security.configure(p.get("password"), p.get("policy"), p.get("replacement"), p.get("mode"))
             elif method == "security.lock":
                 self.security.lock(p.get("scope", "main"))
             else:
@@ -444,6 +445,11 @@ class EngineAPI:
             )
         if method == "status.delete":
             self.checklist.delete_status(p["id"])
+            return True
+        if method == "timetable.colors":
+            colors = validate_timetable_colors(p)
+            write_settings(self.settings_path, dict(self.settings, timetable_colors=colors))
+            self.settings["timetable_colors"] = colors
             return True
         if method == "timetable.save":
             if "slots" in p and not p.get("is_online", False):

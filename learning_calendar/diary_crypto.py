@@ -32,17 +32,17 @@ def _derive(password,salt):
     return bytearray(Argon2id(salt=salt,length=32,iterations=3,lanes=4,memory_cost=65536).derive(password.encode('utf-8')))
 
 
-def wrap_key(password,key):
-    if len(password)<12:raise VaultError('암호는 12자 이상으로 정하세요.')
+def wrap_key(password,key,*,minimum=12):
+    if not isinstance(password,str) or len(password)<minimum:raise VaultError('암호는 12자 이상으로 정하세요.')
     salt=os.urandom(16);nonce=os.urandom(12);kek=_derive(password,salt)
     try:cipher=AESGCM(bytes(kek)).encrypt(nonce,bytes(key),KEY_AAD)
     finally:wipe(kek)
     return json.dumps(dict(version=1,kdf='argon2id-64m-3-4',salt=salt.hex(),nonce=nonce.hex(),key=cipher.hex()),separators=(',',':')).encode('ascii')
 
 
-def new_material(password):
+def new_material(password,*,minimum=12):
     key=bytearray(os.urandom(32))
-    try:return key,wrap_key(password,key)
+    try:return key,wrap_key(password,key,minimum=minimum)
     except Exception:wipe(key);raise
 
 

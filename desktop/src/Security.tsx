@@ -6,8 +6,30 @@ import { Modal, useCalix } from "./App";
 import { rpc } from "./bridge";
 import { NumberField } from "./NumberField";
 import { playLogonCue, stopErrorCue } from "./errorCue";
-import type { SecurityState } from "./types";
+import type { CredentialMode, SecurityState } from "./types";
 import "./security-grades.css";
+
+const credentials = { pin4: "숫자 4자리 PIN", pin6: "숫자 6자리 PIN", password: "6자 이상 비밀번호" } as const;
+
+function CredentialPicker({ mode, onChange, pinSupported }: {
+  mode: CredentialMode; onChange: (mode: CredentialMode) => void; pinSupported?: boolean;
+}) {
+  return <label>{t("잠금 방식")}<select value={mode} onChange={event => onChange(event.target.value as CredentialMode)}>
+    {(["pin4", "pin6", "password"] as const).filter(key => pinSupported || key === "password")
+      .map(key => <option key={key} value={key}>{t(credentials[key])}</option>)}
+  </select></label>;
+}
+
+function CredentialInput({ mode, value, onChange, label, required = true, current = false, autoFocus = false }: {
+  mode?: CredentialMode | "legacy"; value: string; onChange: (value: string) => void;
+  label: string; required?: boolean; current?: boolean; autoFocus?: boolean;
+}) {
+  const digits = mode === "pin4" ? 4 : mode === "pin6" ? 6 : undefined;
+  return <label>{t(label)}<input type="password" autoComplete={current ? "current-password" : "new-password"}
+    inputMode={digits ? "numeric" : undefined} pattern={digits ? `[0-9]{${digits}}` : undefined}
+    minLength={digits ?? (!current ? 6 : undefined)} maxLength={digits ?? 1024}
+    value={value} required={required} autoFocus={autoFocus} onChange={event => onChange(event.target.value)} /></label>;
+}
 
 function LockClock() {
   useLanguage();
@@ -63,20 +85,29 @@ export function UnlockView({ scope = "main", onExit }: {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [reset, setReset] = useState(false);
+  const [mode, setMode] = useState<CredentialMode>("password");
+  const [replacement, setReplacement] = useState("");
+  const [confirmation, setConfirmation] = useState("");
   const title = scope === "main" ? "Calix 잠금" : scope === "timetable" ? "시간표 잠금" : "학점 메뉴 잠금";
   const main = scope === "main";
+  const migrating = main && data.security?.credential_mode === "legacy";
+  const currentMode = data.security?.credential_mode;
   return <>
-    <section className={`unlock-view${main ? " startup-unlock" : ""}`} aria-labelledby="unlock-title">
+    <section className={`unlock-view${main ? " startup-unlock" : ""}${migrating ? " startup-migration" : ""}`} aria-labelledby="unlock-title">
       {main ? <><LockClock /><div className="lock-profile" data-checking={pending}>
         <div className="lock-avatar">{data.preferences.avatar ? <img src={data.preferences.avatar} alt="" /> : <UserRound size={48} aria-hidden="true" />}</div>
         <h1 id="unlock-title">{data.preferences.nickname || "Calix"}</h1>
       </div></> : <><span className="security-symbol"><LockKeyhole size={26} /></span><h1 id="unlock-title">{t(title)}</h1></>}
-      <form onSubmit={event => {
+      <form className={migrating ? "credential-migration" : undefined} onSubmit={event => {
         event.preventDefault();
         if (pending) return;
+        if (migrating && replacement !== confirmation) {
+          setError("새 비밀번호가 일치하지 않습니다.");
+          return;
+        }
         setPending(true);
         setError("");
-        void mutate("security.unlock", { password, scope }).then(() => {
+        void mutate("security.unlock", { password, scope, ...(migrating ? { replacement, mode } : {}) }).then(() => {
           setPassword("");
           const reminders = data.preferences.reminders;
           stopErrorCue();
@@ -84,9 +115,17 @@ export function UnlockView({ scope = "main", onExit }: {
         })
           .catch(reason => setError(reason.message)).finally(() => setPending(false));
       }}>
-        <label>{t("비밀번호")}<input type="password" autoComplete="current-password" value={password} maxLength={1024} required autoFocus onChange={event => setPassword(event.target.value)} /></label>
+        {migrating && <h2>{t("새 잠금 방식 설정")}</h2>}
+        <CredentialInput label={migrating ? "현재 비밀번호" : currentMode?.startsWith("pin") ? "PIN" : "비밀번호"}
+          mode={currentMode} value={password} onChange={setPassword} current autoFocus />
+        {migrating && <>
+          <CredentialPicker mode={mode} onChange={next => { setMode(next); setReplacement(""); setConfirmation(""); }} pinSupported={data.security?.pin_supported} />
+          <CredentialInput label={mode === "password" ? "새 비밀번호" : "새 PIN"} mode={mode} value={replacement} onChange={setReplacement} />
+          <CredentialInput label={mode === "password" ? "비밀번호 확인" : "PIN 확인"} mode={mode} value={confirmation} onChange={setConfirmation} />
+          {mode !== "password" && <p className="muted">{t("PIN과 PIN으로 보호한 백업은 현재 Windows 계정에 연결됩니다.")}</p>}
+        </>}
         {error && <p role="alert">{t(error)}</p>}
-        <button className="button primary" disabled={pending}>{pending ? t("확인 중") : t("잠금 해제")}</button>
+        <button className="button primary" disabled={pending}>{pending ? t("확인 중") : t(migrating ? "저장하고 잠금 해제" : "잠금 해제")}</button>
       </form>
       {main && <div className="lock-actions">
         <button type="button" className="text-button" disabled={pending} onClick={() => setReset(true)}>{t("비밀번호를 잊으셨나요?")}</button>
@@ -121,7 +160,9 @@ export function SecuritySettings() {
   const [confirm, setConfirm] = useState("");
   const [pending, setPending] = useState(false);
   const configured = !!current?.configured;
+  const [mode, setMode] = useState<CredentialMode>(current?.credential_mode === "legacy" ? "password" : current?.credential_mode ?? "password");
   const newPassword = configured ? replacement : password;
+  const changingMode = configured && mode !== current?.credential_mode && current?.credential_mode !== undefined;
   const [custom, setCustom] = useState(![1, 5, 10, 15, 30, 60].includes(policy.idle_minutes));
   return (
     <section className="glass settings-panel security-settings">
@@ -131,17 +172,19 @@ export function SecuritySettings() {
         if (newPassword && newPassword !== confirm) { notify("새 비밀번호가 일치하지 않습니다.", true); return; }
         setPending(true);
         void mutate(configured ? "security.configure" : "security.setup",
-          configured ? { password, replacement: replacement || undefined, policy } : { password, policy })
+          configured ? { password, replacement: replacement || undefined, mode: replacement ? mode : undefined, policy } : { password, policy, mode })
           .then(() => { setPassword(""); setReplacement(""); setConfirm(""); notify("잠금 설정 저장됨"); })
           .catch(() => {}).finally(() => setPending(false));
       }}>
         <fieldset disabled={pending}>
-          <label>{configured ? t("현재 비밀번호") : t("비밀번호")}
-            <input type="password" autoComplete={configured ? "current-password" : "new-password"} value={password} minLength={configured ? undefined : 12} maxLength={1024} required onChange={event => setPassword(event.target.value)} />
-          </label>
-          {configured && <label>{t("새 비밀번호")}<input type="password" autoComplete="new-password" minLength={12} maxLength={1024} value={replacement} onChange={event => setReplacement(event.target.value)} placeholder={t("변경할 때 입력")} /></label>}
-          {(!configured || replacement) && <label>{t("비밀번호 확인")}<input type="password" autoComplete="new-password" value={confirm} required minLength={12} maxLength={1024} onChange={event => setConfirm(event.target.value)} /></label>}
-          <p className="muted">{t("12자 이상. 다시 실행할 때 비밀번호가 필요합니다.")}</p>
+          {configured && <CredentialInput label={current?.credential_mode?.startsWith("pin") ? "현재 PIN" : "현재 비밀번호"}
+            mode={current?.credential_mode} value={password} onChange={setPassword} current />}
+          <CredentialPicker mode={mode} onChange={next => { setMode(next); setReplacement(""); setConfirm(""); if (!configured) setPassword(""); }} pinSupported={current?.pin_supported} />
+          <CredentialInput label={mode === "password" ? "새 비밀번호" : "새 PIN"} mode={mode}
+            value={newPassword} onChange={configured ? setReplacement : setPassword} required={!configured || changingMode} />
+          {(!configured || changingMode || replacement) && <CredentialInput
+            label={mode === "password" ? "비밀번호 확인" : "PIN 확인"} mode={mode} value={confirm} onChange={setConfirm} />}
+          {mode !== "password" && <p className="muted">{t("PIN과 PIN으로 보호한 백업은 현재 Windows 계정에 연결됩니다.")}</p>}
           <div className="security-options">
             {([["main", "메인 화면 자동 잠금"], ["timetable", "시간표 잠금"], ["grades", "학점 메뉴 잠금"]] as const).map(([key, label]) =>
               <div className="setting-row security-option" key={key}>

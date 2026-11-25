@@ -106,6 +106,14 @@
 .startup-unlock h1 { margin: 11px 0 18px; font-size: 22px; overflow-wrap: anywhere; }
 .startup-unlock form { gap: 10px; animation: lock-enter .5s .16s cubic-bezier(.2,.75,.3,1) both; }
 .startup-unlock label { margin: 0; }
+.startup-migration { width: min(100% - 36px, 400px); }
+.startup-migration .lock-clock { margin-bottom: 14px; }
+.startup-migration .lock-clock time { font-size: clamp(42px, 8vh, 74px); }
+.startup-migration .lock-avatar { width: 52px; }
+.startup-migration .lock-avatar svg { width: 28px; }
+.credential-migration { text-align: left; }
+.credential-migration h2 { margin: 0; font-size: 18px; }
+.credential-migration p { margin: 0; }
 .startup-unlock .text-button { margin-top: 12px; }
 .lock-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 0 12px; }
 .lock-reset-dialog.modal { width: min(432px, calc(100vw - 32px)); }

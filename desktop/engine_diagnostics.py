@@ -70,7 +70,7 @@ class Diagnostics(logging.Handler):
 
         return dict(
             schema=1,
-            version="1.7.7",
+            version="1.7.8",
             python=platform.python_version(),
             platform=platform.system(),
             architecture=platform.machine(),

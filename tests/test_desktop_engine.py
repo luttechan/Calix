@@ -91,14 +91,14 @@ def test_beta_channel_ignores_unpublished_releases_and_compares_sequences():
     beta1 = release("v1.7.6-beta.1", 21)
     beta2 = release("v1.7.6-beta.2", 22)
     beta10 = release("v1.7.6-beta.10", 23)
-    draft = release("v1.7.7-beta.1", 23, draft=True)
+    draft = release("v1.7.8-beta.1", 23, draft=True)
     assert select_release(stable).tag == stable["tag_name"]
     with pytest.raises(ValueError, match="채널"):
         select_release(beta1)
     assert select_release([draft, beta10, beta1, stable, beta2], allow_beta=True).tag == beta10["tag_name"]
     final = release("v1.7.6", 25)
     assert select_release([beta10, final], allow_beta=True).tag == final["tag_name"]
-    later_stable = release("v1.7.7", 20)
+    later_stable = release("v1.7.8", 20)
     assert select_release([beta10, later_stable], allow_beta=True).tag == later_stable["tag_name"]
 
 
@@ -126,7 +126,7 @@ def test_bootstrap_json_never_loads_qt_widgets_or_private_diary(engine):
     data = engine.dispatch("bootstrap", {})
     json.dumps(data, ensure_ascii=False)
     assert (
-        data["version"] == "1.7.7"
+        data["version"] == "1.7.8"
         and len(data["events"]) == 2
         and not data["tasks"]
         and engine.vault is None
@@ -275,7 +275,7 @@ def test_stdio_round_trip_and_clean_exit_use_temporary_data(tmp_path):
     )
     assert result.returncode == 0, result.stderr
     messages = [json.loads(line) for line in result.stdout.splitlines()]
-    assert next(r for r in messages if r.get("id") == 1)["result"]["version"] == "1.7.7"
+    assert next(r for r in messages if r.get("id") == 1)["result"]["version"] == "1.7.8"
 
 
 def test_quit_exits_cleanly_while_host_keeps_stdin_open(tmp_path):

@@ -115,3 +115,57 @@ def test_password_change_and_locked_configuration(tmp_path):
     api.dispatch("security.unlock", dict(password=replacement, scope="grades"))
     assert api.dispatch("grades.read", {})["items"][0]["title"] == "Saved grade"
     api.close()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows PINs use DPAPI")
+def test_legacy_password_migration_and_pin_backups(tmp_path):
+    from learning_calendar.app_security import PIN_HEADER
+    api = EngineAPI(tmp_path)
+    grade_dispatch(api.store, "grades.save", dict(title="Preserved grade", credits=2, grade="B+"))
+    api.dispatch("security.setup", dict(password=PASSWORD, policy=POLICY))
+    api.close()
+    path = tmp_path / "app-lock.json"
+    legacy = json.loads(path.read_bytes())
+    legacy.pop("credential_mode")
+    path.write_text(json.dumps(legacy))
+    api = EngineAPI(tmp_path)
+    assert api.bootstrap()["security"]["credential_mode"] == "legacy"
+    with pytest.raises(ValueError):
+        api.dispatch("security.unlock", dict(password="wrong", mode="pin4", replacement="0042"))
+    with pytest.raises(ValueError):
+        api.dispatch("security.unlock", dict(password=PASSWORD, mode="pin4", replacement="12345"))
+    assert json.loads(path.read_bytes()) == legacy
+    assert api.bootstrap()["security"]["locked"]
+    api.dispatch("security.unlock", dict(password=PASSWORD, mode="pin4", replacement="0042"))
+    assert bytes.fromhex(json.loads(path.read_bytes())["header"]).startswith(PIN_HEADER)
+    backup = tmp_path / "pin.calix"
+    write_backup(backup, api.store, tmp_path)
+    assert read_backup(backup, password="0042")["grades"][0]["title"] == "Preserved grade"
+    api.close()
+    api = EngineAPI(tmp_path)
+    with pytest.raises(ValueError):
+        api.dispatch("security.unlock", dict(password=PASSWORD))
+    api.dispatch("security.unlock", dict(password="0042"))
+    api.dispatch("security.configure", dict(password="0042", mode="pin6", replacement="000042", policy=POLICY))
+    api.dispatch("security.configure", dict(password="000042", mode="password", replacement="Calix8", policy=POLICY))
+    api.close()
+    api = EngineAPI(tmp_path)
+    api.dispatch("security.unlock", dict(password="Calix8", scope="grades"))
+    assert api.dispatch("grades.read", {})["items"][0]["title"] == "Preserved grade"
+    api.close()
+
+
+def test_timetable_color_presets_persist(tmp_path):
+    api = EngineAPI(tmp_path)
+    colors = {"active": "Ocean", "presets": {"Ocean": ["#478EB0"] * 8}}
+    api.dispatch("timetable.colors", colors)
+    api.close()
+    api = EngineAPI(tmp_path)
+    assert api.bootstrap()["preferences"]["timetable_colors"] == {
+        "active": "Ocean", "presets": {"Ocean": ["#478eb0"] * 8},
+    }
+    with pytest.raises(ValueError):
+        api.dispatch("timetable.colors", {"active": "Missing", "presets": colors["presets"]})
+    api.dispatch("timetable.colors", {**colors, "active": "auto"})
+    assert api.bootstrap()["preferences"]["timetable_colors"]["presets"] == {"Ocean": ["#478eb0"] * 8}
+    api.close()

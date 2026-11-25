@@ -156,13 +156,14 @@ def read_backup(path, owner="", password=None):
         raw = Path(path).read_bytes()
         prefix = b"Calix password backup v1\0"
         if raw.startswith(prefix):
-            from .diary_crypto import unlock_material, wipe
+            from .app_security import unlock_app_material
+            from .diary_crypto import wipe
             from . import secure_db
             offset = len(prefix)
             length = int.from_bytes(raw[offset:offset+4], "big")
             if not 0 < length <= 2048:
                 raise ValueError("백업 형식을 확인하세요.")
-            key = unlock_material(bytes.fromhex(raw[offset+4:offset+4+length].decode()), password)
+            key = unlock_app_material(bytes.fromhex(raw[offset+4:offset+4+length].decode()), password)
             try:
                 raw = secure_db.open_file(raw[offset+4+length:], bytes(key))
             finally:

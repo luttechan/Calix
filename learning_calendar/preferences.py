@@ -12,6 +12,24 @@ PALETTE_COLORS = {"canvas", "surface", "accent", "muted"}
 _credential_backend_ready = False
 
 
+def validate_timetable_colors(value):
+    if not isinstance(value, dict):
+        raise ValueError("시간표 색상을 확인하세요.")
+    presets = value.get("presets")
+    active = value.get("active")
+    if not isinstance(presets, dict) or len(presets) > 24 or not isinstance(active, str):
+        raise ValueError("시간표 색상을 확인하세요.")
+    if active not in ("auto", "manual") and active not in presets:
+        raise ValueError("시간표 테마를 선택하세요.")
+    for name, colors in presets.items():
+        if (not isinstance(name, str) or name in ("auto", "manual")
+                or not 0 < len(name) <= 32 or name.strip() != name
+                or not name.isprintable() or not isinstance(colors, list) or len(colors) != 8
+                or any(not isinstance(c, str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", c) for c in colors)):
+            raise ValueError("시간표 색상을 확인하세요.")
+    return {"active": active, "presets": {name: [color.lower() for color in colors] for name, colors in presets.items()}}
+
+
 def validate_theme_palette(value):
     if not isinstance(value, dict) or value.keys() - PALETTE_COLORS or any(
         not isinstance(color, str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", color)
@@ -47,6 +65,7 @@ def read_settings(path: str | Path) -> dict:
         "active_db": "learning.db",
         "theme": DEFAULT_THEME,
         "theme_palettes": {},
+        "timetable_colors": {"active": "manual", "presets": {}},
         "notifications": False,
         "glass": True,
         "reduce_motion": False,
@@ -107,6 +126,10 @@ def read_settings(path: str | Path) -> dict:
                 pass
             if settings.get("theme") in THEMES:
                 defaults["theme"] = settings["theme"]
+            try:
+                defaults["timetable_colors"] = validate_timetable_colors(settings.get("timetable_colors"))
+            except ValueError:
+                pass
             palettes = settings.get("theme_palettes")
             if isinstance(palettes, dict):
                 for name in THEMES:
@@ -161,6 +184,7 @@ def write_settings(path: str | Path, settings: dict):
             "active_db",
             "theme",
             "theme_palettes",
+            "timetable_colors",
             "notifications",
             "reminders",
             "attendance_visible",
