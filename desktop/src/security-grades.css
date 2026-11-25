@@ -79,7 +79,7 @@
 .security-app-lock::before {
   background: radial-gradient(ellipse at 26% 38%, var(--halo) 0%, transparent 49%), radial-gradient(ellipse at 78% 67%, var(--halo2) 0%, transparent 48%);
   opacity: .65;
-  animation: lock-ambient 14s ease-in-out infinite alternate;
+  animation: lock-ambient 3s ease-out;
 }
 .security-app-lock::after { background: linear-gradient(150deg, transparent 50%, color-mix(in srgb, var(--surface) 65%, transparent)); }
 .security-app-lock > * { z-index: 1; }

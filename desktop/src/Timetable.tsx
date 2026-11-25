@@ -1,52 +1,66 @@
 import { semesterName, t, useLanguage } from "./i18n";
 import {sessionLanes} from "./planningState";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Plus, Sun, Trash2, Monitor, ArrowUpRight, Palette, Sparkles } from "lucide-react";
 import { Modal, TypeBadge, useCalix } from "./App";
 import { weekdays, dueText, status } from "./dates";
 import { useTimetableScale } from "./useTimetableScale";
 import { TimeField } from "./TimeField";
-import type { Session, TimetableColors } from "./types";
+import type { Session, TimetableAppearance, TimetableColors } from "./types";
+import { defaultTimetableColors, timetableCourseColor, timetableCourseKey, timetablePalette, timetableThemes } from "./timetableThemes";
 
 const minute = (value: string) => {
   const [h, m] = value.split(":").map(Number);
   return h * 60 + m;
 };
-const defaultColors = ["#9874cb", "#438dba", "#499a8c", "#c17959", "#b7669d", "#928750", "#6b77cb", "#bd6472"];
-const defaultTimetableColors: TimetableColors = { active: "manual", presets: {} };
-
-function TimetableColorDialog({ colors, onClose }: { colors: TimetableColors; onClose: () => void }) {
-  const { mutate } = useCalix();
-  const [name, setName] = useState(Object.hasOwn(colors.presets, colors.active) ? colors.active : "");
-  const [swatches, setSwatches] = useState(() => colors.presets[name] ?? defaultColors);
-  const [pending, setPending] = useState(false);
-  const submit = (next: TimetableColors) => {
-    setPending(true);
-    void mutate("timetable.colors", next).then(onClose).catch(() => {}).finally(() => setPending(false));
-  };
-  const key = name.trim();
+function TimetableColorDialog({ appearance, palette, courses, presets, pending, onSave, onClose }: {
+  appearance: TimetableAppearance;
+  palette: string[];
+  courses: { session: Session; title: string }[];
+  presets: TimetableColors["presets"];
+  pending: boolean;
+  onSave: (style: TimetableAppearance, name?: string) => void;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [saveTheme, setSaveTheme] = useState(false);
+  const [colors, setColors] = useState(() => appearance.mode === "manual"
+    ? Object.fromEntries(courses.map(({ session }, index) => [timetableCourseKey(session), timetableCourseColor(session, index % 8, appearance, palette)]))
+    : appearance.mode === "custom" ? appearance.colors : {});
+  const draft: TimetableAppearance = { ...appearance, mode: "custom", colors, slots: appearance.mode === "custom" ? appearance.slots : [] };
+  const label = name.trim();
   return <Modal title={t("시간표 색상")} onClose={() => { if (!pending) onClose(); }}>
     <form className="timetable-color-form" onSubmit={event => {
       event.preventDefault();
-      submit({ active: key, presets: { ...colors.presets, [key]: swatches } });
+      if (saveTheme) {
+        const slots = palette.map((color, index) => courses[index]
+          ? timetableCourseColor(courses[index].session, index, draft, palette)
+          : draft.slots[index] || color);
+        onSave({ ...draft, slots }, label);
+      } else {
+        onSave(draft);
+      }
     }}>
-      <label>{t("저장한 시간표 테마")}<select value={Object.hasOwn(colors.presets, name) ? name : ""} disabled={pending} onChange={event => {
-        setName(event.target.value);
-        setSwatches(colors.presets[event.target.value] ?? defaultColors);
-      }}>
-        <option value="">{t("새 테마")}</option>
-        {Object.keys(colors.presets).map(preset => <option key={preset}>{preset}</option>)}
-      </select></label>
-      <label>{t("테마 이름")}<input value={name} maxLength={32} required onChange={event => setName(event.target.value)} disabled={pending} /></label>
-      <div className="timetable-swatches">
-        {swatches.map((color, index) => <input key={index} type="color" value={color}
-          aria-label={t("색상 {0}", [index + 1])} disabled={pending}
-          onChange={event => setSwatches(swatches.map((value, i) => i === index ? event.target.value : value))} />)}
+      <div className="timetable-course-colors">
+        {courses.map(({ session, title }, index) => {
+          const key = timetableCourseKey(session);
+          return <label key={key}>
+            <span>{title}</span>
+            <input type="color" value={timetableCourseColor(session, index % 8, draft, palette)}
+              aria-label={title} disabled={pending} onChange={event =>
+                setColors({ ...colors, [key]: event.target.value })} />
+          </label>;
+        })}
       </div>
+      {saveTheme && <label>{t("테마 이름")}<input autoFocus required maxLength={32}
+        value={name} onChange={event => setName(event.target.value)} disabled={pending} /></label>}
       <div className="dialog-actions">
-        <button type="button" disabled={pending} onClick={() => submit({ ...colors, active: "manual" })}>{t("수업별 색상 사용")}</button>
-        <button type="submit" className="primary" disabled={pending || !key || key === "manual" || key === "auto" ||
-          (!Object.hasOwn(colors.presets, key) && Object.keys(colors.presets).length >= 24)}>{t("저장 및 적용")}</button>
+        {!saveTheme && <button type="button" disabled={pending} onClick={() => setSaveTheme(true)}>{t("테마로 저장")}</button>}
+        {saveTheme && <button type="button" disabled={pending} onClick={() => setSaveTheme(false)}>{t("취소")}</button>}
+        <button type="submit" className="primary" disabled={pending ||
+          (saveTheme && (!label || (!Object.hasOwn(presets, label) && Object.keys(presets).length >= 24)))}>
+          {t(saveTheme ? "저장 및 적용" : "적용")}
+        </button>
       </div>
     </form>
   </Modal>;
@@ -56,12 +70,6 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
   useLanguage();
   const { data, mutate } = useCalix();
   const [now, setNow] = useState(Date.now);
-  useEffect(() => {
-    const update = () => setNow(Date.now());
-    const timer = setInterval(update, 10000);
-    window.addEventListener("focus", update);
-    return () => { clearInterval(timer); window.removeEventListener("focus", update); };
-  }, []);
   const [days, setDays] = useState(5);
   const [density,setDensity] = useState(80);
   const [mode, setMode] = useState<"view" | "edit">("view");
@@ -71,27 +79,45 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
     data.timetableTerms.find((t) => t.name === semester) ||
     data.timetableTerms.find((t) => t.name === data.mainTerm)!;
   const offDays = term.offDays;
-  const sessions = data.sessions.filter((s) => s.semester === term.name);
+  const sessions = useMemo(() => data.sessions.filter(s => s.semester === term.name), [data.sessions, term.name]);
   const colors = data.preferences.timetable_colors ?? defaultTimetableColors;
+  const appearance = colors.terms[term.name] ?? colors.base;
+  const selectedPreset = useMemo(() => {
+    if (appearance.mode !== "custom") return "";
+    const value = JSON.stringify(appearance);
+    return Object.entries(colors.presets).find(([, preset]) => JSON.stringify(preset) === value)?.[0] ?? "";
+  }, [appearance, colors.presets]);
+  const palette = useMemo(() => timetablePalette(appearance.theme), [appearance.theme]);
+  const theme = timetableThemes[appearance.theme];
   const [colorDialog, setColorDialog] = useState(false);
   const [colorPending, setColorPending] = useState(false);
-  const courseKey = (session: Session) => session.course_id || session.title.trim();
-  const courseSlots = new Map([...new Set([...sessions].sort((a, b) => a.id - b.id).map(courseKey))].map((key, index) => [key, index % 8]));
-  const sessionColor = (session: Session) => {
-    const slot = courseSlots.get(courseKey(session)) ?? 0;
-    if (colors.active === "auto") {
-      const shifts = [0, 48, -52, 106, -109, 157, -160, 76];
-      return `oklch(from var(--accent) l clamp(0.10, c, 0.17) calc(h + ${shifts[slot]}))`;
+  const courseList = useMemo(() => {
+    const courses = new Map<string, Session>();
+    for (const session of [...sessions].sort((a, b) => a.id - b.id)) {
+      const key = timetableCourseKey(session);
+      if (!courses.has(key)) courses.set(key, session);
     }
-    return colors.presets[colors.active]?.[slot] || session.color || "var(--accent)";
+    return [...courses.values()];
+  }, [sessions]);
+  const courseSlots = useMemo(() => new Map(courseList.map((course, index) =>
+    [timetableCourseKey(course), index % 8])), [courseList]);
+  const sessionColor = (session: Session) =>
+    timetableCourseColor(session, courseSlots.get(timetableCourseKey(session)) ?? 0, appearance, palette);
+  const saveAppearance = (style: TimetableAppearance, preset?: string) => {
+    if (colorPending) return;
+    setColorPending(true);
+    void mutate("timetable.colors", {
+      ...colors, terms: { ...colors.terms, [term.name]: style },
+      presets: preset ? { ...colors.presets, [preset]: style } : colors.presets,
+    }).then(() => setColorDialog(false)).catch(() => {}).finally(() => setColorPending(false));
   };
   const choose = (s: Session) => (mode === "edit" ? setEdit(s) : setViewing(s));
   const [edit, setEdit] = useState<Session | null | undefined>();
   const [off, setOff] = useState(false);
   const [selectedDays, setSelectedDays] = useState(offDays);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const scheduled = sessions.filter((s) => !s.is_online);
-  const online = sessions.filter((s) => s.is_online);
+  const scheduled = useMemo(() => sessions.filter(s => !s.is_online), [sessions]);
+  const online = useMemo(() => sessions.filter(s => s.is_online), [sessions]);
   const start = Math.min(
     480,
     ...scheduled.map((s) => Math.floor(minute(s.start_time) / 60) * 60),
@@ -108,22 +134,29 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
   );
   // Leave room for a readable, clickable card even for short custom sessions.
   const minimumCardHeight = 24;
-  const lanes = sessionLanes(scheduled, Math.ceil((minimumCardHeight / unit) * 60));
-  const workloads = useMemo(() => {
+  const laneMinutes = Math.ceil((minimumCardHeight / unit) * 60);
+  const lanes = useMemo(() => sessionLanes(scheduled, laneMinutes), [scheduled, laneMinutes]);
+  const { workloads, nextDeadline } = useMemo(() => {
     const counts = new Map<number, { assignment: number; movie: number }>();
+    let next = Infinity;
     for (const event of data.events) {
-      if (
-        event.completed ||
-        (event.due_at && new Date(event.due_at).getTime() <= now)
-      )
-        continue;
-      if (event.kind !== "assignment" && event.kind !== "movie") continue;
+      if (event.completed || (event.kind !== "assignment" && event.kind !== "movie")) continue;
+      const deadline = event.due_at ? Date.parse(event.due_at) : Infinity;
+      if (deadline <= now) continue;
+      if (deadline < next) next = deadline;
       const row = counts.get(event.course_id) || { assignment: 0, movie: 0 };
       row[event.kind]++;
       counts.set(event.course_id, row);
     }
-    return counts;
+    return { workloads: counts, nextDeadline: next };
   }, [data.events, now]);
+  useEffect(() => {
+    const update = () => setNow(Date.now());
+    const timer = Number.isFinite(nextDeadline)
+      ? setTimeout(update, Math.max(1, Math.min(nextDeadline - Date.now(), 2 ** 31 - 1))) : undefined;
+    window.addEventListener("focus", update);
+    return () => { clearTimeout(timer); window.removeEventListener("focus", update); };
+  }, [nextDeadline, now]);
   const name = (s: Session) =>
     s.title || data.courses.find((c) => c.id === s.course_id)?.name || "수업";
   const work = (s: Session) => {
@@ -146,11 +179,25 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
         </div>
         <div className="toolbar">
           {data.timetableConfigured && <>
-            <button type="button" aria-pressed={colors.active === "auto"} disabled={colorPending || colors.active === "auto"} onClick={() => {
-              setColorPending(true);
-              void mutate("timetable.colors", { ...colors, active: "auto" }).catch(() => {}).finally(() => setColorPending(false));
-            }}><Sparkles size={16} />{t("색상 자동 설정")}</button>
-            <button type="button" aria-haspopup="dialog" onClick={() => setColorDialog(true)}><Palette size={16} />{t("시간표 색상")}</button>
+            <select className="timetable-theme-select" aria-label={t("시간표 테마")} disabled={colorPending}
+              value={appearance.mode === "auto" ? String(appearance.theme) : selectedPreset ? `preset:${selectedPreset}` : ""}
+              onChange={event => {
+                const value = event.target.value;
+                if (!value) return;
+                saveAppearance(value.startsWith("preset:") ? colors.presets[value.slice(7)] :
+                  { ...appearance, theme: Number(value), mode: "auto" });
+              }}>
+              <option value="" disabled>{t("시간표 테마")}</option>
+              <optgroup label={t("기본 테마")}>
+                {timetableThemes.map((item, index) => <option value={index} key={item.label}>{t(item.label)}</option>)}
+              </optgroup>
+              {Object.keys(colors.presets).length > 0 && <optgroup label={t("저장한 시간표 테마")}>
+                {Object.keys(colors.presets).map(preset => <option value={`preset:${preset}`} key={preset}>{preset}</option>)}
+              </optgroup>}
+            </select>
+            <button type="button" aria-pressed={appearance.mode === "auto"} disabled={colorPending}
+              onClick={() => saveAppearance({ ...appearance, mode: "auto" })}><Sparkles size={16} />{t("색상 자동 설정")}</button>
+            <button type="button" aria-haspopup="dialog" disabled={colorPending} onClick={() => setColorDialog(true)}><Palette size={16} />{t("시간표 색상")}</button>
           </>}
           <div className="segmented" aria-label={t("시간표 모드")}>
             <button
@@ -202,6 +249,7 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
           value={term.name}
           onChange={(event) => {
             setSemester(event.target.value);
+            setColorDialog(false);
             setViewing(null);
             setEdit(undefined);
             setOff(false);
@@ -225,7 +273,8 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
           <button type="button" onClick={onOpenHome}>{t("홈으로")}</button>
         </section>
       ) : (
-        <div className="timetable-layout">
+        <div className="timetable-layout" data-timetable-theme={appearance.mode === "manual" ? undefined : theme.dark ? "dark" : "light"}
+          style={{ "--timetable-surface": theme.surface, "--timetable-accent": theme.accent } as CSSProperties}>
           <section
             ref={panel}
             className="glass timetable-panel"
@@ -360,7 +409,9 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
           onClose={() => setViewing(null)}
         />
       )}
-      {colorDialog && <TimetableColorDialog colors={colors} onClose={() => setColorDialog(false)} />}
+      {colorDialog && <TimetableColorDialog appearance={appearance} palette={palette}
+        courses={courseList.map(session => ({ session, title: name(session) }))}
+        presets={colors.presets} pending={colorPending} onSave={saveAppearance} onClose={() => setColorDialog(false)} />}
       {edit !== undefined && (
         <SessionEditor
           key={edit?.id ?? "new"}

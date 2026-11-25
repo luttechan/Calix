@@ -60,7 +60,7 @@ button.switch i,
 .modal[data-motion-closing] { pointer-events: none; }
 
 .workspace main > [role="tabpanel"]:not([hidden]) {
-  animation: panel-in 300ms var(--motion-ease);
+  animation: panel-in 180ms var(--motion-ease);
 }
 
 [popover]:popover-open {

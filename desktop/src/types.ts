@@ -128,7 +128,17 @@ export type SecurityState = {
   retry_after: number;
 };
 export type CredentialMode = "pin4" | "pin6" | "password";
-export type TimetableColors = { active: string; presets: Record<string, string[]> };
+export type TimetableAppearance = {
+  theme: number;
+  mode: "auto" | "custom" | "manual";
+  colors: Record<string, string>;
+  slots: string[];
+};
+export type TimetableColors = {
+  base: TimetableAppearance;
+  terms: Record<string, TimetableAppearance>;
+  presets: Record<string, TimetableAppearance>;
+};
 export type Snapshot = {
   security?: SecurityState;
   version: string;

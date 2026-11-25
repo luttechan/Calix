@@ -156,16 +156,22 @@ def test_legacy_password_migration_and_pin_backups(tmp_path):
 
 
 def test_timetable_color_presets_persist(tmp_path):
+    (tmp_path / "settings.json").write_text(json.dumps({
+        "timetable_colors": {"active": "Ocean", "presets": {"Ocean": ["#478EB0"] * 8}},
+    }))
     api = EngineAPI(tmp_path)
-    colors = {"active": "Ocean", "presets": {"Ocean": ["#478EB0"] * 8}}
+    colors = api.bootstrap()["preferences"]["timetable_colors"]
+    assert colors["base"] == colors["presets"]["Ocean"]
+    assert colors["base"]["slots"] == ["#478eb0"] * 8
+    term = api.bootstrap()["mainTerm"]
+    custom = {"theme": 15, "mode": "custom", "colors": {"course:22": "#123abc"}, "slots": []}
+    colors["terms"][term] = custom
+    colors["presets"]["Local"] = custom
     api.dispatch("timetable.colors", colors)
     api.close()
     api = EngineAPI(tmp_path)
-    assert api.bootstrap()["preferences"]["timetable_colors"] == {
-        "active": "Ocean", "presets": {"Ocean": ["#478eb0"] * 8},
-    }
+    assert api.bootstrap()["preferences"]["timetable_colors"] == colors
     with pytest.raises(ValueError):
-        api.dispatch("timetable.colors", {"active": "Missing", "presets": colors["presets"]})
-    api.dispatch("timetable.colors", {**colors, "active": "auto"})
-    assert api.bootstrap()["preferences"]["timetable_colors"]["presets"] == {"Ocean": ["#478eb0"] * 8}
+        api.dispatch("timetable.colors", {**colors, "base": {**custom, "theme": 16}})
+    assert api.bootstrap()["preferences"]["timetable_colors"]["terms"] == {term: custom}
     api.close()

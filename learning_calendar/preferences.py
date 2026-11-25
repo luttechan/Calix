@@ -12,22 +12,59 @@ PALETTE_COLORS = {"canvas", "surface", "accent", "muted"}
 _credential_backend_ready = False
 
 
+def default_timetable_colors():
+    return {"base": {"theme": 0, "mode": "manual", "colors": {}, "slots": []}, "terms": {}, "presets": {}}
+
+
+def _timetable_hex(color):
+    return isinstance(color, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", color)
+
+
+def _timetable_style(value):
+    if not isinstance(value, dict):
+        raise ValueError("시간표 색상을 확인하세요.")
+    theme, mode = value.get("theme"), value.get("mode")
+    colors, slots = value.get("colors"), value.get("slots", [])
+    if (type(theme) is not int or not 0 <= theme < 16 or mode not in ("auto", "custom", "manual")
+            or not isinstance(colors, dict) or len(colors) > 500
+            or not isinstance(slots, list) or len(slots) not in (0, 8)
+            or not all(_timetable_hex(color) for color in slots)
+            or any(not isinstance(key, str) or not key.startswith(("course:", "title:")) or len(key) > 210
+                   or not _timetable_hex(color) for key, color in colors.items())):
+        raise ValueError("시간표 색상을 확인하세요.")
+    return dict(theme=theme, mode=mode, colors={key: color.lower() for key, color in colors.items()},
+                slots=[color.lower() for color in slots])
+
+
 def validate_timetable_colors(value):
     if not isinstance(value, dict):
         raise ValueError("시간표 색상을 확인하세요.")
-    presets = value.get("presets")
-    active = value.get("active")
-    if not isinstance(presets, dict) or len(presets) > 24 or not isinstance(active, str):
+    presets, terms = value.get("presets"), value.get("terms")
+    if not isinstance(presets, dict) or len(presets) > 24 or not isinstance(terms, dict) or len(terms) > 256:
         raise ValueError("시간표 색상을 확인하세요.")
-    if active not in ("auto", "manual") and active not in presets:
-        raise ValueError("시간표 테마를 선택하세요.")
-    for name, colors in presets.items():
-        if (not isinstance(name, str) or name in ("auto", "manual")
-                or not 0 < len(name) <= 32 or name.strip() != name
-                or not name.isprintable() or not isinstance(colors, list) or len(colors) != 8
-                or any(not isinstance(c, str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", c) for c in colors)):
+    for name in (*presets, *terms):
+        if not isinstance(name, str) or not 0 < len(name) <= 32 or name.strip() != name or not name.isprintable():
+            raise ValueError("시간표 테마 이름을 확인하세요.")
+    return dict(base=_timetable_style(value.get("base")),
+                terms={term: _timetable_style(style) for term, style in terms.items()},
+                presets={name: _timetable_style(style) for name, style in presets.items()})
+
+
+def read_timetable_colors(value):
+    if isinstance(value, dict) and "active" in value:
+        default = default_timetable_colors()
+        active = value["active"]
+        presets = value.get("presets")
+        if not isinstance(active, str) or not isinstance(presets, dict):
             raise ValueError("시간표 색상을 확인하세요.")
-    return {"active": active, "presets": {name: [color.lower() for color in colors] for name, colors in presets.items()}}
+        default["presets"] = {name: dict(theme=0, mode="custom", colors={}, slots=swatches)
+                              for name, swatches in presets.items()}
+        if active in default["presets"]:
+            default["base"] = default["presets"][active]
+        elif active == "auto":
+            default["base"]["mode"] = "auto"
+        value = default
+    return validate_timetable_colors(value)
 
 
 def validate_theme_palette(value):
@@ -65,7 +102,7 @@ def read_settings(path: str | Path) -> dict:
         "active_db": "learning.db",
         "theme": DEFAULT_THEME,
         "theme_palettes": {},
-        "timetable_colors": {"active": "manual", "presets": {}},
+        "timetable_colors": default_timetable_colors(),
         "notifications": False,
         "glass": True,
         "reduce_motion": False,
@@ -127,7 +164,7 @@ def read_settings(path: str | Path) -> dict:
             if settings.get("theme") in THEMES:
                 defaults["theme"] = settings["theme"]
             try:
-                defaults["timetable_colors"] = validate_timetable_colors(settings.get("timetable_colors"))
+                defaults["timetable_colors"] = read_timetable_colors(settings.get("timetable_colors"))
             except ValueError:
                 pass
             palettes = settings.get("theme_palettes")

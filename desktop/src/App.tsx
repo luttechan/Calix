@@ -8,6 +8,8 @@ import {
   useState,
   useCallback,
   memo,
+  lazy,
+  Suspense,
   type ReactNode,
   type RefObject,
 } from "react";
@@ -78,12 +80,11 @@ import {
 import type { Snapshot, EventItem, Page, SecurityState } from "./types";
 import { ChecklistPage, TimetablePage, SettingsPage } from "./Workspaces";
 import { MainSemesterControl } from "./SemesterSettings";
-import { DiaryPage } from "./Diary";
 import { DeveloperConsole } from "./DeveloperConsole";
 import { Onboarding } from "./Profile";
-const CachedDiary = memo(DiaryPage),
-  CachedChecklist = memo(ChecklistPage);
 import { finishStartup } from "./startup";
+const CachedDiary = lazy(() => import("./Diary").then(({ DiaryPage }) => ({ default: memo(DiaryPage) })));
+const CachedChecklist = memo(ChecklistPage);
 type ContextValue = {
   data: Snapshot;
   mutate: (
@@ -340,6 +341,8 @@ export function App() {
     [restart, setRestart] = useState(false),
     [exiting, setExiting] = useState(false);
   const exitLock = useRef(false);
+  const [openedChecklist, setOpenedChecklist] = useState(false);
+  const [openedDiary, setOpenedDiary] = useState(false);
   const [stateGeneration, setStateGeneration] = useState(0);
   const draft = useRef<(() => Promise<void>) | null>(null),
     leave = useRef<(() => Promise<void>) | null>(null),
@@ -649,7 +652,11 @@ export function App() {
       }
       setSelected(null);
       setAddDate(null);
-      if (request === navigationRequest.current) setPage(next);
+      if (request === navigationRequest.current) {
+        if (next === "checklist") setOpenedChecklist(true);
+        if (next === "diary") setOpenedDiary(true);
+        setPage(next);
+      }
     } catch (e) {
       notify((e as Error).message, true);
     }
@@ -710,19 +717,16 @@ export function App() {
         : [],
     [data],
   );
-  const found = useMemo(
-    () =>
-      query.trim()
-        ? sorted
-            .filter((e) =>
-              (e.title + " " + e.course_name)
-                .toLocaleLowerCase()
-                .includes(query.trim().toLocaleLowerCase()),
-            )
-            .slice(0, 8)
-        : [],
-    [query, sorted],
-  );
+  const found = useMemo(() => {
+    const needle = query.trim().toLocaleLowerCase();
+    const matches: EventItem[] = [];
+    if (!needle) return matches;
+    for (const event of sorted) {
+      if (`${event.title} ${event.course_name}`.toLocaleLowerCase().includes(needle)) matches.push(event);
+      if (matches.length === 8) break;
+    }
+    return matches;
+  }, [query, sorted]);
   const today = dateKey(),
     pending = remaining(sorted),
     todayEvents = pending.filter(
@@ -1156,18 +1160,20 @@ export function App() {
                   events={sorted}
                 />
               )}
-              <div hidden={page !== "checklist"}>
+              {openedChecklist && <div hidden={page !== "checklist"}>
                 <CachedChecklist />
-              </div>
+              </div>}
               {page === "timetable" && <ProtectedSection scope="timetable"><TimetablePage onOpenHome={() => void navigate("home")} /></ProtectedSection>}
               {page === "grades" && <ProtectedSection scope="grades"><GradesPage /></ProtectedSection>}
               {page === "attendance" && <AttendancePage />}
               {page === "study" && <StudyPage />}
               {page === "deadlines" && <DeadlinePage />}
               {page === "courses" && <CourseOverviewPage />}
-              <div hidden={page !== "diary"}>
-                <CachedDiary active={page === "diary"} />
-              </div>
+              {openedDiary && <div hidden={page !== "diary"}>
+                <Suspense fallback={<div className="loading-state" aria-busy="true" />}>
+                  <CachedDiary active={page === "diary"} />
+                </Suspense>
+              </div>}
               {page === "settings" && <SettingsPage />}
               {selected && data.events.find((e) => e.key === selected) && (
                 <EventDetails
