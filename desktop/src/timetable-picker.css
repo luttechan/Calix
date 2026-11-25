@@ -1,0 +1,95 @@
+.timetable-theme-trigger {
+  max-width: 190px;
+  gap: 8px;
+}
+
+.timetable-theme-trigger > span:not(.timetable-swatch),
+.timetable-theme-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timetable-theme-trigger > svg {
+  flex: none;
+}
+
+.timetable-swatch {
+  display: block;
+  flex: none;
+  inline-size: 34px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: conic-gradient(from -145deg,
+    var(--swatch-surface) 0 54%,
+    var(--swatch-first) 54% 72%,
+    var(--swatch-second) 72% 87%,
+    var(--swatch-third) 87% 100%);
+  box-shadow: inset 0 0 0 1px #11162124, 0 0 0 1px var(--line);
+}
+
+.timetable-theme-trigger .timetable-swatch {
+  inline-size: 18px;
+}
+
+.timetable-theme-dialog.modal {
+  width: min(704px, calc(100vw - 36px));
+}
+
+.timetable-theme-groups {
+  display: grid;
+  gap: 24px;
+}
+
+.timetable-theme-groups h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 9px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 680;
+  letter-spacing: .05em;
+}
+
+.timetable-theme-options {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.timetable-theme-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 15px;
+  gap: 8px;
+  align-items: center;
+  min-inline-size: 0;
+  min-block-size: 52px;
+  padding: 7px 9px;
+  text-align: start;
+  background: var(--ui-field);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--ink);
+  transition: background-color var(--motion-quick) ease, border-color var(--motion-quick) ease;
+}
+
+.timetable-theme-option:hover,
+.timetable-theme-option[aria-pressed="true"] {
+  background: var(--ui-hover);
+}
+
+.timetable-theme-option[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--accent) 65%, var(--line));
+}
+
+.timetable-theme-option[aria-disabled="true"] { cursor: wait; }
+.timetable-theme-check { color: var(--accent); }
+
+@media (max-width: 660px) {
+  .timetable-theme-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 460px) {
+  .timetable-theme-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

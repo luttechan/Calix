@@ -6,6 +6,7 @@ import { Modal, TypeBadge, useCalix } from "./App";
 import { weekdays, dueText, status } from "./dates";
 import { useTimetableScale } from "./useTimetableScale";
 import { TimeField } from "./TimeField";
+import { TimetableThemePicker } from "./TimetableThemePicker";
 import type { Session, TimetableAppearance, TimetableColors } from "./types";
 import { defaultTimetableColors, timetableCourseColor, timetableCourseKey, timetablePalette, timetableThemes } from "./timetableThemes";
 
@@ -103,13 +104,18 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
     [timetableCourseKey(course), index % 8])), [courseList]);
   const sessionColor = (session: Session) =>
     timetableCourseColor(session, courseSlots.get(timetableCourseKey(session)) ?? 0, appearance, palette);
-  const saveAppearance = (style: TimetableAppearance, preset?: string) => {
+  const saveAppearance = async (style: TimetableAppearance, preset?: string) => {
     if (colorPending) return;
     setColorPending(true);
-    void mutate("timetable.colors", {
-      ...colors, terms: { ...colors.terms, [term.name]: style },
-      presets: preset ? { ...colors.presets, [preset]: style } : colors.presets,
-    }).then(() => setColorDialog(false)).catch(() => {}).finally(() => setColorPending(false));
+    try {
+      await mutate("timetable.colors", {
+        ...colors, terms: { ...colors.terms, [term.name]: style },
+        presets: preset ? { ...colors.presets, [preset]: style } : colors.presets,
+      });
+      setColorDialog(false);
+    } finally {
+      setColorPending(false);
+    }
   };
   const choose = (s: Session) => (mode === "edit" ? setEdit(s) : setViewing(s));
   const [edit, setEdit] = useState<Session | null | undefined>();
@@ -179,24 +185,10 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
         </div>
         <div className="toolbar">
           {data.timetableConfigured && <>
-            <select className="timetable-theme-select" aria-label={t("시간표 테마")} disabled={colorPending}
-              value={appearance.mode === "auto" ? String(appearance.theme) : selectedPreset ? `preset:${selectedPreset}` : ""}
-              onChange={event => {
-                const value = event.target.value;
-                if (!value) return;
-                saveAppearance(value.startsWith("preset:") ? colors.presets[value.slice(7)] :
-                  { ...appearance, theme: Number(value), mode: "auto" });
-              }}>
-              <option value="" disabled>{t("시간표 테마")}</option>
-              <optgroup label={t("기본 테마")}>
-                {timetableThemes.map((item, index) => <option value={index} key={item.label}>{t(item.label)}</option>)}
-              </optgroup>
-              {Object.keys(colors.presets).length > 0 && <optgroup label={t("저장한 시간표 테마")}>
-                {Object.keys(colors.presets).map(preset => <option value={`preset:${preset}`} key={preset}>{preset}</option>)}
-              </optgroup>}
-            </select>
+            <TimetableThemePicker key={term.name} style={appearance} presets={colors.presets}
+              selectedPreset={selectedPreset} pending={colorPending} onSelect={saveAppearance} />
             <button type="button" aria-pressed={appearance.mode === "auto"} disabled={colorPending}
-              onClick={() => saveAppearance({ ...appearance, mode: "auto" })}><Sparkles size={16} />{t("색상 자동 설정")}</button>
+              onClick={() => void saveAppearance({ ...appearance, mode: "auto" }).catch(() => {})}><Sparkles size={16} />{t("색상 자동 설정")}</button>
             <button type="button" aria-haspopup="dialog" disabled={colorPending} onClick={() => setColorDialog(true)}><Palette size={16} />{t("시간표 색상")}</button>
           </>}
           <div className="segmented" aria-label={t("시간표 모드")}>
@@ -411,7 +403,8 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
       )}
       {colorDialog && <TimetableColorDialog appearance={appearance} palette={palette}
         courses={courseList.map(session => ({ session, title: name(session) }))}
-        presets={colors.presets} pending={colorPending} onSave={saveAppearance} onClose={() => setColorDialog(false)} />}
+        presets={colors.presets} pending={colorPending}
+        onSave={(style, preset) => void saveAppearance(style, preset).catch(() => {})} onClose={() => setColorDialog(false)} />}
       {edit !== undefined && (
         <SessionEditor
           key={edit?.id ?? "new"}
