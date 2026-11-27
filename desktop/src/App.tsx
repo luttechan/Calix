@@ -12,6 +12,8 @@ import {
   Suspense,
   type ReactNode,
   type RefObject,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import { flushSync } from "react-dom";
 import {
@@ -81,6 +83,7 @@ import {
   isExcusedMovie,
   weekdays,
 } from "./dates";
+import { calendarPeriod, dayDistance, layoutCalendarWeek, orderedRange, shiftCalendarDay, type CalendarPeriod, type CalendarRange } from "./calendarRanges";
 import type { Snapshot, EventItem, Page, SecurityState } from "./types";
 import { ChecklistPage, TimetablePage, SettingsPage } from "./Workspaces";
 import type { TimetableViewState } from "./Timetable";
@@ -337,7 +340,7 @@ export function App() {
     [page, setPage] = useState<Page>("home"),
     [shortcuts, setShortcuts] = useState(false),
     [selected, setSelected] = useState<string | null>(null),
-    [addDate, setAddDate] = useState<string | null>(null),
+    [addDate, setAddDate] = useState<{ end: string; start?: string } | null>(null),
     [toast, setToast] = useState<{message: string; error: boolean} | null>(null),
     [query, setQuery] = useState(""),
     [busy, setBusy] = useState(false),
@@ -716,7 +719,7 @@ export function App() {
       const key = event.key.toLowerCase();
       if (key === "?") { event.preventDefault(); setShortcuts(true); return; }
       if (!event.altKey || event.ctrlKey || event.metaKey) return;
-      if (key === "n") { event.preventDefault(); setAddDate(dateKey()); }
+      if (key === "n") { event.preventDefault(); setAddDate({ end: dateKey() }); }
       if (key === "r") { event.preventDefault(); document.querySelector<HTMLButtonElement>("[data-sync-action]")?.click(); }
       if (key === "l") { event.preventDefault(); void lockScreen(); }
       const pages: Page[] = ["home", "calendar", "assignments", "videos", "timetable", "grades"];
@@ -1006,7 +1009,7 @@ export function App() {
             </button>
             <button
               className="primary"
-              onClick={() => setAddDate(today)}
+              onClick={() => setAddDate({ end: today })}
               disabled={!data}
             >
               <Plus size={17} />{t("일정 추가")}{" "}</button>
@@ -1158,7 +1161,7 @@ export function App() {
                 </>
               )}
               {page === "calendar" && (
-                <CalendarPage events={sorted} onAdd={setAddDate} />
+                <CalendarPage events={sorted} onAdd={(end, start) => setAddDate({ end, start })} />
               )}
               {(page === "assignments" || page === "videos") && (
                 <EventListPage
@@ -1193,7 +1196,8 @@ export function App() {
               )}
               {addDate && (
                 <AddEvent
-                  initialDate={addDate}
+                  initialDate={addDate.end}
+                  initialStart={addDate.start}
                   onClose={() => setAddDate(null)}
                 />
               )}
@@ -1429,20 +1433,54 @@ const lastCalendarYear = 2200;
 const calendarYears = Array.from({ length: lastCalendarYear - firstCalendarYear + 1 }, (_, index) => firstCalendarYear + index);
 const calendarMonths = Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, "0"));
 
+type CalendarDrag = { pointer: number; origin: string; grabbed?: CalendarRange & { key: string }; active: boolean };
+
+function calendarDayAt(grid: HTMLDivElement, x: number, y: number) {
+  const cell = document.elementsFromPoint(x, y).find(element =>
+    element instanceof HTMLElement && element.dataset.calendarDate && grid.contains(element));
+  return (cell as HTMLElement | undefined)?.dataset.calendarDate;
+}
+
 function CalendarPage({
   events,
   onAdd,
 }: {
   events: EventItem[];
-  onAdd: (date: string) => void;
+  onAdd: (end: string, start?: string) => void;
 }) {
   useLanguage();
-  const { data, openEvent, notify } = useCalix(),
+  const { data, openEvent, mutate, notify } = useCalix(),
     [month, setMonth] = useState(dateKey().slice(0, 7)),
     [day, setDay] = useState(dateKey()),
     [kind, setKind] = useState("all");
   const [year, monthNumber] = month.split("-");
   const calendarGrid = useRef<HTMLDivElement>(null);
+  const drag = useRef<CalendarDrag | null>(null);
+  const ignoreClick = useRef(false);
+  const moving = useRef(false);
+  const [preview, setPreview] = useState<CalendarRange | null>(null);
+  const finishDrag = useCallback(() => {
+    const current = drag.current;
+    drag.current = null;
+    setPreview(null);
+    const grid = calendarGrid.current;
+    if (current && grid?.hasPointerCapture(current.pointer)) grid.releasePointerCapture(current.pointer);
+  }, []);
+  useEffect(() => {
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && drag.current) {
+        event.preventDefault();
+        finishDrag();
+      }
+    };
+    const abort = () => finishDrag();
+    window.addEventListener("keydown", escape);
+    window.addEventListener("blur", abort);
+    return () => {
+      window.removeEventListener("keydown", escape);
+      window.removeEventListener("blur", abort);
+    };
+  }, [finishDrag]);
   const previousMonth = useRef(month);
   useLayoutEffect(() => {
     const before = previousMonth.current;
@@ -1451,6 +1489,7 @@ function CalendarPage({
     return animateCalendarMonth(calendarGrid.current, month > before ? 1 : -1);
   }, [month]);
   const moveMonth = (next: string) => {
+    finishDrag();
     const [nextYear, nextMonth] = next.split("-").map(Number);
     const lastDay = new Date(Date.UTC(nextYear, nextMonth, 0)).getUTCDate();
     const nextDay = Math.min(lastDay, Number(day.slice(8)));
@@ -1484,17 +1523,84 @@ function CalendarPage({
   const dates = onSnapshot ? bootDates :
     peekMenuRead<typeof bootDates>("calendar.year", { year: visibleYear }) ??
     (historical?.year === visibleYear ? historical.dates : bootDates);
-  const buckets = useMemo(() => {
-    const result = new Map<string, EventItem[]>();
+  const { buckets, periods } = useMemo(() => {
+    const buckets = new Map<string, EventItem[]>();
+    const periods: CalendarPeriod[] = [];
     for (const e of events) {
       if (!e.due_at || (kind !== "all" && e.kind !== kind)) continue;
+      const period = calendarPeriod(e);
+      if (period) {
+        periods.push(period);
+        continue;
+      }
       const key = dateKey(e.due_at);
-      const group = result.get(key) || [];
+      const group = buckets.get(key) || [];
       group.push(e);
-      result.set(key, group);
+      buckets.set(key, group);
     }
-    return result;
+    periods.sort((a, b) => a.start.localeCompare(b.start) || b.end.localeCompare(a.end));
+    return { buckets, periods };
   }, [events, kind]);
+  const weeks = useMemo(() => {
+    const days = monthGrid(month);
+    return Array.from({ length: 6 }, (_, i) => {
+      const week = days.slice(i * 7, i * 7 + 7);
+      return { days: week, ...layoutCalendarWeek(week, periods) };
+    });
+  }, [month, periods]);
+  const shownEvents = [...(buckets.get(day) ?? []), ...periods
+    .filter(period => period.start <= day && day <= period.end).map(period => period.event)];
+  const count = periods.filter(period => period.start.slice(0, 7) <= month && period.end.slice(0, 7) >= month).length +
+    [...buckets.entries()].reduce((sum, [date, items]) => date.startsWith(month) ? sum + items.length : sum, 0);
+  const open = (event: EventItem, day: string) => {
+    setDay(day);
+    openEvent(event.key);
+  };
+  const beginDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || event.pointerType !== "mouse" || !event.isPrimary) return;
+    ignoreClick.current = false;
+    if (moving.current || !(event.target instanceof Element)) return;
+    const button = event.target.closest("button");
+    if (button && !button.hasAttribute("data-calendar-add") && !button.hasAttribute("data-calendar-move")) return;
+    const origin = calendarDayAt(event.currentTarget, event.clientX, event.clientY);
+    if (!origin || origin < `${firstCalendarYear}-01-01` || origin > `${lastCalendarYear}-12-31`) return;
+    const key = button?.getAttribute("data-calendar-move");
+    const period = key ? periods.find(period => period.event.key === key) : undefined;
+    drag.current = { pointer: event.pointerId, origin, active: false,
+      grabbed: key ? { key, start: period?.start ?? origin, end: period?.end ?? origin } : undefined };
+  };
+  const continueDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const current = drag.current;
+    if (!current || current.pointer !== event.pointerId) return;
+    const target = calendarDayAt(event.currentTarget, event.clientX, event.clientY);
+    if (!target || (!current.active && current.origin === target)) return;
+    if (!current.active) {
+      current.active = true;
+      ignoreClick.current = true;
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
+    const days = dayDistance(current.origin, target);
+    const next = current.grabbed ? {
+      start: shiftCalendarDay(current.grabbed.start, days), end: shiftCalendarDay(current.grabbed.end, days),
+    } : orderedRange(current.origin, target);
+    setPreview(previous => previous?.start === next.start && previous.end === next.end ? previous : next);
+  };
+  const dropDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const current = drag.current;
+    if (!current || current.pointer !== event.pointerId) return;
+    const target = current.active ? calendarDayAt(event.currentTarget, event.clientX, event.clientY) : undefined;
+    finishDrag();
+    if (!target || target === current.origin || target < `${firstCalendarYear}-01-01` || target > `${lastCalendarYear}-12-31`) return;
+    if (current.grabbed) {
+      moving.current = true;
+      void mutate("event.move", { key: current.grabbed.key, days: dayDistance(current.origin, target) })
+        .then(() => setDay(target)).catch(() => {}).finally(() => { moving.current = false; });
+      return;
+    }
+    const { start, end } = orderedRange(current.origin, target);
+    setDay(start);
+    onAdd(end, start);
+  };
   return (
     <>
       <PageHeading title={t("달력")}>
@@ -1527,6 +1633,7 @@ function CalendarPage({
           </button>
           <button
             onClick={() => {
+              finishDrag();
               setMonth(dateKey().slice(0, 7));
               setDay(dateKey());
             }}
@@ -1550,13 +1657,7 @@ function CalendarPage({
             </button>
           ))}
         </div>
-        <span className="muted">
-          {
-            [...buckets.entries()].reduce(
-              (sum, [day, items]) => day.startsWith(month) ? sum + items.length : sum,
-              0,
-            )
-          }{t("개 일정")}{" "}</span>
+        <span className="muted">{count}{t("개 일정")}</span>
       </div>
       <section className="glass calendar-panel">
         <div className="weekday-row">
@@ -1566,18 +1667,33 @@ function CalendarPage({
             </span>
           ))}
         </div>
-        <div className="month-grid" ref={calendarGrid}>
-          {monthGrid(month).map((key) => (
+        <div className="month-grid" ref={calendarGrid} data-dragging={preview ? true : undefined}
+          onPointerDown={beginDrag} onPointerMove={continueDrag} onPointerUp={dropDrag}
+          onPointerLeave={() => { if (drag.current && !drag.current.active) finishDrag(); }}
+          onPointerCancel={finishDrag} onLostPointerCapture={finishDrag}
+          onClickCapture={event => {
+            if (event.detail && ignoreClick.current) {
+              event.stopPropagation();
+              ignoreClick.current = false;
+            }
+          }}>
+          {weeks.map(week => (
+            <div className="calendar-week" key={week.days[0]} style={{ "--range-lanes": week.lanes } as CSSProperties}>
+            {week.days.map((key, weekday) => (
             <div
               key={key}
+              data-calendar-date={key}
+              data-range-preview={preview && preview.start <= key && key <= preview.end ? true : undefined}
               className={`day-cell ${key.startsWith(month) ? "" : "outside"} ${key === day ? "day-selected" : ""}`}
               onClick={() => setDay(key)}
               onDoubleClick={(e) => {
-                if (e.target === e.currentTarget) onAdd(key);
+                if (!e.target || !(e.target instanceof Element) || e.target.closest("button")) return;
+                onAdd(key);
               }}
             >
               <div className="day-heading">
                 <button
+                  data-calendar-add=""
                   aria-label={t("{0} 일정 추가", [String(key)])}
                   className={key === dateKey() ? "date-today" : ""}
                   onClick={(e) => {
@@ -1596,12 +1712,12 @@ function CalendarPage({
                 {(buckets.get(key) || []).slice(0, 3).map((e) => (
                   <button
                     key={e.key}
+                    data-calendar-move={e.manual ? e.key : undefined}
                     className={`calendar-event ${e.kind} ${isExcusedMovie(e) ? "excused" : e.completed ? "completed" : ""} ${!e.completed && e.kind === "assignment" && e.due_at && new Date(e.due_at).getTime() < Date.now() ? "late" : ""}`}
                     title={`${e.title} / ${status(e)}`}
                     onClick={(click) => {
                       click.stopPropagation();
-                      setDay(key);
-                      openEvent(e.key);
+                      open(e, key);
                     }}
                   >
                     <i />
@@ -1609,10 +1725,11 @@ function CalendarPage({
                     {isExcusedMovie(e) && <small className="calendar-attendance">{t("공결")}</small>}
                   </button>
                 ))}
-                {(buckets.get(key)?.length || 0) > 3 && (
+                {((buckets.get(key)?.length ?? 0) > 3 || week.hidden[weekday] > 0) && (
                   <button
                     className="more-events"
-                    onClick={() => {
+                    onClick={event => {
+                      event.stopPropagation();
                       setDay(key);
                       requestAnimationFrame(() =>
                         document
@@ -1620,10 +1737,26 @@ function CalendarPage({
                           ?.scrollIntoView({ block: "nearest" }),
                       );
                     }}
-                  >
-                    +{buckets.get(key)!.length - 3}{t("개")}{" "}</button>
+                  >+{Math.max(0, (buckets.get(key)?.length ?? 0) - 3) + week.hidden[weekday]}{t("개")}</button>
                 )}
               </div>
+            </div>
+            ))}
+            {week.segments.length > 0 && <div className="calendar-week-ranges">
+              {week.segments.map(segment => (
+                <button type="button" key={segment.event.key} data-calendar-move={segment.event.key}
+                  className={`calendar-event calendar-span${segment.event.completed ? " completed" : ""}`}
+                  data-continues-before={segment.start < week.days[0] || undefined}
+                  data-continues-after={segment.end > week.days[6] || undefined}
+                  style={{ gridColumn: `${segment.from + 1} / ${segment.to + 2}`, gridRow: segment.lane + 1,
+                    "--event-color": segment.event.type_color || "var(--accent)" } as CSSProperties}
+                  title={`${segment.event.title} (${segment.start} – ${segment.end})`}
+                  onClick={event => open(segment.event,
+                    (event.detail && calendarGrid.current && calendarDayAt(calendarGrid.current, event.clientX, event.clientY)) || week.days[segment.from])}>
+                  <i /><span className="calendar-event-title">{segment.event.title}</span>
+                </button>
+              ))}
+            </div>}
             </div>
           ))}
         </div>
@@ -1635,11 +1768,31 @@ function CalendarPage({
           <button className="text-button" onClick={() => onAdd(day)}>
             <Plus size={16} />{t("일정 추가")}{" "}</button>
         </div>
-        <EventRows events={buckets.get(day) || []} />
+        <EventRows events={shownEvents} />
       </section>
     </>
   );
 }
+
+function ManualEventDates({ start, due, disabled, onChange }: {
+  start: string;
+  due: string;
+  disabled: boolean;
+  onChange: (start: string, due: string) => void;
+}) {
+  const dueLabel = t(start ? "종료일" : "기한");
+  return <div className="form-grid">
+    <label>{t("시작일")}
+      <DateField label={t("시작일")} value={start} allowClear disabled={disabled}
+        onChange={next => onChange(next, due || (next ? `${next}T23:59` : ""))} />
+    </label>
+    <label>{dueLabel}
+      <DateField label={dueLabel} value={due} withTime allowClear disabled={disabled}
+        onChange={next => onChange(next ? start : "", next)} />
+    </label>
+  </div>;
+}
+
 function EventDetails({
   event,
   onClose,
@@ -1654,6 +1807,7 @@ function EventDetails({
     [title, setTitle] = useState(event.title),
     [note, setNote] = useState(event.note),
     [type, setType] = useState(event.type_id?.toString() || ""),
+    [start, setStart] = useState(event.start_at ? dateKey(event.start_at) : ""),
     [due, setDue] = useState(localInput(event.due_at)),
     [remove, setRemove] = useState(false);
   const added = data.tasks.some((t) => t.source_key === event.key);
@@ -1669,7 +1823,8 @@ function EventDetails({
           title,
           note,
           type_id: type ? Number(type) : null,
-          ...(event.manual ? { due_at: due ? due + ":00+09:00" : null } : {}),
+          ...(event.manual ? { start_at: start ? `${start}T00:00:00+09:00` : null,
+            due_at: due ? due + ":00+09:00" : null } : {}),
         });
         setDirty(false);
         notify("저장됨");
@@ -1730,23 +1885,16 @@ function EventDetails({
               }}
             />
           </label>
-          <div className="detail-due">
-            {event.manual ? (
-              <DateField
-                label={t("기한")}
-                value={due}
-                disabled={saving}
-                withTime
-                allowClear
-                onChange={(value) => {
-                  setDue(value);
+          {event.manual ? (
+              <ManualEventDates start={start} due={due} disabled={saving}
+                onChange={(nextStart, nextDue) => {
+                  setStart(nextStart);
+                  setDue(nextDue);
                   setDirty(true);
-                }}
-              />
+                }} />
             ) : (
-              <><CalendarDays size={17} />{dueText(event.due_at)}</>
+              <div className="detail-due"><CalendarDays size={17} />{dueText(event.due_at)}</div>
             )}
-          </div>
           {event.kind === "assignment" && event.completed && event.lms_data && (
             <section className="submission-feedback">
               <h3>{status(event)}</h3>
@@ -1885,14 +2033,18 @@ function EventDetails({
 }
 function AddEvent({
   initialDate,
+  initialStart,
   onClose,
 }: {
   initialDate: string;
+  initialStart?: string;
   onClose: () => void;
 }) {
   useLanguage();
   const { data, mutate, draft } = useCalix();
   const [saving, setSaving] = useState(false);
+  const [start, setStart] = useState(initialStart ?? "");
+  const [due, setDue] = useState(`${initialDate}T23:59`);
   const formRef = useRef<HTMLFormElement>(null),
     pending = useRef<Promise<unknown> | null>(null),
     saveRef = useRef<() => Promise<void>>(async () => {});
@@ -1907,7 +2059,8 @@ function AddEvent({
       title: form.get("title"),
       type_id: Number(form.get("type")),
       course_id: Number(form.get("course")),
-      due_at: form.get("due") ? String(form.get("due")) + ":00+09:00" : null,
+      start_at: start ? `${start}T00:00:00+09:00` : null,
+      due_at: due ? `${due}:00+09:00` : null,
       note: form.get("note"),
     })
       .then(onClose)
@@ -1975,8 +2128,8 @@ function AddEvent({
             </select>
           </label>
         </div>
-        <label>{t("기한")}{" "}<DateField label={t("기한")} name="due" defaultValue={`${initialDate}T23:59`} withTime allowClear disabled={saving} />
-        </label>
+        <ManualEventDates start={start} due={due} disabled={saving}
+          onChange={(nextStart, nextDue) => { setStart(nextStart); setDue(nextDue); }} />
         <label>{t("메모")}{" "}<textarea name="note" rows={4} maxLength={20000} />
         </label>
         <div className="dialog-actions">

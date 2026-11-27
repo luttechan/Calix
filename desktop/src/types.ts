@@ -5,6 +5,7 @@ export type EventItem = {
   kind: string;
   title: string;
   due_at: string | null;
+  start_at?: string | null;
   completed: boolean;
   url: string;
   note: string;

@@ -234,18 +234,18 @@ class Store:
         completed=False,
         key=None,
         *,
+        start_at=None,
         _commit=True,
     ):
         from uuid import uuid4
-        from .models import parse_datetime
+        from .models import validate_manual_period
 
         title = str(title).strip()
         if not title or len(title) > 200:
             raise ValueError("일정명은 1~200자로 입력하세요.")
         if len(note) > 20000:
             raise ValueError("메모는 20,000자까지 저장할 수 있습니다.")
-        if due_at is not None and parse_datetime(due_at) is None:
-            raise ValueError("기한을 확인하세요.")
+        validate_manual_period(start_at, due_at)
         if not self.db.execute(
             "SELECT 1 FROM event_types WHERE id=?", (type_id,)
         ).fetchone():
@@ -258,16 +258,45 @@ class Store:
                 ).fetchone():
                     raise ValueError("수정할 수 없는 일정입니다.")
                 self.db.execute(
-                    "UPDATE events SET title=?,type_id=?,due_at=?,course_id=?,note=?,completed=?,updated_at=? WHERE key=?",
-                    (title, type_id, due_at, course_id, note, int(completed), now, key),
+                    "UPDATE events SET title=?,type_id=?,start_at=?,due_at=?,course_id=?,note=?,completed=?,updated_at=? WHERE key=?",
+                    (title, type_id, start_at, due_at, course_id, note, int(completed), now, key),
                 )
             else:
                 key = "manual:" + uuid4().hex
                 self.db.execute(
-                    "INSERT INTO events(key,course_id,kind,title,due_at,completed,note,active,updated_at,manual,type_id) VALUES(?,?,'manual',?,?,?,?,1,?,1,?)",
-                    (key, course_id, title, due_at, int(completed), note, now, type_id),
+                    "INSERT INTO events(key,course_id,kind,title,start_at,due_at,completed,note,active,updated_at,manual,type_id) VALUES(?,?,'manual',?,?,?,?,?,1,?,1,?)",
+                    (key, course_id, title, start_at, due_at, int(completed), note, now, type_id),
                 )
         return key
+
+    def move_manual_event(self, key, days):
+        from datetime import timedelta
+        from .models import parse_datetime, validate_manual_period
+
+        if type(days) is not int or not -42 <= days <= 42:
+            raise ValueError("이동할 날짜를 확인하세요.")
+        with self.db:
+            row = self.db.execute(
+                "SELECT start_at,due_at FROM events WHERE key=? AND manual=1 AND active=1",
+                (key,),
+            ).fetchone()
+            due = parse_datetime(row["due_at"]) if row else None
+            if due is None:
+                raise ValueError("이동할 수 없는 일정입니다.")
+            if days == 0:
+                return
+            shift = timedelta(days=days)
+            start = parse_datetime(row["start_at"])
+            try:
+                start_at = (start + shift).isoformat() if start else None
+                due_at = (due + shift).isoformat()
+            except OverflowError as error:
+                raise ValueError("이동할 날짜를 확인하세요.") from error
+            validate_manual_period(start_at, due_at)
+            self.db.execute(
+                "UPDATE events SET start_at=?,due_at=?,updated_at=? WHERE key=?",
+                (start_at, due_at, datetime.now(timezone.utc).isoformat(), key),
+            )
 
     def create_manual_events(self, values, repeat="none", count=1):
         from .models import parse_datetime
@@ -395,6 +424,7 @@ class Store:
                 "course_id",
                 "kind",
                 "title",
+                "start_at",
                 "due_at",
                 "completed",
                 "url",
@@ -409,6 +439,7 @@ class Store:
             )
             for row in value["rows"]:
                 row["type_id"] = mapping.get(row["type_id"], row["type_id"])
+                row.setdefault("start_at", None)
                 self.db.execute(
                     "INSERT OR REPLACE INTO events("
                     + ",".join(columns)

@@ -2,7 +2,7 @@ import { Check, Moon, Palette, Sun } from "lucide-react";
 import { useState, type CSSProperties } from "react";
 import { Modal } from "./App";
 import { t, useLanguage } from "./i18n";
-import { timetablePalette, timetableThemes } from "./timetableThemes";
+import { automaticTimetableAppearance, timetablePalette, timetableThemes } from "./timetableThemes";
 import type { TimetableAppearance, TimetableColors } from "./types";
 import "./timetable-picker.css";
 
@@ -46,8 +46,8 @@ export function TimetableThemePicker({ style, recommended, presets, selectedPres
   const apply = (next: TimetableAppearance) => void onSelect(next).then(close).catch(() => {});
   const choose = (name: string, next: TimetableAppearance, selected: boolean) => {
     if (pending) return;
-    if (selected) { close(); return; }
-    if (timetableThemes[next.theme].dark !== prefersDark) {
+    if (selected && next.mode === "custom") { close(); return; }
+    if (!selected && timetableThemes[next.theme].dark !== prefersDark) {
       setConfirmation({ name, style: next });
       return;
     }
@@ -83,7 +83,7 @@ export function TimetableThemePicker({ style, recommended, presets, selectedPres
           <h3 lang="en"><Icon size={15} aria-hidden="true" />{title}</h3>
           <div className="timetable-theme-options">
             {themeOrder.filter(index => timetableThemes[index].dark === dark).map(index =>
-              option(index, t(timetableThemes[index].label), { ...style, theme: index, mode: "auto" },
+              option(index, t(timetableThemes[index].label), automaticTimetableAppearance(index),
                 style.mode === "auto" && style.theme === index))}
           </div>
         </section>)}

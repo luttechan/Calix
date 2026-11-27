@@ -13,7 +13,7 @@ import { TimeField } from "./TimeField";
 import { ChangedNumber } from "./ChangedNumber";
 import { TimetableThemePicker } from "./TimetableThemePicker";
 import type { Session, TimetableAppearance, TimetableColors } from "./types";
-import { defaultTimetableColors, matchingTimetableTheme, timetableCourseColor, timetableCourseKey, timetablePalette, timetableThemes } from "./timetableThemes";
+import { automaticTimetableAppearance, defaultTimetableColors, matchingTimetableTheme, timetableCourseColor, timetableCourseKey, timetablePalette, timetableThemes } from "./timetableThemes";
 
 const minute = (value: string) => {
   const [h, m] = value.split(":").map(Number);
@@ -275,8 +275,7 @@ export function TimetablePage({ onOpenHome, viewState }: {
               aria-pressed={appearance.mode === "auto" && appearance.theme === recommendation} disabled={colorPending}
               aria-label={t("추천 색상 적용")} data-tooltip={t("추천 색상 적용")}
               onClick={() => {
-                if (appearance.mode === "auto" && appearance.theme === recommendation) return;
-                void saveAppearance({ ...appearance, theme: recommendation, mode: "auto" }).catch(() => {});
+                void saveAppearance(automaticTimetableAppearance(recommendation)).catch(() => {});
               }}><Sparkles size={17} /></button>
             <button type="button" className="icon-button" aria-haspopup="dialog" disabled={colorPending}
               aria-label={t("시간표 색상")} data-tooltip={t("시간표 색상")}

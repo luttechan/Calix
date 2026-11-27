@@ -21,6 +21,16 @@ def parse_datetime(value: str | None) -> datetime | None:
         return None
 
 
+def validate_manual_period(start_at, due_at):
+    due = parse_datetime(due_at) if isinstance(due_at, str) else None
+    if due_at is not None and due is None:
+        raise ValueError("기한을 확인하세요.")
+    if start_at is not None:
+        start = parse_datetime(start_at) if isinstance(start_at, str) else None
+        if start is None or due is None or start > due:
+            raise ValueError("시작일과 종료일을 확인하세요.")
+
+
 @dataclass
 class Course:
     id: int

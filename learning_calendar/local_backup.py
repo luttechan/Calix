@@ -8,7 +8,7 @@ import zipfile
 import io
 from pathlib import Path
 from datetime import date
-from .models import parse_datetime
+from .models import validate_manual_period
 from .schedule_colors import normalize_color, minutes
 
 LIMIT = 64 * 1024 * 1024
@@ -32,7 +32,7 @@ def write_backup(path, store, folder):
         customizations=store.local_customizations(),
         events=_rows(
             store.db,
-            "SELECT key,course_id,title,due_at,completed,note,starred,type_id,series_id FROM events WHERE manual=1 AND active=1",
+            "SELECT key,course_id,title,start_at,due_at,completed,note,starred,type_id,series_id FROM events WHERE manual=1 AND active=1",
         ),
     )
     from .checklist_store import backup_state
@@ -280,11 +280,7 @@ def read_backup(path, owner="", password=None, *, diary_destination_key=None):
                 raise ValueError("일정의 과목이나 유형을 확인하세요.")
             for flag in ("completed", "starred"):
                 _integer(row[flag], 0, 1)
-            if row["due_at"] is not None and (
-                not isinstance(row["due_at"], str)
-                or parse_datetime(row["due_at"]) is None
-            ):
-                raise ValueError("기한을 확인하세요.")
+            validate_manual_period(row.get("start_at"), row["due_at"])
         term_names = None
         if value["version"] >= 5 or "timetable_config" in schedule:
             from .timetable_terms import validate as validate_terms
@@ -564,13 +560,14 @@ def restore_backup(value, store, folder):
                     )
                     for row in schedule["events"]:
                         db.execute(
-                            "INSERT INTO events(key,course_id,kind,title,due_at,completed,note,starred,active,updated_at,manual,type_id,series_id) VALUES(?,?,'manual',?,?,?,?,?,1,'',1,?,?)",
+                            "INSERT INTO events(key,course_id,kind,title,start_at,due_at,completed,note,starred,active,updated_at,manual,type_id,series_id) VALUES(?,?,'manual',?,?,?,?,?,?,1,'',1,?,?)",
                             tuple(
-                                row[key]
+                                row.get(key) if key == "start_at" else row[key]
                                 for key in (
                                     "key",
                                     "course_id",
                                     "title",
+                                    "start_at",
                                     "due_at",
                                     "completed",
                                     "note",

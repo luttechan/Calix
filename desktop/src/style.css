@@ -898,10 +898,41 @@ label textarea {
 }
 .month-grid {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  grid-template-rows: repeat(6, minmax(90px, 1fr));
+  grid-template-rows: repeat(6, minmax(min-content, 1fr));
   min-height: 570px;
   gap: 5px;
+  user-select: none;
+}
+.calendar-week {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  min-height: 90px;
+  gap: 5px;
+}
+.calendar-week-ranges {
+  position: absolute;
+  inset: 45px 0 auto;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-auto-rows: 23px;
+  gap: 4px 5px;
+  pointer-events: none;
+}
+.calendar-week-ranges .calendar-span {
+  min-width: 0;
+  margin-inline: 7px;
+  pointer-events: auto;
+  color: color-mix(in srgb, var(--event-color) 45%, var(--ink));
+  background: color-mix(in srgb, var(--event-color) 21%, var(--surface));
+}
+.calendar-span[data-continues-before] {
+  border-start-start-radius: 2px;
+  border-end-start-radius: 2px;
+}
+.calendar-span[data-continues-after] {
+  border-start-end-radius: 2px;
+  border-end-end-radius: 2px;
 }
 .day-cell {
   min-width: 0;
@@ -909,7 +940,7 @@ label textarea {
   border-radius: 12px;
   background: color-mix(in srgb, var(--surface) 30%, transparent);
   border: 1px solid transparent;
-  cursor: default;
+  cursor: crosshair;
 }
 .day-cell.day-selected {
   background: color-mix(in srgb, var(--surface) 68%, transparent);
@@ -917,6 +948,17 @@ label textarea {
 }
 .day-cell.outside {
   opacity: 0.28;
+}
+.day-cell[data-range-preview] {
+  background: color-mix(in srgb, var(--accent) 19%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 65%, var(--line));
+  opacity: 1;
+}
+.month-grid[data-dragging], .month-grid[data-dragging] * {
+  cursor: grabbing;
+}
+.calendar-event[data-calendar-move] {
+  cursor: grab;
 }
 .day-heading {
   display: flex;
@@ -949,6 +991,7 @@ label textarea {
 .day-events {
   display: grid;
   gap: 4px;
+  padding-top: calc(27px * var(--range-lanes, 0));
 }
 .calendar-event {
   min-height: 21px;
@@ -1288,7 +1331,6 @@ label textarea {
   }
   .month-grid {
     min-height: 510px;
-    grid-template-rows: repeat(6, minmax(80px, 1fr));
   }
   .calendar-event {
     font-size: 9px;

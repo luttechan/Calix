@@ -126,7 +126,7 @@ def test_bootstrap_json_never_loads_qt_widgets_or_private_diary(engine):
     data = engine.dispatch("bootstrap", {})
     json.dumps(data, ensure_ascii=False)
     assert (
-        data["version"] == "1.8.0"
+        data["version"] == "1.8.1"
         and len(data["events"]) == 2
         and not data["tasks"]
         and engine.vault is None
@@ -310,6 +310,46 @@ def test_installer_helper_rejects_arbitrary_file_and_digest(tmp_path):
     assert install(path, "0" * 64, 1) == 2
 
 
+def test_calendar_period_can_move_edit_and_restore_as_one_event(engine):
+    from learning_calendar.local_backup import read_backup, restore_backup, write_backup
+
+    values = {
+        "title": "프로젝트",
+        "type_id": engine.bootstrap()["types"][0]["id"],
+        "start_at": "2026-11-27T00:00:00+09:00",
+        "due_at": "2026-12-02T21:30:00+09:00",
+        "note": "메모 유지",
+    }
+    key = engine.dispatch("event.add", values)
+    engine.dispatch("event.move", {"key": key, "days": -2})
+    engine.dispatch("event.save", {"key": key, "title": "수정한 프로젝트", "note": values["note"]})
+    moved = engine.event(key)
+    assert moved.start_at == "2026-11-25T00:00:00+09:00"
+    assert moved.due_at == "2026-11-30T21:30:00+09:00"
+    assert moved.title == "수정한 프로젝트" and moved.note == values["note"]
+    with pytest.raises(ValueError, match="시작일과 종료일"):
+        engine.dispatch("event.save", {"key": key, "title": moved.title, "start_at": values["due_at"]})
+    with pytest.raises(ValueError, match="이동할 수 없는 일정"):
+        engine.dispatch("event.move", {"key": "a", "days": 2})
+    assert engine.event(key) == moved
+
+    backup_file = engine.folder / "calendar-period.calix"
+    write_backup(backup_file, engine.store, engine.folder)
+    restore_backup(read_backup(backup_file), engine.store, engine.folder)
+    assert engine.event(key) == moved
+
+
+def test_calendar_drag_can_move_legacy_single_day_event(engine):
+    key = engine.dispatch("event.add", {
+        "title": "하루 일정", "type_id": engine.bootstrap()["types"][0]["id"],
+        "due_at": "2026-12-31T18:00:00+09:00",
+    })
+    assert engine.event(key).start_at is None
+    engine.dispatch("event.move", {"key": key, "days": 1})
+    assert engine.event(key).due_at == "2027-01-01T18:00:00+09:00"
+    assert engine.event(key).start_at is None
+
+
 def test_stdio_round_trip_and_clean_exit_use_temporary_data(tmp_path):
     requests = [
         dict(id=1, method="bootstrap", params={}),
@@ -331,7 +371,7 @@ def test_stdio_round_trip_and_clean_exit_use_temporary_data(tmp_path):
     )
     assert result.returncode == 0, result.stderr
     messages = [json.loads(line) for line in result.stdout.splitlines()]
-    assert next(r for r in messages if r.get("id") == 1)["result"]["version"] == "1.8.0"
+    assert next(r for r in messages if r.get("id") == 1)["result"]["version"] == "1.8.1"
 
 
 def test_quit_exits_cleanly_while_host_keeps_stdin_open(tmp_path):

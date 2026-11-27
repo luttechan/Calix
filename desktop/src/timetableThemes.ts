@@ -26,6 +26,10 @@ export const defaultTimetableColors: TimetableColors = {
   presets: {},
 };
 
+export function automaticTimetableAppearance(theme: number): TimetableAppearance {
+  return { theme, mode: "auto", colors: {}, slots: [] };
+}
+
 export const matchingTimetableTheme: Record<ThemeId, number> = {
   aurora: 0,
   "aurora-dawn": 1,
