@@ -395,7 +395,15 @@ pub async fn self_check(app: AppHandle) -> Result<Value, String> {
                     let centered = |position: i32, origin: i32, size: u32, available: u32|
                         (2 * (i64::from(position) - i64::from(origin)) + i64::from(size) - i64::from(available)).abs() <= 4;
                     window_centered = centered(offset.x, area.position.x, size.width, area.size.width)
-                        && centered(offset.y, area.position.y, size.height, area.size.height);
+                        && centered(offset.y, area.position.y, size.height, area.size.height)
+                        && size.width <= area.size.width && size.height <= area.size.height;
+                    if !window_centered {
+                        return Err(format!(
+                            "WINDOW_CENTER_CHECK_FAILED: window {}x{} at ({}, {}), work area {}x{} at ({}, {})",
+                            size.width, size.height, offset.x, offset.y,
+                            area.size.width, area.size.height, area.position.x, area.position.y,
+                        ));
+                    }
                 }
                 if !window_centered { return Err("WINDOW_CENTER_CHECK_FAILED".into()); }
             }

@@ -183,13 +183,30 @@ fn position_main_window(window: &tauri::WebviewWindow) -> tauri::Result<()> {
     let original = window.outer_size()?;
     let width = original.width.min(area.size.width);
     let height = original.height.min(area.size.height);
-    if width != original.width || height != original.height {
-        window.set_size(tauri::PhysicalSize::new(width, height))?;
+    let x = area.position.x + ((area.size.width - width) / 2) as i32;
+    let y = area.position.y + ((area.size.height - height) / 2) as i32;
+    #[cfg(windows)]
+    {
+        use windows::Win32::UI::WindowsAndMessaging::{SetWindowPos, SWP_NOACTIVATE, SWP_NOZORDER};
+        let hwnd = windows::Win32::Foundation::HWND(window.hwnd()?.0);
+        // Set the outer bounds together. Tauri's set_size sets the client area
+        // and can add the Windows shadow frame back to the requested size.
+        return unsafe { SetWindowPos(hwnd, None, x, y, width as i32, height as i32, SWP_NOACTIVATE | SWP_NOZORDER) }
+            .map_err(|error| std::io::Error::other(error).into());
     }
-    window.set_position(tauri::PhysicalPosition::new(
-        area.position.x + ((area.size.width - width) / 2) as i32,
-        area.position.y + ((area.size.height - height) / 2) as i32,
-    ))
+    #[cfg(not(windows))]
+    {
+        if width != original.width || height != original.height {
+            let client = window.inner_size()?;
+            let frame_width = original.width.saturating_sub(client.width);
+            let frame_height = original.height.saturating_sub(client.height);
+            window.set_size(tauri::PhysicalSize::new(
+                width.saturating_sub(frame_width),
+                height.saturating_sub(frame_height),
+            ))?;
+        }
+        window.set_position(tauri::PhysicalPosition::new(x, y))
+    }
 }
 
 #[cfg(windows)]
