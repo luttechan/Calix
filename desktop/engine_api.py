@@ -22,6 +22,7 @@ class EngineAPI:
         self.folder.mkdir(parents=True, exist_ok=True)
         from learning_calendar.app_security import AppSecurity
         self.security = AppSecurity(self.folder)
+        self.vesper_transfer = None
         self._open_stores()
 
     def _open_stores(self):
@@ -53,6 +54,7 @@ class EngineAPI:
         self.security.close()
 
     def _close_stores(self):
+        self._stop_vesper()
         self.focus.close()
         if self.vault:
             self.vault.close()
@@ -78,6 +80,7 @@ class EngineAPI:
         changed_account = self.store.path.resolve() != candidate.path.resolve()
         if changed_account:
             self.focus.close()
+        self._stop_vesper()
         self.store.close()
         self.store, self.checklist, self.settings = candidate, checklist, settings
         if changed_account:
@@ -122,7 +125,7 @@ class EngineAPI:
         palette = self.settings.get("theme_palettes", {}).get(theme, {})
         if state["locked"]:
             return dict(
-                version="1.8.2-beta.1", events=[], courses=[], types=[], sessions=[],
+                version="1.8.2-beta.2", events=[], courses=[], types=[], sessions=[],
                 timetableTerms=[], mainTerm="", timetableConfigured=False,
                 sections=[], statuses=[], tasks=[], offDays=[], journals=[],
                 holidays={}, specialDates={}, lastSync="", syncSummary="",
@@ -141,7 +144,7 @@ class EngineAPI:
         semesters = self.store.timetable_config()
         year = datetime.now(KST).year
         return dict(
-            version="1.8.2-beta.1",
+            version="1.8.2-beta.2",
             events=[asdict(e) for e in events],
             courses=[asdict(c) for c in self.store.courses()],
             types=self.store.event_types(),
@@ -286,10 +289,40 @@ class EngineAPI:
         finally:
             wipe(key)
 
+    def _stop_vesper(self):
+        if self.vesper_transfer:
+            self.vesper_transfer.close()
+            self.vesper_transfer = None
+
+    def _vesper(self, method, params):
+        from learning_calendar.vesper_records import reconcile, workspace_id
+        from learning_calendar.vesper_transfer import Transfer, addresses
+
+        if method == "addresses":
+            return addresses()
+        if method == "close":
+            self._stop_vesper()
+            return True
+        if method == "start":
+            hosts = addresses()
+            host = params.get("host") or next(iter(hosts), "")
+            if host not in hosts:
+                raise ValueError("같은 Wi-Fi에 연결한 뒤 다시 시도하세요.")
+            self._stop_vesper()
+            self.vesper_transfer = Transfer(host, workspace_id(self.store))
+            return self.vesper_transfer.code()
+        if method == "status":
+            return self.vesper_transfer.status() if self.vesper_transfer else {"phase": "closed"}
+        if method == "approve" and self.vesper_transfer:
+            return self.vesper_transfer.approve(lambda offer: reconcile(self, offer))
+        raise ValueError("연동 요청을 확인하세요.")
+
     def dispatch(self, method, p):
         if not isinstance(method, str) or not isinstance(p, dict):
             raise ValueError("요청을 확인하세요.")
         self.security.require(method)
+        if method.startswith("vesper.transfer."):
+            return self._vesper(method.removeprefix("vesper.transfer."), p)
         if method == "vesper.pairing.preview":
             from learning_calendar.vesper_pairing import issue_preview
 
@@ -299,6 +332,7 @@ class EngineAPI:
                 state = self.security.state()
                 if state["locked"]:
                     self._lock_vault()
+                    self._stop_vesper()
                 return state
             if method == "security.activity":
                 if not self.security.expired():
@@ -331,6 +365,7 @@ class EngineAPI:
             elif method == "security.lock":
                 scope = p.get("scope", "main")
                 self.security.lock(scope)
+                self._stop_vesper()
                 if scope in ("main", "diary"):
                     self._lock_vault()
             else:

@@ -2,9 +2,9 @@
 
 <p align="center">부산외국어대학교 Canvas 일정 관리</p>
 
-<p align="center"><a href="https://github.com/luttechan/Calix/releases/tag/v1.8.2-beta.1"><strong>Windows 베타 다운로드</strong></a>　<a href="https://luttechan.github.io/calix/guide/">사용 설명서</a>　<a href="https://luttechan.github.io/calix/">공식 사이트</a></p>
+<p align="center"><a href="https://github.com/luttechan/Calix/releases/tag/v1.8.2-beta.2"><strong>Windows 베타 다운로드</strong></a>　<a href="https://luttechan.github.io/calix/guide/">사용 설명서</a>　<a href="https://luttechan.github.io/calix/">공식 사이트</a></p>
 
-<p align="center">Windows 10 / 11 x64　|　1.8.2 Beta 1</p>
+<p align="center">Windows 10 / 11 x64　|　1.8.2 Beta 2</p>
 
 <p align="center"><img src="docs/images/calendar.webp" alt="Calix 달력 화면. 예시 일정이 과제와 영상 색상으로 구분되어 있습니다." width="1040"></p>
 
@@ -17,7 +17,7 @@
 | 학습 | 학점 계산, 뽀모도로, 공부 기록, 주간 통계, Anki |
 | 보관 | 일기장, 저장 데이터 암호화, 백업과 복원 |
 
-## 1.8.2 Beta 1
+## 1.8.2 Beta 2
 
 - 달력에서 날짜 칸을 끌면 범위 막대가 표시됩니다. 개인 일정은 막대 가운데를 끌어 이동하고 양끝을 끌어 기간을 조절합니다.
 - 개인 일정 우클릭 메뉴에 수정과 삭제를 추가했습니다. 겹친 일정은 다른 줄이나 날짜 상세에서 확인할 수 있습니다.
@@ -47,7 +47,7 @@
 
 ## 1.7.7
 
-- 기기 연동 메뉴, Calix Vesper 준비용 QR 생성.
+- 같은 Wi-Fi에서 Vesper 0.5.1과 기기 연동. QR을 스캔한 뒤 두 화면의 확인 코드를 비교하고 승인합니다.
 
 ## 1.7.6 Beta 3
 

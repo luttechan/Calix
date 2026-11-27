@@ -37,3 +37,18 @@
   font-size: 13px;
 }
 .vesper-pairing-code [role="timer"] { color: var(--ink); font-variant-numeric: tabular-nums; }
+.vesper-pairing-approval {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--accent-soft);
+}
+.vesper-pairing-approval strong {
+  font-size: 23px;
+  letter-spacing: .12em;
+  font-variant-numeric: tabular-nums;
+}
+.vesper-pairing-approval p { margin: 0; color: var(--muted); }
+.vesper-pairing-result { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }

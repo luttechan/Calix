@@ -2,7 +2,7 @@ import { t, useLanguage } from "./i18n";
 import { NumberField } from "./NumberField";
 import { AnkiReview } from "./AnkiReview";
 import { AnvStatus } from "./AnvStatus";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useId, useState, useSyncExternalStore } from "react";
 import { Pause, Play, RotateCcw, Settings, SkipForward, Timer, X } from "lucide-react";
 import { rpc, subscribe } from "./bridge";
 import { Modal, useCalix } from "./App";
@@ -44,6 +44,7 @@ function useFocus() {
 }
 function Tomato() {
   useLanguage();
+  const gradient = useId();
   return (
     <svg
       className="tomato"
@@ -52,14 +53,15 @@ function Tomato() {
       aria-label={t("토마토")}
     >
       <defs>
-        <radialGradient id="tomatoGlow" cx="35%" cy="30%">
-          <stop stopColor="#ff927f" />
-          <stop offset="1" stopColor="#e44458" />
+        <radialGradient id={gradient} cx="35%" cy="28%" r="75%">
+          <stop stopColor="#ffae97" />
+          <stop offset=".55" stopColor="#f77571" />
+          <stop offset="1" stopColor="#d94359" />
         </radialGradient>
       </defs>
       <path
         d="M60 34C26 9 0 50 15 82c12 25 34 23 45 20 12 3 36 4 46-21 15-33-12-72-46-47"
-        fill="url(#tomatoGlow)"
+        fill={`url(#${gradient})`}
       />
       <path
         d="M60 38 36 23l19 2L50 9l15 13 14-9-4 18 17 5-24 7Z"
@@ -80,6 +82,15 @@ function Tomato() {
         strokeLinecap="round"
         opacity=".7"
       />
+      <g aria-hidden="true">
+        <ellipse cx="37" cy="74" rx="7" ry="4" fill="#ffb6ae" />
+        <ellipse cx="83" cy="74" rx="7" ry="4" fill="#ffb6ae" />
+        <ellipse cx="45" cy="64" rx="4.8" ry="6.1" fill="#432735" />
+        <ellipse cx="75" cy="64" rx="4.8" ry="6.1" fill="#432735" />
+        <circle cx="43.7" cy="62" r="1.35" fill="#fff7ef" />
+        <circle cx="73.7" cy="62" r="1.35" fill="#fff7ef" />
+        <path d="M55 73q5 5 10 0" fill="none" stroke="#432735" strokeWidth="2.7" strokeLinecap="round" />
+      </g>
     </svg>
   );
 }

@@ -394,7 +394,7 @@ dependencies = [
 
 [[package]]
 name = "calix-desktop"
-version = "1.8.2-beta.1"
+version = "1.8.2-beta.2"
 dependencies = [
  "serde",
  "serde_json",

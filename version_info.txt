@@ -3,11 +3,11 @@ VSVersionInfo(
   kids=[StringFileInfo([StringTable('041204b0',[
     StringStruct('CompanyName','Lutein Studio'),
     StringStruct('FileDescription','Calix 일정 관리'),
-    StringStruct('FileVersion','1.8.2-beta.1'),
+    StringStruct('FileVersion','1.8.2-beta.2'),
     StringStruct('InternalName','Calix'),
     StringStruct('OriginalFilename','calix-engine.exe'),
     StringStruct('ProductName','Calix'),
-    StringStruct('ProductVersion','1.8.2-beta.1'),
+    StringStruct('ProductVersion','1.8.2-beta.2'),
     StringStruct('LegalCopyright','Copyright 2026 JINYEONG OH, Lutein Studio')
   ])]),VarFileInfo([VarStruct('Translation',[1042,1200])])]
 )

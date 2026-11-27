@@ -63,6 +63,8 @@ def check(exe):
         "learning_calendar.grades",
         "learning_calendar.anki",
         "learning_calendar.vesper_pairing",
+        "learning_calendar.vesper_transfer",
+        "learning_calendar.vesper_records",
     ):
         assert required in modules, required
     assert (
@@ -76,6 +78,7 @@ def check(exe):
             dict(id=1, method="bootstrap", params={}),
             dict(id=2, method="vault.state", params={}),
             dict(id=3, method="vesper.pairing.preview", params={}),
+            dict(id=5, method="vesper.transfer.addresses", params={}),
             dict(id=4, method="quit", params={}),
         ]
         completed = subprocess.run(
@@ -91,13 +94,14 @@ def check(exe):
         responses = [json.loads(line) for line in completed.stdout.splitlines()]
         assert (
             next(r for r in responses if r.get("id") == 1)["result"]["version"]
-            == "1.8.2-beta.1"
+            == "1.8.2-beta.2"
         )
         assert (
             next(r for r in responses if r.get("id") == 2)["result"]["initialized"]
             is False
         )
         pairing = next(r for r in responses if r.get("id") == 3)["result"]
+        assert isinstance(next(r for r in responses if r.get("id") == 5)["result"], list)
         qr_rows = pairing["rows"]
         assert pairing["expiresAt"] > 0 and len(qr_rows) >= 21
         assert all(len(row) == len(qr_rows) and set(row) <= {"0", "1"} for row in qr_rows)
