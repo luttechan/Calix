@@ -15,7 +15,7 @@ import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { flushSync } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import {
   Home,
   CalendarDays,
@@ -45,6 +45,8 @@ import {
   LockKeyhole,
   UserRound,
   Square,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { getVersion } from "@tauri-apps/api/app";
 import { matchesEventFilter, type EventFilter } from "./eventFilters";
@@ -1433,12 +1435,120 @@ const lastCalendarYear = 2200;
 const calendarYears = Array.from({ length: lastCalendarYear - firstCalendarYear + 1 }, (_, index) => firstCalendarYear + index);
 const calendarMonths = Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, "0"));
 
-type CalendarDrag = { pointer: number; origin: string; grabbed?: CalendarRange & { key: string }; active: boolean };
+type CalendarDrag = {
+  pointer: number;
+  origin: string;
+  target?: string;
+  x: number;
+  y: number;
+  grabbed?: CalendarRange & { event: EventItem; offset: number; action: "move" | "start" | "end" };
+};
+type CalendarPreview = {
+  event?: EventItem;
+  bars: { x: number; y: number; width: number; continuesBefore: boolean; continuesAfter: boolean }[];
+};
+type CalendarMenu = { event: EventItem; day: string; anchorDay: string; x: number; y: number; anchor: HTMLButtonElement };
 
-function calendarDayAt(grid: HTMLDivElement, x: number, y: number) {
-  const cell = document.elementsFromPoint(x, y).find(element =>
-    element instanceof HTMLElement && element.dataset.calendarDate && grid.contains(element));
-  return (cell as HTMLElement | undefined)?.dataset.calendarDate;
+function calendarCellAt(grid: HTMLDivElement, x: number, y: number) {
+  return document.elementsFromPoint(x, y).find((element): element is HTMLElement =>
+    element instanceof HTMLElement && Boolean(element.dataset.calendarDate) && grid.contains(element));
+}
+
+function calendarPreview(grid: HTMLDivElement, range: CalendarRange, grabbed: CalendarDrag["grabbed"]): CalendarPreview {
+  const bounds = grid.getBoundingClientRect();
+  const bars: CalendarPreview["bars"] = [];
+  for (const week of grid.querySelectorAll(".calendar-week")) {
+    const cells = Array.from(week.querySelectorAll<HTMLElement>("[data-calendar-date]"));
+    const overlap = cells.filter(cell => cell.dataset.calendarDate! >= range.start && cell.dataset.calendarDate! <= range.end);
+    if (!overlap.length) continue;
+    const first = overlap[0].getBoundingClientRect();
+    const last = overlap[overlap.length - 1].getBoundingClientRect();
+    const occupied = Array.from(week.querySelectorAll<HTMLElement>(".calendar-event, .more-events"))
+      .filter(item => !grabbed || item.dataset.calendarMove !== grabbed.event.key)
+      .map(item => item.getBoundingClientRect())
+      .filter(item => item.left < last.right - 7 && item.right > first.left + 7);
+    const fits = (offset: number) => offset + 23 <= first.height - 3 &&
+      occupied.every(item => first.top + offset + 23 <= item.top || first.top + offset >= item.bottom);
+    const preferred = Math.min(grabbed?.offset ?? 45, first.height - 26);
+    let y = preferred;
+    if (!fits(y)) {
+      y = 45;
+      while (y + 23 <= first.height - 3 && !fits(y)) y += 27;
+      if (y + 23 > first.height - 3) y = first.height - 26;
+    }
+    bars.push({
+      x: first.left - bounds.left + 7,
+      y: first.top - bounds.top + y,
+      width: last.right - first.left - 14,
+      continuesBefore: range.start < cells[0].dataset.calendarDate!,
+      continuesAfter: range.end > cells[cells.length - 1].dataset.calendarDate!,
+    });
+  }
+  return { event: grabbed?.event, bars };
+}
+
+function calendarDragRange(current: CalendarDrag, target: string): CalendarRange {
+  const grabbed = current.grabbed;
+  if (!grabbed) return orderedRange(current.origin, target);
+  if (grabbed.action === "start") return { start: target < grabbed.end ? target : grabbed.end, end: grabbed.end };
+  if (grabbed.action === "end") return { start: grabbed.start, end: target > grabbed.start ? target : grabbed.start };
+  const days = dayDistance(current.origin, target);
+  return { start: shiftCalendarDay(grabbed.start, days), end: shiftCalendarDay(grabbed.end, days) };
+}
+
+function CalendarEventMenu({ menu, onClose, onEdit, onDelete }: {
+  menu: CalendarMenu;
+  onClose: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const popup = useRef<HTMLDivElement>(null);
+  const close = useRef(onClose);
+  close.current = onClose;
+  useLayoutEffect(() => {
+    const element = popup.current!;
+    const rect = element.getBoundingClientRect();
+    element.style.left = `${Math.max(8, Math.min(menu.x, window.innerWidth - rect.width - 8))}px`;
+    element.style.top = `${Math.max(8, Math.min(menu.y, window.innerHeight - rect.height - 8))}px`;
+    element.querySelector("button")?.focus({ preventScroll: true });
+  }, [menu]);
+  useEffect(() => {
+    const outside = (event: PointerEvent) => {
+      if (!(event.target instanceof Node) || !popup.current?.contains(event.target)) close.current();
+    };
+    const dismiss = () => close.current();
+    document.addEventListener("pointerdown", outside, true);
+    window.addEventListener("resize", dismiss);
+    window.addEventListener("scroll", dismiss, true);
+    window.addEventListener("blur", dismiss);
+    return () => {
+      document.removeEventListener("pointerdown", outside, true);
+      window.removeEventListener("resize", dismiss);
+      window.removeEventListener("scroll", dismiss, true);
+      window.removeEventListener("blur", dismiss);
+    };
+  }, []);
+  return createPortal(
+    <div className="calendar-event-menu" ref={popup} role="menu" aria-label={menu.event.title}
+      onContextMenu={event => event.preventDefault()}
+      onKeyDown={event => {
+        if (event.key === "Escape" || event.key === "Tab") {
+          if (event.key === "Escape") event.preventDefault();
+          event.stopPropagation();
+          onClose();
+          menu.anchor.focus({ preventScroll: true });
+        } else if (["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
+          event.preventDefault();
+          const options = event.currentTarget.querySelectorAll("button");
+          const toggle = document.activeElement === options[0] ? 1 : 0;
+          options[event.key === "Home" ? 0 : event.key === "End" ? 1 : toggle]?.focus();
+        }
+      }}>
+      <button type="button" role="menuitem" onClick={onEdit}><Pencil size={15} />{t("수정")}</button>
+      <button type="button" role="menuitem" className="danger" onClick={onDelete}><Trash2 size={15} />{t("삭제")}</button>
+    </div>,
+    document.body,
+  );
 }
 
 function CalendarPage({
@@ -1458,7 +1568,9 @@ function CalendarPage({
   const drag = useRef<CalendarDrag | null>(null);
   const ignoreClick = useRef(false);
   const moving = useRef(false);
-  const [preview, setPreview] = useState<CalendarRange | null>(null);
+  const [preview, setPreview] = useState<CalendarPreview | null>(null);
+  const [menu, setMenu] = useState<CalendarMenu | null>(null);
+  const [remove, setRemove] = useState<CalendarMenu | null>(null);
   const finishDrag = useCallback(() => {
     const current = drag.current;
     drag.current = null;
@@ -1476,9 +1588,11 @@ function CalendarPage({
     const abort = () => finishDrag();
     window.addEventListener("keydown", escape);
     window.addEventListener("blur", abort);
+    window.addEventListener("resize", abort);
     return () => {
       window.removeEventListener("keydown", escape);
       window.removeEventListener("blur", abort);
+      window.removeEventListener("resize", abort);
     };
   }, [finishDrag]);
   const previousMonth = useRef(month);
@@ -1489,6 +1603,7 @@ function CalendarPage({
     return animateCalendarMonth(calendarGrid.current, month > before ? 1 : -1);
   }, [month]);
   const moveMonth = (next: string) => {
+    setMenu(null);
     finishDrag();
     const [nextYear, nextMonth] = next.split("-").map(Number);
     const lastDay = new Date(Date.UTC(nextYear, nextMonth, 0)).getUTCDate();
@@ -1556,44 +1671,74 @@ function CalendarPage({
     setDay(day);
     openEvent(event.key);
   };
+  const contextActions = (event: EventItem, day: string) => {
+    if (!event.manual) return {};
+    return {
+      "aria-haspopup": "menu" as const,
+      "aria-expanded": menu?.event.key === event.key && menu.anchorDay === day,
+      onContextMenu: (click: React.MouseEvent<HTMLButtonElement>) => {
+        click.preventDefault();
+        finishDrag();
+        const target = calendarGrid.current &&
+          calendarCellAt(calendarGrid.current, click.clientX, click.clientY)?.dataset.calendarDate;
+        setMenu({ event, day: target || day, anchorDay: day, x: click.clientX, y: click.clientY, anchor: click.currentTarget });
+      },
+      onKeyDown: (press: React.KeyboardEvent<HTMLButtonElement>) => {
+        if (press.key !== "ContextMenu" && !(press.shiftKey && press.key === "F10")) return;
+        press.preventDefault();
+        const box = press.currentTarget.getBoundingClientRect();
+        setMenu({ event, day, anchorDay: day, x: box.left, y: box.bottom, anchor: press.currentTarget });
+      },
+    };
+  };
   const beginDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0 || event.pointerType !== "mouse" || !event.isPrimary) return;
     ignoreClick.current = false;
     if (moving.current || !(event.target instanceof Element)) return;
     const button = event.target.closest("button");
     if (button && !button.hasAttribute("data-calendar-add") && !button.hasAttribute("data-calendar-move")) return;
-    const origin = calendarDayAt(event.currentTarget, event.clientX, event.clientY);
+    const cell = calendarCellAt(event.currentTarget, event.clientX, event.clientY);
+    const origin = cell?.dataset.calendarDate;
     if (!origin || origin < `${firstCalendarYear}-01-01` || origin > `${lastCalendarYear}-12-31`) return;
     const key = button?.getAttribute("data-calendar-move");
+    const action = event.target.closest<HTMLElement>("[data-calendar-edge]")?.dataset.calendarEdge;
     const period = key ? periods.find(period => period.event.key === key) : undefined;
-    drag.current = { pointer: event.pointerId, origin, active: false,
-      grabbed: key ? { key, start: period?.start ?? origin, end: period?.end ?? origin } : undefined };
+    const selected = period?.event ?? (key ? buckets.get(origin)?.find(item => item.key === key) : undefined);
+    drag.current = { pointer: event.pointerId, origin, x: event.clientX, y: event.clientY,
+      grabbed: selected && cell && button ? { event: selected, start: period?.start ?? origin, end: period?.end ?? origin,
+        action: action === "start" || action === "end" ? action : "move",
+        offset: button.getBoundingClientRect().top - cell.getBoundingClientRect().top } : undefined };
   };
   const continueDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
     const current = drag.current;
     if (!current || current.pointer !== event.pointerId) return;
-    const target = calendarDayAt(event.currentTarget, event.clientX, event.clientY);
-    if (!target || (!current.active && current.origin === target)) return;
-    if (!current.active) {
-      current.active = true;
+    const target = calendarCellAt(event.currentTarget, event.clientX, event.clientY)?.dataset.calendarDate;
+    if (!target || target === current.target) return;
+    if (!current.target && target === current.origin &&
+        (!current.grabbed || Math.hypot(event.clientX - current.x, event.clientY - current.y) < 5)) return;
+    if (!current.target) {
       ignoreClick.current = true;
       event.currentTarget.setPointerCapture(event.pointerId);
     }
-    const days = dayDistance(current.origin, target);
-    const next = current.grabbed ? {
-      start: shiftCalendarDay(current.grabbed.start, days), end: shiftCalendarDay(current.grabbed.end, days),
-    } : orderedRange(current.origin, target);
-    setPreview(previous => previous?.start === next.start && previous.end === next.end ? previous : next);
+    current.target = target;
+    setPreview(calendarPreview(event.currentTarget, calendarDragRange(current, target), current.grabbed));
   };
   const dropDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
     const current = drag.current;
     if (!current || current.pointer !== event.pointerId) return;
-    const target = current.active ? calendarDayAt(event.currentTarget, event.clientX, event.clientY) : undefined;
+    const target = current.target
+      ? calendarCellAt(event.currentTarget, event.clientX, event.clientY)?.dataset.calendarDate : undefined;
     finishDrag();
     if (!target || target === current.origin || target < `${firstCalendarYear}-01-01` || target > `${lastCalendarYear}-12-31`) return;
     if (current.grabbed) {
+      const range = calendarDragRange(current, target);
+      if (range.start === current.grabbed.start && range.end === current.grabbed.end) return;
       moving.current = true;
-      void mutate("event.move", { key: current.grabbed.key, days: dayDistance(current.origin, target) })
+      const key = current.grabbed.event.key;
+      const operation = current.grabbed.action === "move"
+        ? mutate("event.move", { key, days: dayDistance(current.origin, target) })
+        : mutate("event.resize", { key, ...range });
+      void operation
         .then(() => setDay(target)).catch(() => {}).finally(() => { moving.current = false; });
       return;
     }
@@ -1669,7 +1814,7 @@ function CalendarPage({
         </div>
         <div className="month-grid" ref={calendarGrid} data-dragging={preview ? true : undefined}
           onPointerDown={beginDrag} onPointerMove={continueDrag} onPointerUp={dropDrag}
-          onPointerLeave={() => { if (drag.current && !drag.current.active) finishDrag(); }}
+          onPointerLeave={() => { if (drag.current && !drag.current.target) finishDrag(); }}
           onPointerCancel={finishDrag} onLostPointerCapture={finishDrag}
           onClickCapture={event => {
             if (event.detail && ignoreClick.current) {
@@ -1683,7 +1828,6 @@ function CalendarPage({
             <div
               key={key}
               data-calendar-date={key}
-              data-range-preview={preview && preview.start <= key && key <= preview.end ? true : undefined}
               className={`day-cell ${key.startsWith(month) ? "" : "outside"} ${key === day ? "day-selected" : ""}`}
               onClick={() => setDay(key)}
               onDoubleClick={(e) => {
@@ -1712,7 +1856,9 @@ function CalendarPage({
                 {(buckets.get(key) || []).slice(0, 3).map((e) => (
                   <button
                     key={e.key}
+                    {...contextActions(e, key)}
                     data-calendar-move={e.manual ? e.key : undefined}
+                    data-drag-source={preview?.event?.key === e.key || undefined}
                     className={`calendar-event ${e.kind} ${isExcusedMovie(e) ? "excused" : e.completed ? "completed" : ""} ${!e.completed && e.kind === "assignment" && e.due_at && new Date(e.due_at).getTime() < Date.now() ? "late" : ""}`}
                     title={`${e.title} / ${status(e)}`}
                     onClick={(click) => {
@@ -1723,6 +1869,8 @@ function CalendarPage({
                     <i />
                     <span className="calendar-event-title">{e.title}</span>
                     {isExcusedMovie(e) && <small className="calendar-attendance">{t("공결")}</small>}
+                    {e.manual && <><span data-calendar-edge="start" aria-hidden="true" />
+                      <span data-calendar-edge="end" aria-hidden="true" /></>}
                   </button>
                 ))}
                 {((buckets.get(key)?.length ?? 0) > 3 || week.hidden[weekday] > 0) && (
@@ -1745,6 +1893,8 @@ function CalendarPage({
             {week.segments.length > 0 && <div className="calendar-week-ranges">
               {week.segments.map(segment => (
                 <button type="button" key={segment.event.key} data-calendar-move={segment.event.key}
+                  {...contextActions(segment.event, week.days[segment.from])}
+                  data-drag-source={preview?.event?.key === segment.event.key || undefined}
                   className={`calendar-event calendar-span${segment.event.completed ? " completed" : ""}`}
                   data-continues-before={segment.start < week.days[0] || undefined}
                   data-continues-after={segment.end > week.days[6] || undefined}
@@ -1752,13 +1902,24 @@ function CalendarPage({
                     "--event-color": segment.event.type_color || "var(--accent)" } as CSSProperties}
                   title={`${segment.event.title} (${segment.start} – ${segment.end})`}
                   onClick={event => open(segment.event,
-                    (event.detail && calendarGrid.current && calendarDayAt(calendarGrid.current, event.clientX, event.clientY)) || week.days[segment.from])}>
+                    (event.detail && calendarGrid.current &&
+                      calendarCellAt(calendarGrid.current, event.clientX, event.clientY)?.dataset.calendarDate) || week.days[segment.from])}>
                   <i /><span className="calendar-event-title">{segment.event.title}</span>
+                  {segment.start >= week.days[0] && <span data-calendar-edge="start" aria-hidden="true" />}
+                  {segment.end <= week.days[6] && <span data-calendar-edge="end" aria-hidden="true" />}
                 </button>
               ))}
             </div>}
             </div>
           ))}
+          {preview && <div className="calendar-drag-layer" aria-hidden="true">
+            {preview.bars.map((bar, index) => <div key={index} className="calendar-event calendar-span calendar-drag-bar"
+              data-continues-before={bar.continuesBefore || undefined} data-continues-after={bar.continuesAfter || undefined}
+              style={{ width: bar.width, transform: `translate3d(${bar.x}px, ${bar.y}px, 0)`,
+                "--event-color": preview.event?.type_color || "var(--accent)" } as CSSProperties}>
+              <i /><span className="calendar-event-title">{preview.event?.title ?? t("일정 추가")}</span>
+            </div>)}
+          </div>}
         </div>
       </section>
       <section className="glass day-detail">
@@ -1770,8 +1931,35 @@ function CalendarPage({
         </div>
         <EventRows events={shownEvents} />
       </section>
+      {menu && <CalendarEventMenu menu={menu} onClose={() => setMenu(null)}
+        onEdit={() => { setMenu(null); open(menu.event, menu.day); }}
+        onDelete={() => { setRemove(menu); setMenu(null); }} />}
+      {remove && <DeleteEventDialog event={remove.event} onDeleted={() => setRemove(null)}
+        onClose={() => {
+          setRemove(null);
+          requestAnimationFrame(() => remove.anchor.focus({ preventScroll: true }));
+        }} />}
     </>
   );
+}
+
+function DeleteEventDialog({ event, onClose, onDeleted }: {
+  event: Pick<EventItem, "key" | "title">;
+  onClose: () => void;
+  onDeleted: () => void;
+}) {
+  const { mutate } = useCalix();
+  const [deleting, setDeleting] = useState(false);
+  return <Modal title={t("정말 삭제하시겠습니까?")} onClose={() => { if (!deleting) onClose(); }}>
+    <p>{event.title}</p>
+    <div className="dialog-actions">
+      <button autoFocus disabled={deleting} onClick={onClose}>{t("취소")}</button>
+      <button className="danger" disabled={deleting} onClick={() => {
+        setDeleting(true);
+        void mutate("event.delete", { key: event.key }).then(onDeleted).catch(() => setDeleting(false));
+      }}>{t("삭제")}</button>
+    </div>
+  </Modal>;
 }
 
 function ManualEventDates({ start, due, disabled, onChange }: {
@@ -2012,21 +2200,7 @@ function EventDetails({
         </form>
       </Modal>
       {remove && (
-        <Modal title={t("정말 삭제하시겠습니까?")} onClose={() => setRemove(false)}>
-          <p>{title}</p>
-          <div className="dialog-actions">
-            <span />
-            <button onClick={() => setRemove(false)}>{t("취소")}</button>
-            <button
-              className="primary"
-              onClick={() =>
-                void mutate("event.delete", { key: event.key })
-                  .then(onClose)
-                  .catch(() => {})
-              }
-            >{t("삭제")}{" "}</button>
-          </div>
-        </Modal>
+        <DeleteEventDialog event={{ key: event.key, title }} onClose={() => setRemove(false)} onDeleted={onClose} />
       )}
     </>
   );

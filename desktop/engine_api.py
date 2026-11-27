@@ -122,7 +122,7 @@ class EngineAPI:
         palette = self.settings.get("theme_palettes", {}).get(theme, {})
         if state["locked"]:
             return dict(
-                version="1.8.1", events=[], courses=[], types=[], sessions=[],
+                version="1.8.2-beta.1", events=[], courses=[], types=[], sessions=[],
                 timetableTerms=[], mainTerm="", timetableConfigured=False,
                 sections=[], statuses=[], tasks=[], offDays=[], journals=[],
                 holidays={}, specialDates={}, lastSync="", syncSummary="",
@@ -141,7 +141,7 @@ class EngineAPI:
         semesters = self.store.timetable_config()
         year = datetime.now(KST).year
         return dict(
-            version="1.8.1",
+            version="1.8.2-beta.1",
             events=[asdict(e) for e in events],
             courses=[asdict(c) for c in self.store.courses()],
             types=self.store.event_types(),
@@ -467,6 +467,9 @@ class EngineAPI:
             )
         if method == "event.move":
             self.store.move_manual_event(p["key"], p["days"])
+            return True
+        if method == "event.resize":
+            self.store.resize_manual_event(p["key"], p["start"], p["end"])
             return True
         if method == "event.delete":
             e = self.event(p["key"])

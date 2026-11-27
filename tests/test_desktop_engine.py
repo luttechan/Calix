@@ -126,7 +126,7 @@ def test_bootstrap_json_never_loads_qt_widgets_or_private_diary(engine):
     data = engine.dispatch("bootstrap", {})
     json.dumps(data, ensure_ascii=False)
     assert (
-        data["version"] == "1.8.1"
+        data["version"] == "1.8.2-beta.1"
         and len(data["events"]) == 2
         and not data["tasks"]
         and engine.vault is None
@@ -350,6 +350,28 @@ def test_calendar_drag_can_move_legacy_single_day_event(engine):
     assert engine.event(key).start_at is None
 
 
+def test_calendar_resize_keeps_original_time_and_overlapping_events(engine):
+    kind = engine.bootstrap()["types"][0]["id"]
+    first = engine.dispatch("event.add", {"title": "일정 하나", "type_id": kind,
+        "due_at": "2026-12-31T18:27:00+09:00", "note": "유지"})
+    other = engine.dispatch("event.add", {"title": "일정 둘", "type_id": kind,
+        "start_at": "2027-01-01T00:00:00+09:00", "due_at": "2027-01-02T22:00:00+09:00"})
+    existing = engine.event(other)
+    engine.dispatch("event.resize", {"key": first, "start": "2026-12-31", "end": "2027-01-02"})
+    resized = engine.event(first)
+    assert resized.start_at == "2026-12-31T00:00:00+09:00"
+    assert resized.due_at == "2027-01-02T18:27:00+09:00"
+    assert resized.note == "유지"
+    assert engine.event(other) == existing
+    with pytest.raises(ValueError):
+        engine.dispatch("event.resize", {"key": first, "start": "2027-01-04", "end": "2027-01-02"})
+    assert engine.event(first) == resized
+    engine.dispatch("event.resize", {"key": first, "start": "2027-01-02", "end": "2027-01-02"})
+    assert engine.event(first).start_at is None
+    assert engine.event(first).due_at == resized.due_at
+    assert engine.event(other) == existing
+
+
 def test_stdio_round_trip_and_clean_exit_use_temporary_data(tmp_path):
     requests = [
         dict(id=1, method="bootstrap", params={}),
@@ -371,7 +393,7 @@ def test_stdio_round_trip_and_clean_exit_use_temporary_data(tmp_path):
     )
     assert result.returncode == 0, result.stderr
     messages = [json.loads(line) for line in result.stdout.splitlines()]
-    assert next(r for r in messages if r.get("id") == 1)["result"]["version"] == "1.8.1"
+    assert next(r for r in messages if r.get("id") == 1)["result"]["version"] == "1.8.2-beta.1"
 
 
 def test_quit_exits_cleanly_while_host_keeps_stdin_open(tmp_path):
