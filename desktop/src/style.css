@@ -897,6 +897,7 @@ label textarea {
   color: #bb7d92;
 }
 .month-grid {
+  position: relative;
   display: grid;
   grid-template-rows: repeat(6, minmax(min-content, 1fr));
   min-height: 570px;
@@ -919,12 +920,32 @@ label textarea {
   gap: 4px 5px;
   pointer-events: none;
 }
-.calendar-week-ranges .calendar-span {
+.calendar-week-ranges .calendar-span,
+.calendar-event.calendar-drag-bar {
   min-width: 0;
-  margin-inline: 7px;
-  pointer-events: auto;
   color: color-mix(in srgb, var(--event-color) 45%, var(--ink));
   background: color-mix(in srgb, var(--event-color) 21%, var(--surface));
+}
+.calendar-week-ranges .calendar-span {
+  margin-inline: 7px;
+  pointer-events: auto;
+}
+.calendar-drag-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+.calendar-event.calendar-drag-bar {
+  position: absolute;
+  inset: 0 auto auto 0;
+  min-height: 23px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--event-color) 52%, transparent),
+    0 4px 12px #0002;
+  transition: transform 125ms cubic-bezier(.2, .7, .2, 1), width 125ms cubic-bezier(.2, .7, .2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .calendar-event.calendar-drag-bar { transition: none; }
 }
 .calendar-span[data-continues-before] {
   border-start-start-radius: 2px;
@@ -940,7 +961,7 @@ label textarea {
   border-radius: 12px;
   background: color-mix(in srgb, var(--surface) 30%, transparent);
   border: 1px solid transparent;
-  cursor: crosshair;
+  cursor: default;
 }
 .day-cell.day-selected {
   background: color-mix(in srgb, var(--surface) 68%, transparent);
@@ -949,16 +970,65 @@ label textarea {
 .day-cell.outside {
   opacity: 0.28;
 }
-.day-cell[data-range-preview] {
-  background: color-mix(in srgb, var(--accent) 19%, var(--surface));
-  border-color: color-mix(in srgb, var(--accent) 65%, var(--line));
-  opacity: 1;
+.calendar-event[data-calendar-move] {
+  cursor: grab;
+  position: relative;
+  padding-inline: 8px;
+}
+.calendar-event [data-calendar-edge] {
+  position: absolute;
+  inset-block: 1px;
+  width: 8px;
+  cursor: ew-resize;
+}
+.calendar-event [data-calendar-edge="start"] { inset-inline-start: 0; }
+.calendar-event [data-calendar-edge="end"] { inset-inline-end: 0; }
+.calendar-event [data-calendar-edge]::after {
+  position: absolute;
+  content: "";
+  inset: 6px 3px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.calendar-event:hover [data-calendar-edge]::after, .calendar-event:focus-visible [data-calendar-edge]::after {
+  opacity: .58;
 }
 .month-grid[data-dragging], .month-grid[data-dragging] * {
   cursor: grabbing;
 }
-.calendar-event[data-calendar-move] {
-  cursor: grab;
+.calendar-event[data-drag-source] {
+  opacity: .22;
+}
+.calendar-event-menu {
+  position: fixed;
+  z-index: 100;
+  inset: 0 auto auto 0;
+  display: grid;
+  min-width: 142px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: 0 9px 32px #0003;
+}
+.calendar-event-menu > button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 9px;
+  min-height: 34px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  font-size: 13px;
+  text-align: left;
+}
+.calendar-event-menu > button:hover, .calendar-event-menu > button:focus-visible {
+  background: var(--accent-soft);
 }
 .day-heading {
   display: flex;

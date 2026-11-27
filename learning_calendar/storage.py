@@ -298,6 +298,34 @@ class Store:
                 (start_at, due_at, datetime.now(timezone.utc).isoformat(), key),
             )
 
+    def resize_manual_event(self, key, first, last):
+        from datetime import date, time
+        from .models import KST, parse_datetime, validate_manual_period
+
+        try:
+            first_day, last_day = date.fromisoformat(first), date.fromisoformat(last)
+            if first_day.isoformat() != first or last_day.isoformat() != last or first_day > last_day:
+                raise ValueError()
+        except (TypeError, ValueError) as error:
+            raise ValueError("시작일과 종료일을 확인하세요.") from error
+        with self.db:
+            row = self.db.execute(
+                "SELECT start_at,due_at FROM events WHERE key=? AND manual=1 AND active=1",
+                (key,),
+            ).fetchone()
+            due = parse_datetime(row["due_at"]) if row else None
+            if due is None:
+                raise ValueError("이동할 수 없는 일정입니다.")
+            start = parse_datetime(row["start_at"])
+            start_time = start.timetz() if start else time(tzinfo=KST)
+            start_at = datetime.combine(first_day, start_time).isoformat() if first_day < last_day else None
+            due_at = datetime.combine(last_day, due.timetz()).isoformat()
+            validate_manual_period(start_at, due_at)
+            self.db.execute(
+                "UPDATE events SET start_at=?,due_at=?,updated_at=? WHERE key=?",
+                (start_at, due_at, datetime.now(timezone.utc).isoformat(), key),
+            )
+
     def create_manual_events(self, values, repeat="none", count=1):
         from .models import parse_datetime
         from datetime import timedelta
