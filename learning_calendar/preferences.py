@@ -7,6 +7,7 @@ SERVICE = "Calix"
 LEGACY_SERVICE = "BUFS Learning Calendar"
 ACCOUNT_KEY = "__account_id__"
 DEFAULT_THEME = "aurora"
+DATE_ERAS = ("gregorian", "dangi", "buddhist", "japanese")
 THEMES = (DEFAULT_THEME, "aurora-dawn", "aurora-dusk", "pink", "sky", "mint", "purple", "dark", "peach", "amber", "olive", "lavender")
 PALETTE_COLORS = {"canvas", "surface", "accent", "muted"}
 _credential_backend_ready = False
@@ -111,6 +112,7 @@ def read_settings(path: str | Path) -> dict:
         "beta_updates": False,
         "font_mode": "pretendard",
         "language": "ko",
+        "date_era": "gregorian",
         "avatar": "",
         "nickname": "",
         "greeting": "{닉네임}님, 오셨군요!",
@@ -179,6 +181,8 @@ def read_settings(path: str | Path) -> dict:
                 defaults["font_mode"] = settings["font_mode"]
             if settings.get("language") in ("ko", "en", "ja"):
                 defaults["language"] = settings["language"]
+            if settings.get("date_era") in DATE_ERAS:
+                defaults["date_era"] = settings["date_era"]
             name = settings.get("active_db")
             reserved = {
                 "CON",
@@ -234,6 +238,7 @@ def write_settings(path: str | Path, settings: dict):
             "beta_updates",
             "font_mode",
             "language",
+            "date_era",
             "nickname",
             "greeting",
             "onboarding_complete",

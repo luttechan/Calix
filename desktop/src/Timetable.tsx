@@ -1,14 +1,19 @@
 import { semesterName, t, useLanguage } from "./i18n";
+import { PageHeading } from "./PageHeading";
+import { ColorField } from "./ColorField";
 import {sessionLanes} from "./planningState";
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { Plus, Sun, Trash2, Monitor, ArrowUpRight, Palette, Sparkles } from "lucide-react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
+import { Plus, Sun, Trash2, Monitor, ArrowUpRight, Paintbrush, Sparkles, Maximize2, Minimize2, CalendarRange, Ruler, Pencil, Check } from "lucide-react";
+import { isTauri } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Modal, TypeBadge, useCalix } from "./App";
 import { weekdays, dueText, status } from "./dates";
 import { useTimetableScale } from "./useTimetableScale";
 import { TimeField } from "./TimeField";
+import { ChangedNumber } from "./ChangedNumber";
 import { TimetableThemePicker } from "./TimetableThemePicker";
 import type { Session, TimetableAppearance, TimetableColors } from "./types";
-import { defaultTimetableColors, timetableCourseColor, timetableCourseKey, timetablePalette, timetableThemes } from "./timetableThemes";
+import { defaultTimetableColors, matchingTimetableTheme, timetableCourseColor, timetableCourseKey, timetablePalette, timetableThemes } from "./timetableThemes";
 
 const minute = (value: string) => {
   const [h, m] = value.split(":").map(Number);
@@ -45,12 +50,11 @@ function TimetableColorDialog({ appearance, palette, courses, presets, pending, 
       <div className="timetable-course-colors">
         {courses.map(({ session, title }, index) => {
           const key = timetableCourseKey(session);
-          return <label key={key}>
+          return <div className="timetable-course-color" key={key}>
             <span>{title}</span>
-            <input type="color" value={timetableCourseColor(session, index % 8, draft, palette)}
-              aria-label={title} disabled={pending} onChange={event =>
-                setColors({ ...colors, [key]: event.target.value })} />
-          </label>;
+            <ColorField label={title} value={timetableCourseColor(session, index % 8, draft, palette)}
+              disabled={pending} onChange={value => setColors(previous => ({ ...previous, [key]: value }))} />
+          </div>;
         })}
       </div>
       {saveTheme && <label>{t("테마 이름")}<input autoFocus required maxLength={32}
@@ -67,21 +71,67 @@ function TimetableColorDialog({ appearance, palette, courses, presets, pending, 
   </Modal>;
 }
 
-export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
+export type TimetableViewState = {
+  mainTerm: string;
+  semester: string;
+  days: number;
+  density: number;
+  scrollLeft: number;
+  scrollTop: number;
+};
+
+export function TimetablePage({ onOpenHome, viewState }: {
+  onOpenHome: () => void;
+  viewState: RefObject<TimetableViewState | null>;
+}) {
   useLanguage();
   const { data, mutate } = useCalix();
+  const previousView = viewState.current?.mainTerm === data.mainTerm ? viewState.current : null;
   const [now, setNow] = useState(Date.now);
-  const [days, setDays] = useState(5);
-  const [density,setDensity] = useState(80);
+  const [days, setDays] = useState(previousView?.days ?? 5);
+  const [expanded, setExpanded] = useState(false);
+  const windowActions = useRef(Promise.resolve());
+  useEffect(() => {
+    if (!expanded) return;
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented && !document.querySelector("dialog[open]")) {
+        setExpanded(false);
+      }
+    };
+    window.addEventListener("keydown", escape);
+    const appWindow = isTauri() ? getCurrentWindow() : null;
+    let active = true;
+    let maximizedHere = false;
+    if (appWindow) {
+      windowActions.current = windowActions.current.then(async () => {
+        if (await appWindow.isMaximized() || !active) return;
+        await appWindow.maximize();
+        maximizedHere = true;
+      }).catch(() => {});
+    }
+    return () => {
+      active = false;
+      window.removeEventListener("keydown", escape);
+      if (appWindow) {
+        windowActions.current = windowActions.current.then(async () => {
+          if (maximizedHere && await appWindow.isMaximized()) await appWindow.unmaximize();
+        }).catch(() => {});
+      }
+    };
+  }, [expanded]);
+  const [density, setDensity] = useState(previousView?.density ?? 0);
+  const [densityDialog, setDensityDialog] = useState(false);
   const [mode, setMode] = useState<"view" | "edit">("view");
-  const [semester, setSemester] = useState(data.mainTerm);
+  const [semester, setSemester] = useState(previousView?.semester ?? data.mainTerm);
   const [viewing, setViewing] = useState<Session | null>(null);
   const term =
-    data.timetableTerms.find((t) => t.name === semester) ||
-    data.timetableTerms.find((t) => t.name === data.mainTerm)!;
+    data.timetableTerms.find((t) => t.name === semester) ??
+    data.timetableTerms.find((t) => t.name === data.mainTerm) ??
+    { name: data.mainTerm, offDays: [] };
   const offDays = term.offDays;
   const sessions = useMemo(() => data.sessions.filter(s => s.semester === term.name), [data.sessions, term.name]);
   const colors = data.preferences.timetable_colors ?? defaultTimetableColors;
+  const recommendation = matchingTimetableTheme[data.preferences.theme] ?? 0;
   const appearance = colors.terms[term.name] ?? colors.base;
   const selectedPreset = useMemo(() => {
     if (appearance.mode !== "custom") return "";
@@ -137,9 +187,29 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
     end,
     data.timetableConfigured,
     density,
+    online.length > 0,
   );
+  useLayoutEffect(() => {
+    const saved = viewState.current;
+    const element = panel.current;
+    if (!element) return;
+    const sameSemester = saved?.mainTerm === data.mainTerm && saved.semester === term.name;
+    element.scrollTo({ left: sameSemester ? saved.scrollLeft : 0, top: sameSemester ? saved.scrollTop : 0, behavior: "instant" });
+  }, [data.mainTerm, data.timetableConfigured, panel, term.name, viewState]);
+  useLayoutEffect(() => {
+    if (!data.timetableConfigured) return;
+    const saved = viewState.current;
+    const sameSemester = saved?.mainTerm === data.mainTerm && saved.semester === term.name;
+    viewState.current = {
+      mainTerm: data.mainTerm, semester: term.name, days, density,
+      scrollLeft: sameSemester ? saved.scrollLeft : 0,
+      scrollTop: sameSemester ? saved.scrollTop : 0,
+    };
+  }, [data.mainTerm, data.timetableConfigured, days, density, term.name, viewState]);
   // Leave room for a readable, clickable card even for short custom sessions.
   const minimumCardHeight = 24;
+  const gridHeight = Math.max(height, ...scheduled.map(session =>
+    ((minute(session.start_time) - start) / 60) * unit + minimumCardHeight + 3));
   const laneMinutes = Math.ceil((minimumCardHeight / unit) * 60);
   const lanes = useMemo(() => sessionLanes(scheduled, laneMinutes), [scheduled, laneMinutes]);
   const { workloads, nextDeadline } = useMemo(() => {
@@ -170,108 +240,103 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
     return (
       s.course_id > 0 && (
         <div className="session-work">
-          <span>{t("과제")}{" "}{count.assignment}</span>
-          <span>{t("영상")}{" "}{count.movie}</span>
+          <span>{t("과제")}{" "}<ChangedNumber value={count.assignment} /></span>
+          <span>{t("영상")}{" "}<ChangedNumber value={count.movie} /></span>
         </div>
       )
     );
   };
   return (
-    <>
-      <div className="page-heading">
-        <div>
-          <p className="eyebrow">{t("이번 주")}</p>
-          <h1>{t("시간표")}</h1>
-        </div>
-        <div className="toolbar">
-          {data.timetableConfigured && <>
-            <TimetableThemePicker key={term.name} style={appearance} presets={colors.presets}
+    <section className="timetable-page" data-expanded={expanded || undefined}>
+      <PageHeading title={t("시간표")}>
+        {data.timetableConfigured && <div className="timetable-strip">
+          <select className="timetable-term-select" aria-label={t("시간표 학기")} value={term.name}
+            onChange={event => {
+              setSemester(event.target.value);
+              setColorDialog(false);
+              setViewing(null);
+              setEdit(undefined);
+              setOff(false);
+            }}>
+            {data.timetableTerms.map(termOption => <option key={termOption.name} value={termOption.name}>
+              {semesterName(termOption.name)}{termOption.name === data.mainTerm ? t(" (메인)") : ""}
+            </option>)}
+          </select>
+          <div className="timetable-tools" role="group" aria-label={t("시간표")}>
+            <button type="button" className="icon-button" aria-pressed={days === 7}
+              aria-label={t("주간")} data-tooltip={t(days === 7 ? "주중만 보기" : "주간 보기")}
+              onClick={() => setDays(days === 5 ? 7 : 5)}><CalendarRange size={17} /></button>
+            <button type="button" className="icon-button" aria-haspopup="dialog"
+              aria-label={t("시간표 시간 간격")} data-tooltip={t("시간 간격")}
+              onClick={() => setDensityDialog(true)}><Ruler size={17} /></button>
+            <TimetableThemePicker key={term.name} style={appearance} recommended={recommendation} presets={colors.presets}
               selectedPreset={selectedPreset} pending={colorPending} onSelect={saveAppearance} />
-            <button type="button" aria-pressed={appearance.mode === "auto"} disabled={colorPending}
-              onClick={() => void saveAppearance({ ...appearance, mode: "auto" }).catch(() => {})}><Sparkles size={16} />{t("색상 자동 설정")}</button>
-            <button type="button" aria-haspopup="dialog" disabled={colorPending} onClick={() => setColorDialog(true)}><Palette size={16} />{t("시간표 색상")}</button>
-          </>}
-          <div className="segmented" aria-label={t("시간표 모드")}>
-            <button
-              aria-pressed={mode === "view"}
-              className={mode === "view" ? "selected" : ""}
+            <button type="button" className="icon-button"
+              aria-pressed={appearance.mode === "auto" && appearance.theme === recommendation} disabled={colorPending}
+              aria-label={t("추천 색상 적용")} data-tooltip={t("추천 색상 적용")}
               onClick={() => {
-                setMode("view");
-                setEdit(undefined);
-                setOff(false);
-              }}
-            >{t("열람 모드")}{" "}</button>
-            <button
-              aria-pressed={mode === "edit"}
-              className={mode === "edit" ? "selected" : ""}
+                if (appearance.mode === "auto" && appearance.theme === recommendation) return;
+                void saveAppearance({ ...appearance, theme: recommendation, mode: "auto" }).catch(() => {});
+              }}><Sparkles size={17} /></button>
+            <button type="button" className="icon-button" aria-haspopup="dialog" disabled={colorPending}
+              aria-label={t("시간표 색상")} data-tooltip={t("시간표 색상")}
+              onClick={() => setColorDialog(true)}><Paintbrush size={17} /></button>
+          </div>
+          <div className="timetable-tools" role="group" aria-label={t("시간표 모드")}>
+            <button type="button" className="icon-button" aria-pressed={mode === "edit"}
+              aria-label={t("편집 모드")} data-tooltip={t(mode === "edit" ? "편집 완료" : "편집 모드")}
               onClick={() => {
-                setMode("edit");
-                setViewing(null);
-              }}
-            >{t("편집 모드")}{" "}</button>
+                if (mode === "edit") { setMode("view"); setEdit(undefined); setOff(false); }
+                else { setMode("edit"); setViewing(null); }
+              }}>
+              {mode === "edit" ? <Check size={17} /> : <Pencil size={17} />}
+            </button>
+            {mode === "edit" && <>
+              <button type="button" className="icon-button" aria-haspopup="dialog" aria-label={t("공강 설정")}
+                data-tooltip={t("공강 설정")} onClick={() => { setSelectedDays(offDays); setOff(true); }}><Sun size={17} /></button>
+              <button type="button" className="icon-button primary" aria-haspopup="dialog" aria-label={t("수업 추가")}
+                data-tooltip={t("수업 추가")} onClick={() => setEdit(null)}><Plus size={18} /></button>
+            </>}
+            <button type="button" className="icon-button timetable-expand" aria-pressed={expanded}
+              aria-label={t(expanded ? "시간표 복원" : "시간표 최대화")} data-tooltip={t(expanded ? "시간표 복원" : "시간표 최대화")}
+              onClick={() => setExpanded(active => !active)}>
+              {expanded ? <Minimize2 size={17} /> : <Maximize2 size={17} />}
+            </button>
           </div>
-          <div className="segmented">
-            {[5, 7].map((n) => (
-              <button
-                key={n}
-                className={days === n ? "selected" : ""}
-                onClick={() => setDays(n)}
-              >
-                {n === 5 ? t("주중") : t("주간")}
-              </button>
-            ))}
-          </div>
-          {mode === "edit" && data.timetableConfigured && (
-            <>
-              <button
-                onClick={() => {
-                  setSelectedDays(offDays);
-                  setOff(true);
-                }}
-              >{t("공강 설정")}{" "}</button>
-              <button className="primary" onClick={() => setEdit(null)}>
-                <Plus size={17} />{t("수업 추가")}{" "}</button>
-            </>
-          )}
+        </div>}
+      </PageHeading>
+      {densityDialog && <Modal title={t("시간표 시간 간격")} className="timetable-density-dialog" onClose={() => setDensityDialog(false)}>
+        <div className="timetable-density-options">
+          {([[0, "화면에 맞춤"], [64, "보통"], [80, "넓게"], [104, "아주 넓게"]] as const).map(([unit, label]) =>
+            <button key={unit} type="button" aria-pressed={density === unit} onClick={() => { setDensity(unit); setDensityDialog(false); }}>
+              {t(label)}{density === unit && <Check size={16} aria-hidden="true" />}
+            </button>)}
         </div>
-      </div>
-      <div className="semester-toolbar">
-        <label>{t("학기")}{" "}<select
-          aria-label={t("시간표 학기")}
-          value={term.name}
-          onChange={(event) => {
-            setSemester(event.target.value);
-            setColorDialog(false);
-            setViewing(null);
-            setEdit(undefined);
-            setOff(false);
-          }}
-        >
-          {data.timetableTerms.map((termOption) => (
-            <option key={termOption.name} value={termOption.name}>
-              {semesterName(termOption.name)}
-              {termOption.name === data.mainTerm ? t(" (메인)") : ""}
-            </option>
-          ))}
-        </select>
-        </label>
-        <label>{t("시간 간격")}<select aria-label={t("시간표 시간 간격")} value={density} onChange={e=>setDensity(Number(e.target.value))}><option value={0}>{t("화면에 맞춤")}</option><option value={64}>{t("보통")}</option><option value={80}>{t("넓게")}</option><option value={104}>{t("아주 넓게")}</option></select></label>
-        {data.timetableConfigured && term.name === data.mainTerm &&
-          <span className="count-pill">{t("메인 학기")}</span>}
-      </div>
+      </Modal>}
       {!data.timetableConfigured ? (
         <section className="glass empty">
           <p>{t("홈에서 메인 학기를 설정하세요.")}</p>
           <button type="button" onClick={onOpenHome}>{t("홈으로")}</button>
         </section>
       ) : (
-        <div className="timetable-layout" data-timetable-theme={appearance.mode === "manual" ? undefined : theme.dark ? "dark" : "light"}
-          style={{ "--timetable-surface": theme.surface, "--timetable-accent": theme.accent } as CSSProperties}>
+        <div className="timetable-layout"
+          data-timetable-theme={appearance.mode === "manual" ? undefined : theme.dark ? "dark" : "light"}
+          style={appearance.mode === "manual" ? undefined : {
+            "--timetable-surface": theme.surface, "--timetable-accent": theme.accent,
+          } as CSSProperties}>
           <section
             ref={panel}
-            className="glass timetable-panel"
+            className="timetable-panel"
+            onScroll={event => {
+              const saved = viewState.current;
+              if (saved?.semester === term.name) {
+                saved.scrollLeft = event.currentTarget.scrollLeft;
+                saved.scrollTop = event.currentTarget.scrollTop;
+              }
+            }}
             style={{ "--hour-unit": `${unit}px`, "--week-days": days } as React.CSSProperties}
           >
+            <div className="timetable-content">
             <div className="week-grid">
             <div className="week-headers">
               <span />
@@ -281,11 +346,11 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
                   className={offDays.includes(i) ? "off-header" : ""}
                 >
                   {t(day)}
-                  <small>{offDays.includes(i) ? t("공강") : ""}</small>
+                  {offDays.includes(i) && <small className="timetable-off-tag">{t("공강")}</small>}
                 </div>
               ))}
             </div>
-            <div className="week-body" style={{ height }}>
+            <div className="week-body" style={{ height: gridHeight }}>
               <div className="time-axis">
                 {Array.from({ length: (end - start) / 60 }, (_, i) => (
                   <span key={i} style={{ top: i * unit }}>
@@ -306,14 +371,7 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
                       setEdit(null);
                   }}
                 >
-                  {offDays.includes(i) ? (
-                    <div className="off-marker">
-                      <span>
-                        <Sun size={30} />
-                      </span>
-                      <strong>{t("공강")}</strong>
-                    </div>
-                  ) : (
+                  {!offDays.includes(i) && (
                     scheduled
                       .filter((s) => s.day === i)
                       .map((s) => {
@@ -331,9 +389,8 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
                               left: `calc(${(lanes.get(s.id)?.lane || 0) * 100 / (lanes.get(s.id)?.count || 1)}% + 3px)`,
                               right: "auto",
                               width: `calc(${100 / (lanes.get(s.id)?.count || 1)}% - 6px)`,
-                              borderLeftColor: sessionColor(s),
-                              background: `color-mix(in srgb,${sessionColor(s)} 12%,var(--surface))`,
-                            }}
+                              "--course-color": sessionColor(s),
+                            } as CSSProperties}
                             onClick={() => choose(s)}
                           >
                             <strong>{name(s)}</strong>
@@ -356,9 +413,8 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
               ))}
             </div>
             </div>
-          </section>
           {online.length > 0 && (
-            <section className="glass online-courses" aria-label={t("비대면 수업")}>
+            <section className="online-courses" aria-label={t("비대면 수업")}>
               <header>
                 <span>
                   <Monitor size={17} />
@@ -392,6 +448,8 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
               </div>
             </section>
           )}
+            </div>
+          </section>
         </div>
       )}
       {viewing && (
@@ -469,7 +527,7 @@ export function TimetablePage({ onOpenHome }: { onOpenHome: () => void }) {
           </div>
         </Modal>
       )}
-    </>
+    </section>
   );
 }
 
@@ -810,13 +868,7 @@ function SessionEditor({
               onChange={(event) => field("professor", event.target.value)}
             />
           </label>
-          <label>{t("색상")}{" "}<input
-              type="color"
-              aria-label={t("색상")}
-              value={form.color}
-              onChange={(event) => field("color", event.target.value)}
-            />
-          </label>
+          <ColorField caption label={t("색상")} value={form.color} onChange={value => field("color", value)} />
         </div>
         <div className="dialog-actions">
           {session && (

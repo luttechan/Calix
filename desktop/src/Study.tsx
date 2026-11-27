@@ -7,6 +7,8 @@ import { Pause, Play, RotateCcw, Settings, SkipForward, Timer, X } from "lucide-
 import { rpc, subscribe } from "./bridge";
 import { Modal, useCalix } from "./App";
 import { dateKey } from "./dates";
+import { ChangedNumber } from "./ChangedNumber";
+import { invalidateMenuReads, peekMenuRead, readMenu } from "./menuReads";
 import { DEFAULT_FOCUS_COMMENTS, focusSeconds, timerText, type FocusComments, type FocusState } from "./focusState";
 import type { EventItem } from "./types";
 
@@ -33,7 +35,9 @@ async function read() {
 }
 async function command(action: string, extra: Record<string, unknown> = {}) {
   ++request;
-  publish(await rpc<FocusState>("focus.command", { action, ...extra }));
+  const next = await rpc<FocusState>("focus.command", { action, ...extra });
+  invalidateMenuReads("focus.totals");
+  publish(next);
 }
 function useFocus() {
   return useSyncExternalStore(watch, () => current);
@@ -259,7 +263,7 @@ export function StudyPage() {
     [work, setWork] = useState(25),
     [short, setShort] = useState(5),
     [long, setLong] = useState(15),
-    [totals, setTotals] = useState<{ day: string; seconds: number }[]>([]),
+    [totals, setTotals] = useState<{ day: string; seconds: number }[]>(() => peekMenuRead("focus.totals") ?? []),
     [offset, setOffset] = useState(0);
   const [commentSettings, setCommentSettings] = useState(false);
   const comments = state?.comments ?? DEFAULT_FOCUS_COMMENTS;
@@ -274,18 +278,18 @@ export function StudyPage() {
   useEffect(() => {
     let alive = true;
     const load = () =>
-      void rpc<{ day: string; seconds: number }[]>("focus.totals")
+      void readMenu<{ day: string; seconds: number }[]>("focus.totals")
         .then((v) => {
           if (alive) setTotals(v);
         })
         .catch(() => {});
     load();
-    const t = setInterval(load, 30000);
+    const t = state?.running ? setInterval(load, 30000) : undefined;
     return () => {
       alive = false;
       clearInterval(t);
     };
-  }, []);
+  }, [state?.running, state?.phase, state?.round]);
   // Use KST date arithmetic rather than the host time zone.
   const kst = new Date(new Date(`${dateKey()}T00:00:00Z`).getTime());
   kst.setUTCDate(kst.getUTCDate() - ((kst.getUTCDay() + 6) % 7) + offset * 7);
@@ -302,11 +306,8 @@ export function StudyPage() {
     );
   return (
     <section className="learning-page study-page">
-      <div className="page-heading">
-        <div>
-          <h1>{t("나의 학습")}</h1>
-        </div>
-        <div>
+      <PageHeading title={t("나의 학습")}>
+        <div className="study-week-actions">
           <button onClick={() => setOffset(offset - 1)} aria-label={t("이전 주")}>
             ←
           </button>
@@ -321,7 +322,7 @@ export function StudyPage() {
             →
           </button>
         </div>
-      </div>
+      </PageHeading>
       <div className="study-metrics">
         {[
           ["영상 수강", metrics.videos],
@@ -331,7 +332,7 @@ export function StudyPage() {
           return (
             <article className="glass" key={String(title)}>
               <span>{t(String(title))}</span>
-              <strong>{v.percent === null ? "—" : `${v.percent}%`}</strong>
+              <strong><ChangedNumber value={v.percent === null ? null : `${v.percent}%`} /></strong>
               <progress max={100} value={v.percent ?? 0} />
               <small>
                 {v.done} / {v.total}{t("건")}{" "}</small>
@@ -341,7 +342,7 @@ export function StudyPage() {
         <article className="glass">
           <span>{t("미완료 항목")}</span>
           <strong>
-            {metrics.pending}
+            <ChangedNumber value={metrics.pending} />
             <small>{t("건")}</small>
           </strong>
           <small>{t("이번 주 마감 기준")}</small>
@@ -349,7 +350,7 @@ export function StudyPage() {
         <article className="glass">
           <span>{t("집중 시간")}</span>
           <strong>
-            {Math.floor(seconds / 60)}
+            <ChangedNumber value={Math.floor(seconds / 60)} />
             <small>{t("분")}</small>
           </strong>
         </article>
@@ -442,3 +443,4 @@ export function StudyPage() {
     </section>
   );
 }
+import { PageHeading } from "./PageHeading";

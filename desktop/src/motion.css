@@ -48,20 +48,34 @@ button.switch i,
 .sidebar nav[data-marked] .nav-motion-marker { opacity: 1; }
 .sidebar nav[data-marked] button.active::before { content: none; }
 
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-reduce-motion]) .page-heading > h1 {
+    animation: page-title-in 285ms var(--motion-ease) both;
+  }
+}
+
+@keyframes page-title-in {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: none; }
+}
+
 .modal[open] {
   animation: modal-in var(--motion-panel) var(--motion-ease);
 }
 
 .modal[open]::backdrop {
-  animation: backdrop-in 235ms ease-out;
+  opacity: 1;
+  transition: opacity 235ms ease-out;
 }
 
-.modal[data-motion-closing]::backdrop { animation: backdrop-out 180ms ease-in both; }
+@starting-style {
+  .modal[open]::backdrop { opacity: 0; }
+}
+
+.modal[data-motion-closing]::backdrop { opacity: 0; transition: opacity 180ms ease-in; }
 .modal[data-motion-closing] { pointer-events: none; }
 
-.workspace main > [role="tabpanel"]:not([hidden]) {
-  animation: panel-in 180ms var(--motion-ease);
-}
+.changed-number { display: inline-block; font-variant-numeric: tabular-nums; }
 
 [popover]:popover-open {
   transform-origin: top center;
@@ -80,22 +94,9 @@ button.switch i,
   66% { opacity: 1; transform: translateY(-2px) scale(1.012); }
   100% { opacity: 1; transform: none; }
 }
-@keyframes panel-in {
-  from { opacity: .25; translate: 0 12px; }
-  to { opacity: 1; translate: 0 0; }
-}
 @keyframes popover-in {
   from { opacity: 0; scale: .94; translate: 0 -7px; }
   to { opacity: 1; scale: 1; translate: 0 0; }
-}
-
-@keyframes backdrop-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-@keyframes backdrop-out {
-  from { opacity: 1; }
-  to { opacity: 0; }
 }
 
 :root[data-reduce-motion] *, :root[data-reduce-motion] *::before,
@@ -115,8 +116,8 @@ button.switch i,
     --motion-panel: 0ms;
   }
   .modal[open]::backdrop,
-  .modal[data-motion-closing]::backdrop,
-  .workspace main > [role="tabpanel"]:not([hidden]),
+  .modal[data-motion-closing]::backdrop { transition: none; }
+
   [popover]:popover-open,
   select::picker(select) {
     animation: none;

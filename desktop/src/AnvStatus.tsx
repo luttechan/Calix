@@ -1,7 +1,7 @@
 import { t, useLanguage } from "./i18n";
 import { useEffect, useState } from "react";
 import { Cable, RefreshCw } from "lucide-react";
-import { rpc } from "./bridge";
+import { invalidateMenuReads, peekMenuRead, readMenu } from "./menuReads";
 import "./anki-review.css";
 
 type AnvConnection =
@@ -11,13 +11,13 @@ type AnvConnection =
 export function AnvStatus() {
   useLanguage();
   const [revision, setRevision] = useState(0);
-  const [status, setStatus] = useState<AnvConnection>();
-  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState<AnvConnection | undefined>(() => peekMenuRead("anv.status"));
+  const [loading, setLoading] = useState(() => !status);
 
   useEffect(() => {
     let active = true;
     const timer = window.setTimeout(() => {
-      void rpc<AnvConnection>("anv.status")
+      void readMenu<AnvConnection>("anv.status")
         .then(value => { if (active) setStatus(value); })
         .catch(() => { if (active) setStatus({ connected: false }); })
         .finally(() => { if (active) setLoading(false); });
@@ -33,6 +33,7 @@ export function AnvStatus() {
       <div className="anki-review-header">
         <h2 id="anv-status-heading"><Cable size={18} aria-hidden="true" /> ANV</h2>
         <button type="button" disabled={loading} aria-label={t("ANV 새로고침")} onClick={() => {
+          invalidateMenuReads("anv.status");
           setLoading(true);
           setRevision(value => value + 1);
         }}>

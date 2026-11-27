@@ -56,9 +56,8 @@ fn publish(app: &AppHandle, payload: Value) -> Result<u64, String> {
     Ok(revision)
 }
 
-fn show(app:&AppHandle,payload:Value)->Result<u64,String>{
-    validate(&payload)?;
-    let visible=!app.state::<ReminderState>().checking.load(std::sync::atomic::Ordering::SeqCst);
+fn prepare(app:&AppHandle,payload:Value)->Result<u64,String>{
+    let checking=app.state::<ReminderState>().checking.load(std::sync::atomic::Ordering::SeqCst);
     let monitor = app.get_webview_window("main")
         .and_then(|window| window.current_monitor().ok().flatten())
         .or_else(|| app.primary_monitor().ok().flatten());
@@ -75,26 +74,25 @@ fn show(app:&AppHandle,payload:Value)->Result<u64,String>{
             area.position.y + (area.size.height as i32 - ((height + 16.0) * scale) as i32).max(0),
         )
     });
-    let revision=publish(app,payload)?;
-    if let Some(window)=app.get_webview_window("reminder") {
-        window.set_size(LogicalSize::new(REMINDER_WIDTH, height)).map_err(|_| "알림 창 크기를 조정하지 못했습니다.")?;
-        if let Some(position) = position { let _ = window.set_position(position); }
-        if visible { window.show().map_err(|_|"알림을 표시하지 못했습니다.")?; }
-        crate::focus_developer(app);
-        return Ok(revision);
+    let window = if let Some(window) = app.get_webview_window("reminder") {
+        window
+    } else {
+        let developer = app.state::<crate::DeveloperState>().0.load(std::sync::atomic::Ordering::SeqCst);
+        let mut builder = WebviewWindowBuilder::new(app, "reminder", WebviewUrl::App("reminder.html".into()))
+            .title("Calix").inner_size(REMINDER_WIDTH, height).decorations(false).resizable(false)
+            .visible(false).focused(false).skip_taskbar(true).always_on_top(!developer)
+            .transparent(true).background_color(tauri::window::Color(0, 0, 0, 0))
+            .additional_browser_args(UI_ARGS);
+        if checking {
+            builder = builder.data_directory(std::env::temp_dir().join(format!("calix-media-check-{}", std::process::id())));
+        }
+        builder.build().map_err(|e| format!("알림 창을 열지 못했습니다. ({e})"))?
+    };
+    if let Some(position) = position {
+        window.set_position(position).map_err(|_| "알림 창 위치를 조정하지 못했습니다.")?;
     }
-    let developer=app.state::<crate::DeveloperState>().0.load(std::sync::atomic::Ordering::SeqCst);
-    let mut builder=WebviewWindowBuilder::new(app,"reminder",WebviewUrl::App("reminder.html".into()))
-        .title("Calix").inner_size(REMINDER_WIDTH,height).decorations(false).resizable(false)
-        .visible(visible).focused(false).skip_taskbar(true).always_on_top(!developer)
-        .additional_browser_args(UI_ARGS);
-    if !visible {
-        builder=builder.data_directory(std::env::temp_dir().join(format!("calix-media-check-{}",std::process::id())));
-    }
-    let window=builder.build().map_err(|e|format!("알림 창을 열지 못했습니다. ({e})"))?;
-    if let Some(position) = position { let _ = window.set_position(position); }
-    crate::focus_developer(app);
-    Ok(revision)
+    window.set_size(LogicalSize::new(REMINDER_WIDTH, height)).map_err(|_| "알림 창 크기를 조정하지 못했습니다.")?;
+    publish(app, payload)
 }
 
 // WebView2 construction must never run inside a synchronous Windows IPC handler.
@@ -105,13 +103,30 @@ pub async fn reminder_show(app:AppHandle,webview:Webview,payload:Value)->Result<
     let state=app.state::<ReminderState>();
     let _guard=state.gate.lock().await;
     let handle=app.clone();
-    tauri::async_runtime::spawn_blocking(move ||show(&handle,payload)).await.map_err(|_|"알림을 준비하지 못했습니다.")?
+    tauri::async_runtime::spawn_blocking(move ||prepare(&handle,payload)).await.map_err(|_|"알림을 준비하지 못했습니다.")?
 }
 #[tauri::command]
 pub fn reminder_payload(app:AppHandle,webview:Webview)->Result<Value,String>{
     crate::auth::trusted(&webview,&["reminder"])?;
     snapshot(&app)
 }
+
+#[tauri::command]
+pub async fn reminder_ready(app: AppHandle, webview: Webview, revision: u64) -> Result<bool, String> {
+    crate::auth::trusted(&webview, &["reminder"])?;
+    let state = app.state::<ReminderState>();
+    let _guard = state.gate.lock().await;
+    let value = snapshot(&app)?;
+    if value["revision"].as_u64() != Some(revision) || value["payload"].is_null() { return Ok(false); }
+    if state.checking.load(std::sync::atomic::Ordering::SeqCst) { return Ok(true); }
+    let window = app.get_webview_window("reminder").ok_or("알림 창이 없습니다.")?;
+    if !window.is_visible().map_err(|_| "알림 창 상태를 확인하지 못했습니다.")? {
+        window.show().map_err(|_| "알림을 표시하지 못했습니다.")?;
+        crate::focus_developer(&app);
+    }
+    Ok(true)
+}
+
 fn dismiss(app:&AppHandle,revision:Option<u64>)->Result<(),String>{
     let value=snapshot(app)?;
     if revision.is_some_and(|r|value["revision"].as_u64()!=Some(r)) {return Ok(());}
@@ -177,7 +192,7 @@ pub async fn self_check(app:AppHandle)->Result<Value,String>{
         let deadline=Instant::now()+Duration::from_secs(45);
         loop {
             if Instant::now()>deadline { return Err("REMINDER_UI_TIMEOUT".to_string()); }
-            let ready=crate::campus::evaluate(&window,"!!document.querySelector('.reminder-card')".into()).await?;
+            let ready=crate::campus::evaluate(&window,"!!document.querySelector('.reminder-card[data-shown]')".into()).await?;
             if ready==true { break; }
             tokio::time::sleep(Duration::from_millis(100)).await;
         }

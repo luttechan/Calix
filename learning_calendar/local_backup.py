@@ -151,23 +151,22 @@ def _id(value):
     return value
 
 
-def read_backup(path, owner="", password=None):
+def read_backup(path, owner="", password=None, *, diary_destination_key=None):
+    from .diary_crypto import app_bound_header, open_app_diary_key, wipe, wrap_diary_for_app
+
+    source_key = None
     try:
         raw = Path(path).read_bytes()
         prefix = b"Calix password backup v1\0"
         if raw.startswith(prefix):
             from .app_security import unlock_app_material
-            from .diary_crypto import wipe
             from . import secure_db
             offset = len(prefix)
             length = int.from_bytes(raw[offset:offset+4], "big")
             if not 0 < length <= 2048:
                 raise ValueError("백업 형식을 확인하세요.")
-            key = unlock_app_material(bytes.fromhex(raw[offset+4:offset+4+length].decode()), password)
-            try:
-                raw = secure_db.open_file(raw[offset+4+length:], bytes(key))
-            finally:
-                wipe(key)
+            source_key = unlock_app_material(bytes.fromhex(raw[offset+4:offset+4+length].decode()), password)
+            raw = secure_db.open_file(raw[offset+4+length:], bytes(source_key))
         with zipfile.ZipFile(io.BytesIO(raw)) as archive:
             files = archive.infolist()
             if (
@@ -340,11 +339,21 @@ def read_backup(path, owner="", password=None):
             if len(header) > 1024:
                 raise ValueError("암호화 저장소 형식을 확인하세요.")
             config = json.loads(header)
-            if config["version"] != 1 or config["kdf"] != "argon2id-64m-3-4":
+            if app_bound_header(header):
+                if source_key is None:
+                    raise ValueError("비밀 일기는 암호화 백업에서 복원하세요.")
+                diary_key = open_app_diary_key(source_key, header)
+                try:
+                    if diary_destination_key is not None:
+                        vault["header"] = wrap_diary_for_app(diary_destination_key, diary_key).hex()
+                finally:
+                    wipe(diary_key)
+            elif config["version"] != 1 or config["kdf"] != "argon2id-64m-3-4":
                 raise ValueError("지원하지 않는 암호화 방식입니다.")
-            for key, size in (("salt", 16), ("nonce", 12), ("key", 48)):
-                if len(bytes.fromhex(config[key])) != size:
-                    raise ValueError("암호화 키 형식을 확인하세요.")
+            else:
+                for key, size in (("salt", 16), ("nonce", 12), ("key", 48)):
+                    if len(bytes.fromhex(config[key])) != size:
+                        raise ValueError("암호화 키 형식을 확인하세요.")
             secret_ids = set()
             for row in _list(vault["entries"]):
                 key = _id(row["id"])
@@ -404,6 +413,8 @@ def read_backup(path, owner="", password=None):
         RecursionError,
     ):
         raise ValueError("백업 파일이 손상되었거나 형식이 다릅니다.") from None
+    finally:
+        wipe(source_key)
 
 
 def restore_backup(value, store, folder):

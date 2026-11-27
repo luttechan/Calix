@@ -1,4 +1,8 @@
 import { t, useLanguage } from "./i18n";
+import { PageHeading } from "./PageHeading";
+import { ColorField } from "./ColorField";
+import { CredentialPrompt, PrivateDiaryMigration, SecuritySettings } from "./Security";
+import { pinLength } from "./PinKeypad";
 import { useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -26,17 +30,17 @@ export function DiaryPage({ active = true }: { active?: boolean }) {
   const { data, notify, leave, mutate, soundError } = useCalix();
   const [secret, setSecret] = useState(false),
     [unlocked, setUnlocked] = useState(false),
-    [initialized, setInitialized] = useState(false),
+    [migration, setMigration] = useState(false),
     [entries, setEntries] = useState<Summary[]>(data.journals),
     [id, setId] = useState<string | null>(null),
     [title, setTitle] = useState(""),
     [date, setDate] = useState(dateKey()),
     [dirty, setDirty] = useState(false),
     [busy, setBusy] = useState(false),
-    [password, setPassword] = useState(""),
     [error, setError] = useState(""),
     [remove, setRemove] = useState(false);
   const loading = useRef(false),
+    accessRevision = useRef(0),
     saveRef = useRef<() => Promise<void>>(async () => {}),
     dirtyRef = useRef(false),
     secretRef = useRef(false),
@@ -112,8 +116,9 @@ export function DiaryPage({ active = true }: { active?: boolean }) {
     if (!active) return;
     const guard = async () => {
       await saveRef.current();
-      if (secretRef.current) await rpc("vault.lock");
       if (secretRef.current) {
+        accessRevision.current++;
+        await rpc("vault.lock");
         clear();
         setEntries([]);
         setUnlocked(false);
@@ -133,6 +138,7 @@ export function DiaryPage({ active = true }: { active?: boolean }) {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
         if (!secretRef.current) return;
+        accessRevision.current++;
         void saveRef
           .current()
           .then(() => rpc("vault.lock"))
@@ -156,22 +162,41 @@ export function DiaryPage({ active = true }: { active?: boolean }) {
     };
   }, [editor]);
   const switchMode = async (next: boolean) => {
+    if (next === secret || busy) return;
     try {
       await save();
+      accessRevision.current++;
       await rpc("vault.lock");
       clear();
       setSecret(next);
       secretRef.current = next;
       setUnlocked(false);
-      setPassword("");
       setError("");
-      if (next) {
-        const state = await rpc<{ initialized: boolean }>("vault.state");
-        setInitialized(state.initialized);
-        setEntries([]);
-      } else await reload(false);
+      if (next) setEntries([]);
+      else await reload(false);
     } catch (e) {
       notify((e as Error).message, true);
+    }
+  };
+  const unlockDiary = async (password: string) => {
+    const request = ++accessRevision.current;
+    setBusy(true);
+    setError("");
+    try {
+      await rpc("vault.unlock", { password });
+      if (request !== accessRevision.current) return;
+      const summaries = await rpc<Summary[]>("diary.list", { secret: true });
+      if (request === accessRevision.current) {
+        setEntries(summaries);
+        setUnlocked(true);
+      }
+    } catch (error) {
+      if (request === accessRevision.current) {
+        setError((error as Error).message);
+        soundError();
+      }
+    } finally {
+      setBusy(false);
     }
   };
   const open = async (key: string) => {
@@ -206,10 +231,7 @@ export function DiaryPage({ active = true }: { active?: boolean }) {
   };
   return (
     <>
-      <div className="page-heading">
-        <div>
-          <h1>{t("일기장")}</h1>
-        </div>
+      <PageHeading title={t("일기장")}>
         <div className="toolbar">
           <div className="segmented">
             <button
@@ -240,47 +262,20 @@ export function DiaryPage({ active = true }: { active?: boolean }) {
               <Plus size={17} />{t("새 일기")}{" "}</button>
           )}
         </div>
-      </div>
+      </PageHeading>
       {secret && !unlocked ? (
         <section className="glass vault-panel">
           <div className="vault-symbol">
             <Lock size={31} />
           </div>
-          <h2>{initialized ? t("비밀 일기") : t("비밀 일기 만들기")}</h2>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              setBusy(true);
-              setError("");
-              const value = password;
-              setPassword("");
-              void rpc("vault.unlock", { password: value })
-                .then(() => {
-                  setUnlocked(true);
-                  return reload(true);
-                })
-                .catch((e) => { setError(e.message); soundError(); })
-                .finally(() => setBusy(false));
-            }}
-          >
-            <label>
-              <span>{initialized ? t("암호") : t("암호 (12자 이상)")}</span>
-              <input
-                type="password"
-                autoComplete="off"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                minLength={initialized ? 1 : 12}
-                maxLength={4096}
-                required
-                aria-label={t("비밀 일기 암호")}
-              />
-            </label>
-            {error && <p className="danger">{error}</p>}
-            <button className="primary" disabled={busy}>
-              {busy ? t("확인 중") : initialized ? t("잠금 해제") : t("만들기")}
-            </button>
-          </form>
+          <h2>{t("비밀 일기")}</h2>
+          {data.privateDiaryMigration ? <>
+            <button type="button" className="primary" onClick={() => setMigration(true)}>{t("비밀 일기 암호 변경")}</button>
+            {migration && <PrivateDiaryMigration onClose={() => setMigration(false)} />}
+          </> : !data.security?.configured ? <SecuritySettings setupOnly />
+            : <CredentialPrompt label={pinLength(data.security.credential_mode) ? "PIN" : "비밀번호"}
+              mode={data.security.credential_mode} pending={busy} error={error} nextLabel="잠금 해제"
+              onSubmit={password => void unlockDiary(password)} />}
         </section>
       ) : (
         <section className="glass diary-workspace">
@@ -377,14 +372,7 @@ export function DiaryPage({ active = true }: { active?: boolean }) {
               >
                 <Underline size={16} />
               </button>
-              <input
-                type="color"
-                aria-label={t("글자 색")}
-                defaultValue="#af527f"
-                onChange={(e) =>
-                  editor?.chain().focus().setColor(e.target.value).run()
-                }
-              />
+              <ColorField label={t("글자 색")} onChange={value => editor?.chain().setColor(value).run()} />
               <span />
               <button
                 className="save-entry"

@@ -379,12 +379,26 @@ pub async fn self_check(app: AppHandle) -> Result<Value, String> {
     let folder = std::env::temp_dir().join(format!("calix-webview-check-{}-{}",std::process::id(),std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()));
     let mut views = Vec::new();
     let mut readings = Vec::new();
+    let mut window_centered = false;
     let result = async {
         for (label,path) in [("check-set","set"),("check-read","read")] {
             let view = WebviewWindowBuilder::new(&app,label,WebviewUrl::External(format!("http://{address}/{path}").parse().unwrap()))
-                .inner_size(1280.0,900.0).visible(false).focused(false).skip_taskbar(true).data_directory(folder.clone()).additional_browser_args(ARGS)
+                .inner_size(1280.0,900.0).decorations(false).visible(false).focused(false).skip_taskbar(true).data_directory(folder.clone()).additional_browser_args(ARGS)
                 .build().map_err(|e|e.to_string())?;
             views.push(view.clone());
+            if path == "set" {
+                crate::position_main_window(&view).map_err(|e| e.to_string())?;
+                if let Some(monitor) = view.current_monitor().map_err(|e| e.to_string())? {
+                    let area = monitor.work_area();
+                    let offset = view.outer_position().map_err(|e| e.to_string())?;
+                    let size = view.outer_size().map_err(|e| e.to_string())?;
+                    let centered = |position: i32, origin: i32, size: u32, available: u32|
+                        (2 * (i64::from(position) - i64::from(origin)) + i64::from(size) - i64::from(available)).abs() <= 4;
+                    window_centered = centered(offset.x, area.position.x, size.width, area.size.width)
+                        && centered(offset.y, area.position.y, size.height, area.size.height);
+                }
+                if !window_centered { return Err("WINDOW_CENTER_CHECK_FAILED".into()); }
+            }
             let deadline = Instant::now()+Duration::from_secs(25);
             let started=Instant::now();
             loop {
@@ -399,7 +413,7 @@ pub async fn self_check(app: AppHandle) -> Result<Value, String> {
             }
         }
         if readings[1]["shared"]!="true" || readings[1]["httpOnlyHidden"]!=true { return Err("WEBVIEW2_PROFILE_NOT_SHARED".to_string()); }
-        Ok(json!({"passed":true,"transport":"webview2","sameProfile":true,"httpOnlyProtected":true,"viewport":readings[1]}))
+        Ok(json!({"passed":true,"transport":"webview2","sameProfile":true,"httpOnlyProtected":true,"windowCentered":window_centered,"viewport":readings[1]}))
     }.await;
     for view in views { let _=view.destroy(); }
     stop.store(true,Ordering::SeqCst);

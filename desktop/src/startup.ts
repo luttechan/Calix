@@ -29,4 +29,5 @@ export async function finishStartup() {
   if (overlay && !motionReduced()) await new Promise(resolve => window.setTimeout(resolve, 350));
   overlay?.remove();
   document.getElementById("root")?.removeAttribute("inert");
+  document.dispatchEvent(new Event("calix:startup-ready"));
 }

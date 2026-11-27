@@ -10,9 +10,9 @@ def test_popup_does_not_import_the_main_app_or_start_an_engine():
 
 def test_windows_reminder_commands_do_not_block_the_ipc_thread():
     code=(ROOT/'desktop/src-tauri/src/reminder.rs').read_text(encoding='utf-8')
-    for command in ('reminder_show', 'reminder_close', 'reminder_open_event'):
+    for command in ('reminder_show', 'reminder_ready', 'reminder_close', 'reminder_open_event'):
         assert f'pub async fn {command}' in code
-    assert 'spawn_blocking(move ||show(' in code
+    assert 'spawn_blocking(move ||prepare(' in code
     assert 'state.gate.lock().await' in code
     assert 'WebviewUrl::App("reminder.html".into())' in code
     assert 'index.html?reminder' not in code

@@ -1,18 +1,19 @@
-.timetable-theme-trigger {
-  max-width: 190px;
-  gap: 8px;
-}
-
-.timetable-theme-trigger > span:not(.timetable-swatch),
 .timetable-theme-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.timetable-theme-trigger > svg {
-  flex: none;
+.timetable-theme-label { display: grid; min-width: 0; }
+.timetable-theme-label small { color: var(--muted); font-size: 11px; }
+.timetable-theme-confirmation {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
 }
+.timetable-theme-confirmation p { margin: 0; }
+.timetable-theme-confirmation .dialog-actions { grid-column: 1 / -1; }
 
 .timetable-swatch {
   display: block;

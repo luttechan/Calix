@@ -6,11 +6,56 @@ import {
   LoaderCircle,
   UserRound,
   Trash2,
+  Maximize2,
+  Pencil,
 } from "lucide-react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { Modal, useCalix } from "./App";
 import { readAvatar } from "./avatar";
 import { ThemePicker } from "./ThemePicker";
+
+export function HomeProfilePhoto() {
+  useLanguage();
+  const { data, mutate, notify } = useCalix();
+  const input = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const avatar = data.preferences.avatar;
+  const replace = async (file: File) => {
+    setBusy(true);
+    try {
+      const next = await readAvatar(file);
+      await mutate("profile.save", { avatar: next }, { inlineError: true });
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "사진을 불러오지 못했습니다.", true);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return <div className="home-heading-avatar">
+    <span className="home-avatar-photo" aria-hidden="true">
+      <UserRound size={26} />
+      {avatar && <img key={avatar} src={avatar} alt="" decoding="async"
+        onError={event => { event.currentTarget.hidden = true; }} />}
+    </span>
+    <div className="home-avatar-actions">
+      {avatar && <button type="button" aria-label={t("크게 보기")} title={t("크게 보기")}
+        onClick={() => setPreview(true)}><Maximize2 size={15} aria-hidden="true" /></button>}
+      <button type="button" aria-label={t("프로필 사진 변경")} title={t("변경")} disabled={busy}
+        onClick={() => input.current?.click()}><Pencil size={15} aria-hidden="true" /></button>
+    </div>
+    <input ref={input} type="file" accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
+      aria-label={t("프로필 사진 선택")} hidden onChange={event => {
+        const file = event.currentTarget.files?.[0];
+        event.currentTarget.value = "";
+        if (file) void replace(file);
+      }} />
+    {preview && avatar && <Modal title={t("내 프로필 사진")} className="home-avatar-dialog" onClose={() => setPreview(false)}>
+      <img src={avatar} alt={t("내 프로필 사진")} />
+    </Modal>}
+  </div>;
+}
+
 export function Onboarding() {
   useLanguage();
   const { data, mutate } = useCalix(),

@@ -1,9 +1,10 @@
 import { semesterName, t, useLanguage } from "./i18n";
+import { ChangedNumber } from "./ChangedNumber";
+import { invalidateMenuReads, peekMenuRead, readMenu, rememberMenuRead } from "./menuReads";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
-  Calculator,
   Download,
   Link2,
   Plus,
@@ -172,8 +173,11 @@ export function GradesPage() {
   const [semester, setSemester] = useState(
       data.mainTerm || data.timetableTerms[0]?.name || "",
     ),
-    [sheet, setSheet] = useState<GradeSheet | null>(null),
-    [loading, setLoading] = useState(true),
+    [sheet, setSheet] = useState<GradeSheet | null>(() => {
+      const cached = peekMenuRead<GradeData>("grades.read", { semester });
+      return cached ? createSheet(cached) : null;
+    }),
+    [loading, setLoading] = useState(() => !sheet),
     [pending, setPending] = useState(false);
   const [error, setError] = useState(""),
     [errors, setErrors] = useState<GradeErrors>({}),
@@ -191,7 +195,7 @@ export function GradesPage() {
       field: "title" | "credits" | "grade" | "category";
       desc: boolean;
     } | null>(null);
-  const latest = useRef<GradeSheet | null>(null),
+  const latest = useRef<GradeSheet | null>(sheet),
     job = useRef<Promise<void> | null>(null),
     request = useRef(0),
     mounted = useRef(true),
@@ -202,11 +206,9 @@ export function GradesPage() {
     setSheet(next);
   }, []);
   const count = sheet ? changeCount(sheet) : 0;
-  const courseStamp = JSON.stringify([
-    data.lastSync,
-    data.mainTerm,
-    data.courses,
-  ]);
+  const courseStamp = useMemo(() => JSON.stringify([
+    data.lastSync, data.mainTerm, data.courses,
+  ]), [data.lastSync, data.mainTerm, data.courses]);
   const importChoices = useMemo(() => {
     const ids = new Set(sheet?.items.map((item) => item.id));
     const names = new Set(
@@ -223,10 +225,10 @@ export function GradesPage() {
   const load = useCallback(
     async (term: string) => {
       const id = ++request.current;
-      setLoading(true);
+      setLoading(!peekMenuRead("grades.read", { semester: term }) && latest.current?.base.semester !== term);
       setError("");
       try {
-        const result = await rpc<GradeData>("grades.read", { semester: term });
+        const result = await readMenu<GradeData>("grades.read", { semester: term });
         if (
           mounted.current &&
           id === request.current &&
@@ -314,6 +316,7 @@ export function GradesPage() {
             )
             .map((item) => item.id),
         });
+        rememberMenuRead("grades.read", { semester: result.semester }, result);
         if (mounted.current) {
           update(createSheet(result));
           setErrors({});
@@ -360,6 +363,8 @@ export function GradesPage() {
                 }),
           },
         );
+        if (operation === "reset") invalidateMenuReads("grades.read");
+        rememberMenuRead("grades.read", { semester: result.semester }, result);
         if (!mounted.current) return;
         update(createSheet(result));
         setErrors({});
@@ -477,14 +482,9 @@ export function GradesPage() {
     );
   };
   return (
+    <>
+    <PageHeading title={t("학점 계산기")} />
     <section className="grades-page">
-      <header className="page-heading">
-        <div>
-          <p className="eyebrow">GRADEBOOK</p>
-          <h1>{t("학점 계산기")}</h1>
-        </div>
-        <Calculator size={26} aria-hidden="true" />
-      </header>
       <div className="grades-toolbar">
         <label>{t("학기")}{" "}<select
             aria-label={t("학기")}
@@ -606,28 +606,28 @@ export function GradesPage() {
             <article>
               <span>{t("평점평균")}</span>
               <strong>
-                {summary.gpa ?? "—"}
+                  <ChangedNumber value={summary.gpa} />
                 <small> / {sheet.scale}</small>
               </strong>
             </article>
             <article>
               <span>{t("취득 학점")}</span>
               <strong>
-                {summary.earned_credits}
+                  <ChangedNumber value={summary.earned_credits} />
                 <small>{" "}{t("학점")}</small>
               </strong>
             </article>
             <article>
               <span>{t("평점 산입")}</span>
               <strong>
-                {summary.graded_credits}
+                  <ChangedNumber value={summary.graded_credits} />
                 <small>{" "}{t("학점")}</small>
               </strong>
             </article>
             <article>
               <span>{t("성적 미입력")}</span>
               <strong>
-                {summary.pending}
+                  <ChangedNumber value={summary.pending} />
                 <small>{" "}{t("과목")}</small>
               </strong>
             </article>
@@ -921,5 +921,7 @@ export function GradesPage() {
         </Modal>
       )}
     </section>
+    </>
   );
 }
+import { PageHeading } from "./PageHeading";

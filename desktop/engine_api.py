@@ -9,7 +9,10 @@ from learning_calendar.storage import Store
 from learning_calendar.models import KST
 from learning_calendar.checklist_store import ChecklistStore
 from learning_calendar.diary_store import DiaryStore
-from learning_calendar.preferences import DEFAULT_THEME, THEMES, read_settings, validate_theme_palette, validate_timetable_colors, write_settings
+from learning_calendar.preferences import (
+    DATE_ERAS, DEFAULT_THEME, THEMES, default_timetable_colors, read_settings,
+    validate_theme_palette, validate_timetable_colors, write_settings,
+)
 from learning_calendar.holidays import HolidayCalendar
 
 
@@ -119,7 +122,7 @@ class EngineAPI:
         palette = self.settings.get("theme_palettes", {}).get(theme, {})
         if state["locked"]:
             return dict(
-                version="1.7.8", events=[], courses=[], types=[], sessions=[],
+                version="1.8.0", events=[], courses=[], types=[], sessions=[],
                 timetableTerms=[], mainTerm="", timetableConfigured=False,
                 sections=[], statuses=[], tasks=[], offDays=[], journals=[],
                 holidays={}, specialDates={}, lastSync="", syncSummary="",
@@ -131,13 +134,14 @@ class EngineAPI:
                                  developer_mode=False, font_mode=self.settings.get("font_mode", "pretendard"),
                                  beta_updates=False,
                                  language=self.settings.get("language", "ko"),
+                                 date_era=self.settings.get("date_era", "gregorian"),
                                  catholic=False, birthday=False, avatar=self.settings.get("avatar", "")),
             )
         events = self.store.events()
         semesters = self.store.timetable_config()
         year = datetime.now(KST).year
         return dict(
-            version="1.7.8",
+            version="1.8.0",
             events=[asdict(e) for e in events],
             courses=[asdict(c) for c in self.store.courses()],
             types=self.store.event_types(),
@@ -161,7 +165,7 @@ class EngineAPI:
                     k: self.settings.get(k, d)
                     for k, d in [
                         ("theme", DEFAULT_THEME),
-                        ("timetable_colors", {"active": "manual", "presets": {}}),
+                        ("timetable_colors", default_timetable_colors()),
                         ("reminders", {}),
                         ("attendance_visible", False),
                         ("attendance_sync", False),
@@ -172,6 +176,7 @@ class EngineAPI:
                         ("beta_updates", False),
                         ("font_mode", "pretendard"),
                         ("language", "ko"),
+                        ("date_era", "gregorian"),
                         ("nickname", ""),
                         ("avatar", ""),
                         ("greeting", "{닉네임}님, 오셨군요!"),
@@ -195,6 +200,7 @@ class EngineAPI:
                 for day, name in self.holidays.special_dates(y).items()
             },
             journals=self.diary.summaries(),
+            privateDiaryMigration=self._private_diary_migration(),
         )
 
     def _off_days(self):
@@ -234,6 +240,52 @@ class EngineAPI:
             self.vault = Vault(self.folder / "private-diary.db")
         return self.vault
 
+    def _lock_vault(self):
+        self.security.lock("diary")
+        if self.vault:
+            self.vault.lock()
+
+    def _private_diary_migration(self):
+        if not (self.folder / "private-diary.db").is_file():
+            return False
+        try:
+            return self._diary(True).needs_migration
+        except Exception:
+            # Let the other menus load when the diary database cannot be opened.
+            return False
+
+    def _unlock_vault(self, p, *, migrate=False):
+        import os
+        from learning_calendar.diary_crypto import open_app_diary_key, unlock_material, wipe, wrap_diary_for_app
+
+        if not self.security.material:
+            raise ValueError("먼저 앱 비밀번호를 설정하세요.")
+        vault = self._diary(True)
+        if vault.needs_migration != migrate:
+            raise ValueError("먼저 비밀 일기 암호를 변경하세요." if not migrate else "이미 앱 비밀번호를 사용 중입니다.")
+        key = None
+        self._lock_vault()
+        try:
+            self.security.unlock(p.get("password"), "diary")
+            master = self.security.key
+            if migrate:
+                key = unlock_material(vault.header(), p.get("previous"))
+                vault.activate(key)
+                vault.replace_header(wrap_diary_for_app(master, key))
+                self._lock_vault()
+            elif vault.initialized:
+                key = open_app_diary_key(master, vault.header())
+                vault.activate(key)
+            else:
+                key = bytearray(os.urandom(32))
+                vault.initialize(key, wrap_diary_for_app(master, key))
+            return True
+        except Exception:
+            self._lock_vault()
+            raise
+        finally:
+            wipe(key)
+
     def dispatch(self, method, p):
         if not isinstance(method, str) or not isinstance(p, dict):
             raise ValueError("요청을 확인하세요.")
@@ -244,12 +296,22 @@ class EngineAPI:
             return issue_preview()
         if method.startswith("security."):
             if method == "security.state":
-                return self.security.state()
+                state = self.security.state()
+                if state["locked"]:
+                    self._lock_vault()
+                return state
             if method == "security.activity":
                 if not self.security.expired():
                     import time
                     self.security.activity = time.monotonic()
                 return self.security.state()
+            if method == "security.verify":
+                from learning_calendar.diary_crypto import wipe
+
+                if not self.security.material or self.security.expired():
+                    raise ValueError("먼저 잠금을 해제하세요.")
+                wipe(self.security.authenticate(p.get("password")))
+                return True
             if method == "security.setup":
                 policy = self.security.validate(p.get("policy"))
                 self._close_stores()
@@ -265,8 +327,12 @@ class EngineAPI:
                     self._open_stores()
             elif method == "security.configure":
                 self.security.configure(p.get("password"), p.get("policy"), p.get("replacement"), p.get("mode"))
+                self._lock_vault()
             elif method == "security.lock":
-                self.security.lock(p.get("scope", "main"))
+                scope = p.get("scope", "main")
+                self.security.lock(scope)
+                if scope in ("main", "diary"):
+                    self._lock_vault()
             else:
                 raise ValueError("잠금 요청을 확인하세요.")
             return self.security.state()
@@ -351,7 +417,8 @@ class EngineAPI:
             if method == "backup.export":
                 write_backup(path, self.store, self.folder)
             else:
-                value = read_backup(path, self.store.get_meta("canvas_user_id"), p.get("password"))
+                value = read_backup(path, self.store.get_meta("canvas_user_id"), p.get("password"),
+                                    diary_destination_key=self.security.key)
                 recovery = self.folder / (
                     "recovery-" + datetime.now().strftime("%Y%m%d-%H%M%S-%f") + ".calix"
                 )
@@ -522,6 +589,8 @@ class EngineAPI:
                 sorted(set(days)),
             )
             return True
+        if method.startswith("diary.") and p.get("secret") and "diary" not in self.security.scopes:
+            raise ValueError("비밀 일기가 잠겨 있습니다.")
         if method == "diary.list":
             return self._diary(p.get("secret", False)).summaries()
         if method == "diary.read":
@@ -533,25 +602,13 @@ class EngineAPI:
             return True
         if method == "vault.state":
             vault = self._diary(True)
-            return dict(initialized=vault.initialized, unlocked=vault.unlocked)
+            return dict(initialized=vault.initialized, unlocked=vault.unlocked, needs_migration=vault.needs_migration)
         if method == "vault.unlock":
-            from learning_calendar.diary_crypto import new_material, unlock_material
-
-            vault = self._diary(True)
-            password = p.get("password", "")
-            if not isinstance(password, str) or not 1 <= len(password) <= 4096:
-                raise ValueError("암호를 확인하세요.")
-            if vault.initialized:
-                vault.activate(unlock_material(vault.header(), password))
-            else:
-                if len(password) < 12:
-                    raise ValueError("암호는 12자 이상으로 정하세요.")
-                key, header = new_material(password)
-                vault.initialize(key, header)
-            return True
+            return self._unlock_vault(p)
+        if method == "vault.migrate":
+            return self._unlock_vault(p, migrate=True)
         if method == "vault.lock":
-            if self.vault:
-                self.vault.lock()
+            self._lock_vault()
             return True
         if method == "reminders.save":
             from learning_calendar.reminders import validate
@@ -601,6 +658,9 @@ class EngineAPI:
             language = p.get("language", self.settings.get("language", "ko"))
             if language not in ("ko", "en", "ja"):
                 raise ValueError("지원하는 언어를 선택하세요.")
+            date_era = p.get("date_era", self.settings.get("date_era", "gregorian"))
+            if date_era not in DATE_ERAS:
+                raise ValueError("날짜 표기를 확인하세요.")
             if (
                 theme not in THEMES
                 or type(glass) is not bool
@@ -621,6 +681,7 @@ class EngineAPI:
                 reduce_motion=reduce_motion,
                 font_mode=mode,
                 language=language,
+                date_era=date_era,
                 developer_mode=developer_mode,
                 beta_updates=developer_mode and beta_updates,
                 developer_acknowledged=developer_mode

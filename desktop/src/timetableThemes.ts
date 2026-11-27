@@ -1,4 +1,4 @@
-import type { Session, TimetableAppearance, TimetableColors } from "./types";
+import type { Session, ThemeId, TimetableAppearance, TimetableColors } from "./types";
 
 type Theme = { label: string; surface: string; accent: string; hues: number[]; dark: boolean };
 export const timetableThemes: Theme[] = [
@@ -24,6 +24,21 @@ export const defaultTimetableColors: TimetableColors = {
   base: { theme: 0, mode: "manual", colors: {}, slots: [] },
   terms: {},
   presets: {},
+};
+
+export const matchingTimetableTheme: Record<ThemeId, number> = {
+  aurora: 0,
+  "aurora-dawn": 1,
+  "aurora-dusk": 3,
+  pink: 4,
+  sky: 2,
+  mint: 6,
+  purple: 5,
+  dark: 13,
+  peach: 10,
+  amber: 9,
+  olive: 14,
+  lavender: 5,
 };
 
 export function timetableCourseKey(session: Session) {

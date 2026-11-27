@@ -15,6 +15,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.argon2 import Argon2id
 
 KEY_AAD=b'Calix/private-diary/v1/data-key'
+APP_KEY_AAD=b'Calix/private-diary/v2/app-data-key'
 ENTRY_AAD=b'Calix/private-diary/v1/entry/'
 PENDING_AAD=b'Calix/private-diary/v1/pending'
 
@@ -62,6 +63,29 @@ def unlock_material(header,password):
     finally:wipe(kek)
 
 
+def app_bound_header(header):
+    return json.loads(header).get("version") == 2
+
+
+def wrap_diary_for_app(master_key, diary_key):
+    nonce = os.urandom(12)
+    cipher = AESGCM(bytes(master_key)).encrypt(nonce, bytes(diary_key), APP_KEY_AAD)
+    return json.dumps(dict(version=2, kdf="app-key-aesgcm", nonce=nonce.hex(), key=cipher.hex()),
+                      separators=(",", ":")).encode("ascii")
+
+
+def open_app_diary_key(master_key, header):
+    try:
+        value = json.loads(header)
+        nonce, cipher = bytes.fromhex(value["nonce"]), bytes.fromhex(value["key"])
+        if (value["version"] != 2 or value["kdf"] != "app-key-aesgcm"
+                or len(nonce) != 12 or len(cipher) != 48):
+            raise ValueError
+        return bytearray(AESGCM(bytes(master_key)).decrypt(nonce, cipher, APP_KEY_AAD))
+    except (InvalidTag, ValueError, TypeError, KeyError):
+        raise VaultError("비밀 일기 저장소를 확인하세요.") from None
+
+
 def validate_entry(value):
     if not isinstance(value,dict):raise VaultError('일기 형식을 확인하세요.')
     title=value.get('title','');body=value.get('body','');day=value.get('date','')
@@ -85,6 +109,8 @@ class Vault:
     def initialized(self):return self.db.execute('SELECT 1 FROM vault').fetchone() is not None
     @property
     def unlocked(self):return self.key is not None
+    @property
+    def needs_migration(self):return self.initialized and not app_bound_header(self.header())
     def header(self):
         row=self.db.execute('SELECT header FROM vault WHERE id=1').fetchone()
         if row is None:raise VaultError('먼저 암호를 설정하세요.')

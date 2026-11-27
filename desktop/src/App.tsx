@@ -13,6 +13,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import { flushSync } from "react-dom";
 import {
   Home,
   CalendarDays,
@@ -51,14 +52,17 @@ import { listen } from "@tauri-apps/api/event";
 import { AttendancePage } from "./Attendance";
 import { StudyPage, FocusDock } from "./Study";
 import { SyncNotice } from "./SyncNotice";
-import { animateCalendarMonth, animatePage, motionReduced, saveMotionPreference } from "./motion";
+import { animateCalendarMonth, motionReduced, saveMotionPreference } from "./motion";
+import { PageHeading } from "./PageHeading";
+import { ChangedNumber } from "./ChangedNumber";
+import { invalidateMenuReads, peekMenuRead, readMenu } from "./menuReads";
 import { playErrorCue, stopErrorCue } from "./errorCue";
 import { applyThemePalette } from "./themePalette";
 import { defaultTheme } from "./ThemePicker";
 import { defaultSyncTrack } from "./syncCue";
 import { DeadlinePage, CourseOverviewPage } from "./Overview";
 import { GradesPage } from "./Grades";
-import { ProtectedSection, SecurityMonitor, UnlockView } from "./Security";
+import { PrivateDiaryMigration, ProtectedSection, SecurityMonitor, UnlockView } from "./Security";
 import { UpdateDialog } from "./UpdateDialog";
 import { WindowControls } from "./WindowControls";
 import { dragWindow } from "./windowDrag";
@@ -79,9 +83,11 @@ import {
 } from "./dates";
 import type { Snapshot, EventItem, Page, SecurityState } from "./types";
 import { ChecklistPage, TimetablePage, SettingsPage } from "./Workspaces";
+import type { TimetableViewState } from "./Timetable";
 import { MainSemesterControl } from "./SemesterSettings";
 import { DeveloperConsole } from "./DeveloperConsole";
-import { Onboarding } from "./Profile";
+import { HomeProfilePhoto, Onboarding } from "./Profile";
+import { formatFullDate } from "./dateEra";
 import { finishStartup } from "./startup";
 const CachedDiary = lazy(() => import("./Diary").then(({ DiaryPage }) => ({ default: memo(DiaryPage) })));
 const CachedChecklist = memo(ChecklistPage);
@@ -90,6 +96,7 @@ type ContextValue = {
   mutate: (
     method: string,
     params?: Record<string, unknown>,
+    options?: { inlineError?: boolean },
   ) => Promise<unknown>;
   notify: (message: string, error?: boolean) => void;
   soundError: () => void;
@@ -129,9 +136,9 @@ export function Modal({
     const dialog = ref.current;
     dialog?.showModal();
     return () => {
+      dialog?.close();
       closing.current?.cancel();
       closing.current = null;
-      dialog?.close();
     };
   }, []);
   const requestClose = () => {
@@ -152,10 +159,13 @@ export function Modal({
     closing.current = animation;
     dialog.dataset.motionClosing = "";
     void animation.finished.then(() => {
-      closing.current = null;
-      delete dialog.dataset.motionClosing;
-      latestClose.current();
-      animation.cancel();
+      // Keep the dialog faded out until React commits its removal.
+      flushSync(() => latestClose.current());
+      if (ref.current === dialog) {
+        closing.current = null;
+        delete dialog.dataset.motionClosing;
+        animation.cancel();
+      }
     }, () => {});
   };
   return (
@@ -297,7 +307,6 @@ const navigation: [Page, string, typeof Home][] = [
   ["deadlines", "마감 보드", ListTodo],
   ["courses", "과목별 현황", ChartNoAxesColumn],
 ];
-const pageOrder = [...navigation.map(([id]) => id), "settings"];
 const pageLabel = (id: Page, title: string) =>
   id === "grades" && currentLanguage() !== "ko" ? "GPA" : t(title);
 export function App() {
@@ -343,7 +352,9 @@ export function App() {
   const exitLock = useRef(false);
   const [openedChecklist, setOpenedChecklist] = useState(false);
   const [openedDiary, setOpenedDiary] = useState(false);
+  const [diaryMigrationDismissed, setDiaryMigrationDismissed] = useState(false);
   const [stateGeneration, setStateGeneration] = useState(0);
+  const timetableView = useRef<TimetableViewState | null>(null);
   const draft = useRef<(() => Promise<void>) | null>(null),
     leave = useRef<(() => Promise<void>) | null>(null),
     searchRef = useRef<HTMLInputElement>(null),
@@ -403,18 +414,26 @@ export function App() {
     const request = ++refreshRequest.current;
     const snapshot = await rpc<Snapshot>("bootstrap");
     if (request !== refreshRequest.current) return;
+    if (snapshot.security?.locked) invalidateMenuReads();
     setData(snapshot);
     setError("");
   }, []);
   const mutate = useCallback(
-    async (method: string, params: Record<string, unknown> = {}) => {
+    async (method: string, params: Record<string, unknown> = {}, options?: { inlineError?: boolean }) => {
       let result;
       try {
         result = await rpc(method, params);
       } catch (e) {
-        notify((e as Error).message, true);
+        if (options?.inlineError) soundError();
+        else notify((e as Error).message, true);
         throw e;
       }
+      if (method === "data.reset" || method === "backup.restore" || method === "security.setup" ||
+          method === "security.configure") invalidateMenuReads();
+      else if (method.startsWith("semester.") || method.startsWith("timetable.term."))
+        invalidateMenuReads("grades.read", "semester.roster");
+      else if (method === "holiday.save" || method === "special.save") invalidateMenuReads("calendar.year");
+      if (method === "data.reset" || method === "backup.restore") timetableView.current = null;
       try {
         await refresh();
       } catch {
@@ -422,7 +441,7 @@ export function App() {
       }
       return result;
     },
-    [refresh, notify],
+    [refresh, notify, soundError],
   );
   useEffect(() => {
     let alive = true;
@@ -440,11 +459,13 @@ export function App() {
       .catch(() => {});
     const unsubscribe = subscribe((message) => {
       if (message.event === "reminder" && isTauri() && !privacyLocked.current) {
-        void invoke("reminder_show", { payload: { ...message.payload as object, language: currentLanguage() } }).catch(
+        void invoke("reminder_show", { payload: { ...message.payload as object,
+          language: currentLanguage(), reduce_motion: document.documentElement.hasAttribute("data-reduce-motion") } }).catch(
           (error) => notify(String(error), true),
         );
       }
       if (message.event === "data-changed") {
+        invalidateMenuReads();
         void refresh().catch((e) => notify(e.message, true));
       }
       if (message.event === "auth-required" && !privacyLocked.current)
@@ -580,18 +601,14 @@ export function App() {
     if (data) setLanguage(language ?? "ko");
   }, [Boolean(data), language]);
   const pageReady = Boolean(data && !data.security?.locked);
-  const mainView = useRef<HTMLElement>(null);
   const sidebarNav = useRef<HTMLElement>(null);
-  const previousPage = useRef(page);
+  const main = useRef<HTMLElement>(null);
   useLayoutEffect(() => {
     if (reduceMotion !== undefined) saveMotionPreference(reduceMotion);
   }, [reduceMotion]);
   useLayoutEffect(() => {
-    const previous = previousPage.current;
-    previousPage.current = page;
-    if (!pageReady || !mainView.current) return;
-    return animatePage(mainView.current, Math.sign(pageOrder.indexOf(page) - pageOrder.indexOf(previous)));
-  }, [page, pageReady, reduceMotion]);
+    main.current?.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [page]);
   const attendanceVisible = data?.preferences.attendance_visible === true;
   useLayoutEffect(() => {
     const menu = sidebarNav.current;
@@ -646,7 +663,9 @@ export function App() {
     try {
       await finishEditing();
       if (request !== navigationRequest.current) return;
-      if (data?.security?.configured && (page === "grades" || page === "timetable") && page !== next) {
+      if ((page === "grades" || page === "timetable") && page !== next &&
+          data?.security?.policy[page] && data.security.unlocked.includes(page)) {
+        if (page === "grades") invalidateMenuReads("grades.read");
         await rpc("security.lock", { scope: page });
         await refresh();
       }
@@ -671,6 +690,7 @@ export function App() {
       ++navigationRequest.current;
       const security = await rpc<SecurityState>("security.lock", { scope: "main" });
       if (!security.locked) throw new Error("비밀번호를 먼저 설정하세요.");
+      invalidateMenuReads();
       ++refreshRequest.current;
       privacyLocked.current = true;
       setData(previous => previous ? { ...previous, security } : previous);
@@ -759,6 +779,8 @@ export function App() {
             resetView: () => {
               draft.current = null;
               leave.current = null;
+              timetableView.current = null;
+              setDiaryMigrationDismissed(false);
               setPage("home");
               setSelected(null);
               setAddDate(null);
@@ -973,6 +995,7 @@ export function App() {
                 void (async () => {
                   if (loggedIn) {
                     await rpc("session.logout");
+                    invalidateMenuReads();
                     if (isTauri()) await invoke("auth_logout");
                   } else await openLogin();
                 })().catch((error) => notify(String(error), true))
@@ -1008,7 +1031,7 @@ export function App() {
             <WindowControls />
           </div>
         </header>
-        <main ref={mainView}>
+        <main ref={main}>
           {!data ? (
             <div className="loading-state">
               {error ? (
@@ -1032,32 +1055,16 @@ export function App() {
             <Context.Provider key={stateGeneration} value={context}>
               {(!data.preferences.onboarding_complete ||
                 !data.preferences.nickname) && <Onboarding />}
+              {data.privateDiaryMigration && data.preferences.onboarding_complete && !diaryMigrationDismissed &&
+                <PrivateDiaryMigration onClose={() => setDiaryMigrationDismissed(true)} />}
               {page === "home" && (
                 <>
-                  <section className="welcome">
-                    <div>
-                      <p className="eyebrow">
-                        {new Intl.DateTimeFormat(locale(), {
-                          timeZone: "Asia/Seoul",
-                          month: "long",
-                          day: "numeric",
-                          weekday: "long",
-                        }).format(new Date())}
-                      </p>
-                      <h1 className="home-greeting">
-                        {(data.preferences.greeting === "{닉네임}님, 오셨군요!" ? t(data.preferences.greeting) : data.preferences.greeting).replaceAll(
-                          "{닉네임}",
-                          data.preferences.nickname || t("나"),
-                        )}
-                      </h1>
-                    </div>
-                    <div className="welcome-actions">
-                      <MainSemesterControl />
-                      <div className="welcome-mark" aria-hidden="true">
-                        <img src="/assets/icons/calix.svg" alt="" />
-                      </div>
-                    </div>
-                  </section>
+                  <PageHeading title={(data.preferences.greeting === "{닉네임}님, 오셨군요!"
+                    ? t(data.preferences.greeting) : data.preferences.greeting).replaceAll("{닉네임}", data.preferences.nickname || t("나"))}>
+                    <time className="home-heading-date" dateTime={today}>{formatFullDate(today, data.preferences.date_era)}</time>
+                    <MainSemesterControl />
+                    <HomeProfilePhoto />
+                  </PageHeading>
                   <section className="stats">
                     <button
                       className="stat glass"
@@ -1066,7 +1073,7 @@ export function App() {
                       <span>{t("오늘까지 할 일")}{" "}<ArrowUpRight size={18} />
                       </span>
                       <strong>
-                        {todayEvents.length}
+                        <ChangedNumber value={todayEvents.length} />
                         <small>{t("건")}</small>
                       </strong>
                       <div className="stat-track">
@@ -1082,7 +1089,7 @@ export function App() {
                       <span>{t("남은 일정")}{" "}<ArrowUpRight size={18} />
                       </span>
                       <strong>
-                        {pending.length}
+                        <ChangedNumber value={pending.length} />
                         <small>{t("개")}</small>
                       </strong>
                       <div className="mini-tags">
@@ -1163,7 +1170,9 @@ export function App() {
               {openedChecklist && <div hidden={page !== "checklist"}>
                 <CachedChecklist />
               </div>}
-              {page === "timetable" && <ProtectedSection scope="timetable"><TimetablePage onOpenHome={() => void navigate("home")} /></ProtectedSection>}
+              {page === "timetable" && <ProtectedSection scope="timetable">
+                <TimetablePage key={data.mainTerm} viewState={timetableView} onOpenHome={() => void navigate("home")} />
+              </ProtectedSection>}
               {page === "grades" && <ProtectedSection scope="grades"><GradesPage /></ProtectedSection>}
               {page === "attendance" && <AttendancePage />}
               {page === "study" && <StudyPage />}
@@ -1252,14 +1261,19 @@ export function App() {
             <img src="/assets/profile-avatar.png" alt="" />
             <span>Lutté Laurent</span>
           </div>
-          <div className="testing-credit">
-            <span className="eyebrow">COMMUNITY CONTRIBUTORS</span>
-            <p>
-              With testing and recommendations from members of
-              <br />
-              <strong>Global Association Club in BUFS</strong>
-            </p>
-          </div>
+          <section className="credit-thanks" aria-labelledby="credit-thanks-title">
+            <h3 id="credit-thanks-title" lang="en">Special Thanks</h3>
+            <dl>
+              <div>
+                <dt lang="en">Aurora QA</dt>
+                <dd lang="en">YELIN CHAE</dd>
+              </div>
+              <div>
+                <dt lang="ja">日本語監修</dt>
+                <dd>Runo</dd>
+              </div>
+            </dl>
+          </section>
           <div className="credit-links">
             <a
               href="https://github.com/luttechan/Calix"
@@ -1333,13 +1347,9 @@ function EventListPage({
   ];
   return (
     <>
-      <div className="page-heading">
-        <div>
-          <p className="eyebrow">{t("수업 일정")}</p>
-          <h1>{kind === "assignment" ? t("과제") : t("영상")}</h1>
-        </div>
-        <span className="count-pill">{filtered.length}{t("개")}</span>
-      </div>
+      <PageHeading title={kind === "assignment" ? t("과제") : t("영상")}>
+        <span className="count-pill"><ChangedNumber value={filtered.length} />{t("개")}</span>
+      </PageHeading>
       <div className="event-filter-bar">
         <div className="event-view-toolbar">
           <div className="segmented" aria-label={t("일정 보기")}>
@@ -1447,18 +1457,22 @@ function CalendarPage({
     setMonth(next);
     setDay(`${next}-${String(nextDay).padStart(2, "0")}`);
   };
-  const [dates, setDates] = useState({
+  const visibleYear = Number(year);
+  const currentYear = Number(dateKey().slice(0, 4));
+  const onSnapshot = visibleYear === currentYear || visibleYear === currentYear + 1;
+  const bootDates = {
     holidays: data.holidays,
     specialDates: data.specialDates,
-  });
+  };
+  const [historical, setHistorical] = useState<{
+    year: number; dates: typeof bootDates;
+  }>();
   useEffect(() => {
+    if (onSnapshot) return;
     let active = true;
-    rpc<{
-      holidays: Record<string, string>;
-      specialDates: Record<string, string>;
-    }>("calendar.year", { year: Number(year) })
+    readMenu<typeof bootDates>("calendar.year", { year: visibleYear })
       .then((value) => {
-        if (active) setDates(value);
+        if (active) setHistorical({ year: visibleYear, dates: value });
       })
       .catch((e) => {
         if (active) notify(e.message, true);
@@ -1466,7 +1480,10 @@ function CalendarPage({
     return () => {
       active = false;
     };
-  }, [year, data.holidays, data.specialDates]);
+  }, [visibleYear, onSnapshot, data.holidays, data.specialDates, notify]);
+  const dates = onSnapshot ? bootDates :
+    peekMenuRead<typeof bootDates>("calendar.year", { year: visibleYear }) ??
+    (historical?.year === visibleYear ? historical.dates : bootDates);
   const buckets = useMemo(() => {
     const result = new Map<string, EventItem[]>();
     for (const e of events) {
@@ -1480,8 +1497,7 @@ function CalendarPage({
   }, [events, kind]);
   return (
     <>
-      <div className="page-heading calendar-heading">
-        <h1>{t("달력")}</h1>
+      <PageHeading title={t("달력")}>
         <div className="toolbar calendar-navigation">
           <button
             className="icon-button"
@@ -1516,7 +1532,7 @@ function CalendarPage({
             }}
           >{t("오늘")}{" "}</button>
         </div>
-      </div>
+      </PageHeading>
       <div className="calendar-toolbar">
         <div className="segmented">
           {[

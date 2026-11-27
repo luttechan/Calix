@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ArrowRight, Bell, BellRing, ClipboardList, Play, Timer, Volume2, X } from "lucide-react";
@@ -53,15 +53,17 @@ function countdown(due: number, now: number) {
 
 export function ReminderCard({
   payload,
+  shown,
   onClose,
   onOpen,
 }: {
   payload: ReminderPayload;
+  shown: boolean;
   onClose: () => void;
   onOpen: (key: string) => void;
 }) {
   useLanguage();
-  const { blocked, play } = useSound(payload.sound, payload.volume, payload);
+  const { blocked, play } = useSound(shown ? payload.sound : "", payload.volume, payload);
   const [now, setNow] = useState(Date.now);
   useEffect(() => {
     if (!payload.urgent) return;
@@ -81,7 +83,7 @@ export function ReminderCard({
   const day = new Intl.DateTimeFormat(locale(), { timeZone: "Asia/Seoul", month: "short", day: "numeric" });
   const count = new Intl.NumberFormat(locale()).format(payload.total);
   return (
-    <article className={`reminder-card ${payload.urgent ? "urgent" : ""}`}>
+    <article className={`reminder-card ${payload.urgent ? "urgent" : ""}`} data-shown={shown || undefined}>
       <header className="reminder-brand" onMouseDown={dragWindow}>
         <span>
           <img src="/assets/icons/calix.svg" alt="" />
@@ -150,7 +152,8 @@ export function ReminderWindow() {
   const [state, setState] = useState<{
     revision: number;
     payload: ReminderPayload | null;
-  }>({ revision: -1, payload: null });
+    shown: boolean;
+  }>({ revision: -1, payload: null, shown: false });
   const latest = useRef(-1);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -164,7 +167,7 @@ export function ReminderWindow() {
         setState((current) => {
           const next = acceptReminder(current, value);
           latest.current = next.revision;
-          return next;
+          return { ...next, shown: Boolean(next.payload && current.shown) };
         });
     };
     void (async () => {
@@ -186,13 +189,26 @@ export function ReminderWindow() {
       stop?.();
     };
   }, []);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (state.payload) {
       setLanguage(state.payload.language);
       document.documentElement.dataset.theme = state.payload.theme;
       document.documentElement.dataset.glass = String(state.payload.glass);
+      if (state.payload.reduce_motion !== undefined) {
+        document.documentElement.toggleAttribute("data-reduce-motion", state.payload.reduce_motion);
+      }
     }
   }, [state.payload]);
+  useEffect(() => {
+    if (!state.payload) return;
+    const revision = state.revision;
+    let active = true;
+    void invoke<boolean>("reminder_ready", { revision }).then(shown => {
+      if (active && shown) setState(current =>
+        current.revision === revision && !current.shown ? { ...current, shown } : current);
+    }).catch(e => { if (active) setError(String(e)); });
+    return () => { active = false; };
+  }, [state.payload, state.revision]);
   const close = () =>
     void invoke("reminder_close", { revision: latest.current }).catch((e) =>
       setError(String(e)),
@@ -207,6 +223,7 @@ export function ReminderWindow() {
   return state.payload ? (
     <ReminderCard
       payload={state.payload}
+      shown={state.shown}
       onClose={close}
       onOpen={(key) =>
         void invoke("reminder_open_event", {

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Modal, useCalix } from "./App";
 import { rpc } from "./bridge";
 import { paletteTokens, paletteValues, validPaletteColor } from "./themePalette";
+import { ColorField } from "./ColorField";
 import type { PaletteColor, ThemePalette } from "./types";
 
 export function DeveloperLab() {
@@ -102,7 +103,7 @@ export function DeveloperLab() {
                 const update = (value: string) => setEditor({ ...editor, colors: { ...editor.colors, [key]: value } });
                 return <div className="dev-palette-field" key={key}>
                   <label htmlFor={`palette-${key}`}>{label}</label>
-                  <input type="color" id={`palette-${key}`} value={validPaletteColor(color) ? color.toLowerCase() : editor.initial[key]} onChange={(event) => update(event.target.value)} />
+                  <ColorField label={label} id={`palette-${key}`} value={validPaletteColor(color) ? color : editor.initial[key]} onChange={update} />
                   <input aria-label={`${label} hex`} value={color} spellCheck={false} required maxLength={7} pattern="#[0-9a-fA-F]{6}" onChange={(event) => update(event.target.value)} />
                 </div>;
               })}

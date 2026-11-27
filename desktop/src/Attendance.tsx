@@ -1,9 +1,13 @@
 import { t, useLanguage } from "./i18n";
+import { PageHeading } from "./PageHeading";
+import { formatFullDate } from "./dateEra";
 import { useEffect, useMemo, useState } from "react";
 import { RefreshCw, Search, CalendarDays } from "lucide-react";
 import { rpc, subscribe } from "./bridge";
 import { useCalix } from "./App";
 import { dueText } from "./dates";
+import { ChangedNumber } from "./ChangedNumber";
+import { peekMenuRead, readMenu } from "./menuReads";
 
 export type AttendanceRow = {
   key: string;
@@ -29,11 +33,12 @@ const labels: Record<string, string> = {
   none: "미확인",
   unknown: "미확인",
 };
+const summaryStatuses = ["attendance", "excused", "late", "absent", "none"] as const;
 export function AttendancePage() {
   useLanguage();
   const { data, notify, soundError } = useCalix();
-  const [rows, setRows] = useState<AttendanceRow[]>([]),
-    [loading, setLoading] = useState(true),
+  const [rows, setRows] = useState<AttendanceRow[] | null>(() => peekMenuRead("attendance.read") ?? null),
+    [loading, setLoading] = useState(() => peekMenuRead("attendance.read") === undefined),
     [error, setError] = useState("");
   const [course, setCourse] = useState(""),
     [view, setView] = useState("date"),
@@ -44,8 +49,8 @@ export function AttendancePage() {
       sequence = 0;
     const load = () => {
       const id = ++sequence;
-      setLoading(true);
-      void rpc<AttendanceRow[]>("attendance.read")
+      setLoading(peekMenuRead("attendance.read") === undefined);
+      void readMenu<AttendanceRow[]>("attendance.read")
         .then((r) => {
           if (alive && sequence === id) {
             setRows(r);
@@ -72,11 +77,12 @@ export function AttendancePage() {
     };
   }, []);
   const selected = useMemo(() => {
+    const entries = rows ?? [];
     const coursesWithItems = new Set(
-      rows.filter((row) => row.source === "item").map((row) => row.course_id),
+      entries.filter((row) => row.source === "item").map((row) => row.course_id),
     );
     const search = query.trim().toLowerCase();
-    return rows
+    return entries
         .filter(
           (r) =>
             (!course || String(r.course_id) === course) &&
@@ -100,17 +106,22 @@ export function AttendancePage() {
                   (a.lesson ?? 999) - (b.lesson ?? 999)),
         );
   }, [rows, course, view, source, query]);
+  const totals = useMemo(() => {
+    const counts = { attendance: 0, excused: 0, late: 0, absent: 0, none: 0 };
+    for (const { status } of selected) {
+      if (status === "unknown") counts.none++;
+      else if (Object.hasOwn(counts, status)) counts[status as keyof typeof counts]++;
+    }
+    return counts;
+  }, [selected]);
   return (
     <section className="learning-page">
-      <div className="page-heading">
-        <div>
-          <h1>{t("출결 현황")}</h1>
-        </div>
+      <PageHeading title={t("출결 현황")}>
         <button
           onClick={() => void rpc("sync").catch((e) => notify(String(e), true))}
         >
           <RefreshCw size={16} />{t("동기화")}{" "}</button>
-      </div>
+      </PageHeading>
       <div className="glass learning-toolbar">
         <label className="search">
           <Search size={16} />
@@ -153,22 +164,14 @@ export function AttendancePage() {
         </select>
       </div>
       {error && <p role="alert">{error}</p>}
-      {rows.some((r) => r.stale) && (
+      {rows?.some((r) => r.stale) && (
         <p className="attendance-warning">{t("일부 출결 갱신 필요")}{" "}</p>
       )}
       <div className="attendance-summary">
-        {["attendance", "excused", "late", "absent", "none"].map((s) => (
+        {summaryStatuses.map((s) => (
           <div className={`glass attendance-total ${s}`} key={s}>
             <span>{t(labels[s])}</span>
-            <strong>
-              {
-                selected.filter((r) =>
-                  s === "none"
-                      ? ["none", "unknown"].includes(r.status)
-                      : r.status === s,
-                ).length
-              }
-            </strong>
+            <strong><ChangedNumber value={rows === null && loading ? null : totals[s]} /></strong>
           </div>
         ))}
       </div>
@@ -188,10 +191,10 @@ export function AttendancePage() {
               <tr key={r.key}>
                 <td>
                   {r.date ? (
-                    r.date.slice(0, 10)
+                    formatFullDate(r.date, data.preferences.date_era)
                   ) : r.start_at ? (
                     <>
-                      {r.start_at.slice(0, 10)}
+                      {formatFullDate(r.start_at, data.preferences.date_era)}
                       <small>{t("수강 시작")}</small>
                     </>
                   ) : (

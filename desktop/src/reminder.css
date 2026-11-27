@@ -1,8 +1,8 @@
-body.reminder-surface {
+html:has(body.reminder-surface), body.reminder-surface {
   margin: 0;
   min-width: 0;
   overflow: hidden;
-  background: var(--surface);
+  background: transparent;
 }
 .reminder-surface #root { height: 100dvh; }
 .reminder-card {
@@ -14,7 +14,17 @@ body.reminder-surface {
   gap: 10px;
   border: 1px solid var(--line);
   border-top: 3px solid var(--reminder-accent);
+  border-radius: 16px;
   background: var(--surface);
+}
+.reminder-card:not([data-shown]) { visibility: hidden; }
+.reminder-card[data-shown] { animation: reminder-in 300ms var(--motion-ease) both; }
+@keyframes reminder-in {
+  from { opacity: 0; transform: translateY(14px) scale(.98); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reminder-card[data-shown] { animation: none; }
 }
 .reminder-card.urgent { --reminder-accent: light-dark(#a33c51, #ff9db0); }
 .reminder-brand, .reminder-intro, .reminder-card > footer {

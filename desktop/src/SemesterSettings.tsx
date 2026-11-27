@@ -3,7 +3,7 @@ import { useState } from "react";
 import { CalendarRange, ChevronDown, Plus, TriangleAlert } from "lucide-react";
 import { Modal, useCalix } from "./App";
 import { NumberField } from "./NumberField";
-import { rpc } from "./bridge";
+import { readMenu } from "./menuReads";
 import type { Snapshot } from "./types";
 import "./semester-settings.css";
 
@@ -16,14 +16,17 @@ export function MainSemesterControl() {
   const [dialog, setDialog] = useState<"change" | "add" | "setup" | null>(null);
   const [next, setNext] = useState("");
   const [saving, setSaving] = useState(false);
+  const term = data.timetableConfigured ? semesterName(data.mainTerm) : t("학기 설정");
 
   return <>
-    <button className="home-semester-button" type="button" aria-haspopup="dialog" onClick={() => {
+    <button className="home-semester-button" type="button" aria-haspopup="dialog"
+      aria-label={data.timetableConfigured ? `${t("메인 학기")} ${term}` : term}
+      title={t("메인 학기")} onClick={() => {
       setNext(data.mainTerm);
       setDialog(data.timetableConfigured ? "change" : "setup");
     }}>
-      <CalendarRange size={19} aria-hidden="true" />
-      <span><small>{t("메인 학기")}</small><strong>{data.timetableConfigured ? data.mainTerm : t("학기 설정")}</strong></span>
+      <CalendarRange size={17} aria-hidden="true" />
+      <span>{term}</span>
       <ChevronDown size={15} aria-hidden="true" />
     </button>
     {dialog === "change" && (
@@ -74,7 +77,7 @@ export function SemesterSettings() {
   const openMove = async () => {
     setLoading(true);
     try {
-      setRosters(await rpc<Rosters>("semester.roster"));
+      setRosters(await readMenu<Rosters>("semester.roster"));
     } catch (error) {
       notify((error as Error).message, true);
     } finally {

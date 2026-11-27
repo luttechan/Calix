@@ -1,7 +1,8 @@
 import { t, useLanguage } from "./i18n";
 import { useEffect, useState } from "react";
 import { Layers, RefreshCw } from "lucide-react";
-import { rpc } from "./bridge";
+import { invalidateMenuReads, peekMenuRead, readMenu } from "./menuReads";
+import { ChangedNumber } from "./ChangedNumber";
 import "./anki-review.css";
 
 const columns = [
@@ -17,20 +18,19 @@ const number = new Intl.NumberFormat("ko-KR");
 export function AnkiReview() {
   useLanguage();
   const [attempt, setAttempt] = useState(0);
-  const [review, setReview] = useState<Review | null>(null);
+  const [review, setReview] = useState<Review | null>(() => peekMenuRead("anki.read") ?? null);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !review);
 
   useEffect(() => {
     let active = true;
     const timer = window.setTimeout(() => {
-      void rpc<Review>("anki.read")
+      void readMenu<Review>("anki.read")
         .then((value) => {
           if (active) setReview(value);
         })
         .catch((reason: unknown) => {
           if (!active) return;
-          setReview(null);
           setError(reason instanceof Error ? reason.message : t("Anki 데이터를 가져오지 못했습니다."));
         })
         .finally(() => {
@@ -48,6 +48,7 @@ export function AnkiReview() {
       <div className="anki-review-header">
         <h2 id="anki-review-heading"><Layers size={18} aria-hidden="true" /> Anki</h2>
         <button type="button" disabled={loading} onClick={() => {
+          invalidateMenuReads("anki.read");
           setLoading(true);
           setError("");
           setAttempt((value) => value + 1);
@@ -60,7 +61,7 @@ export function AnkiReview() {
         <>
           <dl className="anki-review-totals">
             {columns.map(([key, label]) => (
-              <div key={key}><dt>{t(label)}</dt><dd>{number.format(review.totals[key])}</dd></div>
+              <div key={key}><dt>{t(label)}</dt><dd><ChangedNumber value={number.format(review.totals[key])} /></dd></div>
             ))}
           </dl>
           {review.decks.length ? (

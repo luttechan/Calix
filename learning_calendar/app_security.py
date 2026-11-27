@@ -160,7 +160,7 @@ class AppSecurity:
         self.activity = time.monotonic()
 
     def unlock(self, password, scope="main", replacement=None, mode=None):
-        if scope not in ("main", "timetable", "grades"):
+        if scope not in ("main", "timetable", "grades", "diary"):
             raise ValueError("잠금 범위를 확인하세요.")
         key = self.authenticate(password)
         try:
@@ -215,7 +215,7 @@ class AppSecurity:
             if scope == "main":
                 self.root_open = False
                 self.scopes.clear()
-            elif scope in ("timetable", "grades"):
+            elif scope in ("timetable", "grades", "diary"):
                 self.scopes.discard(scope)
             else:
                 raise ValueError("잠금 범위를 확인하세요.")

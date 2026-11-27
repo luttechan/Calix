@@ -80,6 +80,7 @@ export type ReminderSettings = {
 };
 export type ReminderPayload = {
   language?: import("./i18n").Language;
+  reduce_motion?: boolean;
   due_today?: boolean;
   title: string;
   message: string;
@@ -111,6 +112,7 @@ export type Preferences = {
   reduce_motion: boolean;
   font_mode: string;
   language?: import("./i18n").Language;
+  date_era?: import("./dateEra").DateEra;
   catholic: boolean;
   birthday: boolean;
   avatar: string;
@@ -159,6 +161,7 @@ export type Snapshot = {
   holidays: Record<string, string>;
   specialDates: Record<string, string>;
   journals: Summary[];
+  privateDiaryMigration?: boolean;
 };
 export type Page =
   | "deadlines"

@@ -180,10 +180,7 @@
 .overview-items > .plan-warning-item {
   justify-content: flex-start;
 }
-.deadline-page .page-heading {
-  margin-bottom: 18px;
-}
-.deadline-page .page-heading button[aria-expanded="true"] svg {
+.page-heading button[aria-controls="deadline-planning"][aria-expanded="true"] svg {
   transform: rotate(90deg);
 }
 .deadline-list {
@@ -264,7 +261,6 @@
   position: sticky;
   top: 0;
   z-index: 4;
-  background: var(--surface);
 }
 .timetable-panel.with-online {
   max-height: max(300px, calc(100dvh - 290px));

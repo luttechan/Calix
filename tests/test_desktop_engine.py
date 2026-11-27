@@ -91,14 +91,14 @@ def test_beta_channel_ignores_unpublished_releases_and_compares_sequences():
     beta1 = release("v1.7.6-beta.1", 21)
     beta2 = release("v1.7.6-beta.2", 22)
     beta10 = release("v1.7.6-beta.10", 23)
-    draft = release("v1.7.8-beta.1", 23, draft=True)
+    draft = release("v1.7.9-beta.1", 23, draft=True)
     assert select_release(stable).tag == stable["tag_name"]
     with pytest.raises(ValueError, match="채널"):
         select_release(beta1)
     assert select_release([draft, beta10, beta1, stable, beta2], allow_beta=True).tag == beta10["tag_name"]
     final = release("v1.7.6", 25)
     assert select_release([beta10, final], allow_beta=True).tag == final["tag_name"]
-    later_stable = release("v1.7.8", 20)
+    later_stable = release("v1.7.9", 20)
     assert select_release([beta10, later_stable], allow_beta=True).tag == later_stable["tag_name"]
 
 
@@ -126,7 +126,7 @@ def test_bootstrap_json_never_loads_qt_widgets_or_private_diary(engine):
     data = engine.dispatch("bootstrap", {})
     json.dumps(data, ensure_ascii=False)
     assert (
-        data["version"] == "1.7.8"
+        data["version"] == "1.8.0"
         and len(data["events"]) == 2
         and not data["tasks"]
         and engine.vault is None
@@ -198,7 +198,11 @@ def test_diary_rich_text_and_secret_storage_are_preserved(engine):
     )
     key = engine.dispatch("diary.save", {"value": value})
     assert engine.dispatch("diary.read", {"id": key})["html"] == value["html"]
-    engine.dispatch("vault.unlock", {"password": "a-strong-test-password"})
+    password = "a-strong-test-password"
+    with pytest.raises(ValueError):
+        engine.dispatch("vault.unlock", {"password": password})
+    engine.dispatch("security.setup", {"password": password, "mode": "password", "policy": engine.security.policy})
+    engine.dispatch("vault.unlock", {"password": password})
     secret = engine.dispatch("diary.save", {"secret": True, "value": value})
     assert (
         engine.dispatch("diary.read", {"secret": True, "id": secret})["title"] == "일기"
@@ -207,6 +211,58 @@ def test_diary_rich_text_and_secret_storage_are_preserved(engine):
     with pytest.raises(ValueError):
         engine.dispatch("diary.read", {"secret": True, "id": secret})
     assert "일기".encode() not in (engine.folder / "private-diary.db").read_bytes()
+
+
+def test_private_diary_migration_and_backup_use_current_app_password(engine, tmp_path):
+    from learning_calendar.diary_crypto import Vault, new_material, wipe
+
+    previous, current, replacement = "original-diary-password", "app-password", "updated-app-password"
+    legacy = Vault(engine.folder / "private-diary.db")
+    key, header = new_material(previous)
+    legacy.initialize(key, header)
+    wipe(key)
+    value = dict(date="2026-11-27", title="Legacy title", body="Legacy body", html="<p>Legacy body</p>")
+    item = legacy.save(value)
+    legacy.close()
+    assert engine.bootstrap()["privateDiaryMigration"]
+    policy = engine.security.policy
+    engine.dispatch("security.setup", {"password": current, "mode": "password", "policy": policy})
+    with pytest.raises(ValueError):
+        engine.dispatch("vault.migrate", {"previous": "wrong", "password": current})
+    assert engine.bootstrap()["privateDiaryMigration"]
+    assert engine.vault.header() == header
+    engine.dispatch("vault.migrate", {"previous": previous, "password": current})
+    assert not engine.bootstrap()["privateDiaryMigration"]
+    query = {"secret": True, "id": item}
+    with pytest.raises(ValueError):
+        engine.dispatch("diary.read", query)
+    engine.dispatch("vault.unlock", {"password": current})
+    assert engine.dispatch("diary.read", query) == value
+    engine.dispatch("security.configure", {"password": current, "replacement": replacement, "policy": policy})
+    with pytest.raises(ValueError):
+        engine.dispatch("vault.unlock", {"password": current})
+    engine.dispatch("vault.unlock", {"password": replacement})
+    assert engine.dispatch("diary.read", query) == value
+    backup = tmp_path / "secret-diary.calix"
+    engine.dispatch("backup.export", {"path": str(backup)})
+    other = EngineAPI(tmp_path / "another-profile")
+    try:
+        other.dispatch("security.setup", {"password": current, "mode": "password", "policy": policy})
+        other.dispatch("backup.restore", {"path": str(backup), "password": replacement})
+        other.dispatch("vault.unlock", {"password": current})
+        assert other.dispatch("diary.read", query) == value
+    finally:
+        other.close()
+
+
+def test_date_era_preference_is_saved_and_validated(engine):
+    assert engine.bootstrap()["preferences"]["date_era"] == "gregorian"
+    for era in ("dangi", "buddhist", "japanese", "gregorian"):
+        assert engine.dispatch("preferences.save", {"date_era": era})
+        assert read_settings(engine.settings_path)["date_era"] == era
+        assert engine.bootstrap()["preferences"]["date_era"] == era
+    with pytest.raises(ValueError):
+        engine.dispatch("preferences.save", {"date_era": "invalid"})
 
 
 def test_backend_rejects_unknown_methods_and_store_path_escape(engine):
@@ -275,7 +331,7 @@ def test_stdio_round_trip_and_clean_exit_use_temporary_data(tmp_path):
     )
     assert result.returncode == 0, result.stderr
     messages = [json.loads(line) for line in result.stdout.splitlines()]
-    assert next(r for r in messages if r.get("id") == 1)["result"]["version"] == "1.7.8"
+    assert next(r for r in messages if r.get("id") == 1)["result"]["version"] == "1.8.0"
 
 
 def test_quit_exits_cleanly_while_host_keeps_stdin_open(tmp_path):

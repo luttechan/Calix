@@ -176,6 +176,22 @@ fn show(app: &tauri::AppHandle) {
     }
 }
 
+fn position_main_window(window: &tauri::WebviewWindow) -> tauri::Result<()> {
+    let monitor = window.current_monitor()?.or(window.primary_monitor()?);
+    let Some(monitor) = monitor else { return window.center(); };
+    let area = monitor.work_area();
+    let original = window.outer_size()?;
+    let width = original.width.min(area.size.width);
+    let height = original.height.min(area.size.height);
+    if width != original.width || height != original.height {
+        window.set_size(tauri::PhysicalSize::new(width, height))?;
+    }
+    window.set_position(tauri::PhysicalPosition::new(
+        area.position.x + ((area.size.width - width) / 2) as i32,
+        area.position.y + ((area.size.height - height) / 2) as i32,
+    ))
+}
+
 #[cfg(windows)]
 fn register_taskbar_identity(identifier: &str) {
     #[link(name = "shell32")]
@@ -209,12 +225,11 @@ fn verify_taskbar_identity(app: &tauri::App, title: &str) -> Result<String, Stri
 }
 
 #[tauri::command]
-fn privacy_lock(app: tauri::AppHandle) {
+async fn privacy_lock(app: tauri::AppHandle) {
     close_developer_console(&app);
     if let Some(window) = app.get_webview_window("main") { window.close_devtools(); }
-    for label in ["login", "reminder"] {
-        if let Some(window) = app.get_webview_window(label) { let _ = window.hide(); }
-    }
+    if let Some(window) = app.get_webview_window("login") { let _ = window.hide(); }
+    let _ = reminder::dismiss_window(app).await;
 }
 
 fn main() {
@@ -241,7 +256,7 @@ fn main() {
         .manage(auth::AuthGate(std::sync::Mutex::new(())))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![privacy_lock, reminder::reminder_show, reminder::reminder_payload, reminder::reminder_close, reminder::reminder_open_event, developer_console, developer_console_publish, developer_console_action, developer_disable, developer_devtools, developer_export, campus::campus_identity, campus::campus_collect, campus::campus_cancel, campus::campus_debug, quit_app, restart_app, app_ready, auth::auth_open, auth::auth_mount, auth::auth_complete, auth::auth_status, auth::auth_reload, auth::auth_logout, auth::backup_file])
+        .invoke_handler(tauri::generate_handler![privacy_lock, reminder::reminder_show, reminder::reminder_payload, reminder::reminder_ready, reminder::reminder_close, reminder::reminder_open_event, developer_console, developer_console_publish, developer_console_action, developer_disable, developer_devtools, developer_export, campus::campus_identity, campus::campus_collect, campus::campus_cancel, campus::campus_debug, quit_app, restart_app, app_ready, auth::auth_open, auth::auth_mount, auth::auth_complete, auth::auth_status, auth::auth_reload, auth::auth_logout, auth::backup_file])
         .setup(move |app| {
             if let Some(path) = check.clone() {
                 #[cfg(windows)]
@@ -288,6 +303,10 @@ fn main() {
                 });
             if let Some(icon) = app.default_window_icon() { tray = tray.icon(icon.clone()); }
             tray.build(app)?;
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = position_main_window(&window);
+                window.show()?;
+            }
             Ok(())
         })
         .on_window_event(|window, event| {

@@ -5,6 +5,7 @@ import { ChevronRight, Search } from "lucide-react";
 import type { EventItem } from "./types";
 import { deadlineGroup, orderByDeadline } from "./overviewState";
 import "./overview.css";
+import { ChangedNumber } from "./ChangedNumber";
 import { PlanningPanel } from "./Planning";
 function Items({ items }: { items: EventItem[] }) {
   useLanguage();
@@ -84,11 +85,8 @@ export function DeadlinePage() {
     [data.events, kind, query],
   );
   return (
-    <section className="overview-page deadline-page">
-      <header className="page-heading">
-        <div>
-          <h1>{t("마감 보드")}</h1>
-        </div>
+    <>
+      <PageHeading title={t("마감 보드")}>
         <button
           type="button"
           aria-expanded={planning}
@@ -99,7 +97,8 @@ export function DeadlinePage() {
           }}
         >{t("학습 계획")}{" "}<ChevronRight size={16} aria-hidden="true" />
         </button>
-      </header>
+      </PageHeading>
+    <section className="overview-page">
       <div id="deadline-planning" hidden={!planning}>
         {planningOpened && <PlanningPanel now={now} />}
       </div>
@@ -137,7 +136,7 @@ export function DeadlinePage() {
             <section key={id} className={`deadline-group ${id}`}>
               <h2>
                 {t(label)}
-                <span>{selected.length}</span>
+                <ChangedNumber value={selected.length} />
               </h2>
               <Items items={selected} />
             </section>
@@ -152,6 +151,7 @@ export function DeadlinePage() {
         )}
       </div>
     </section>
+    </>
   );
 }
 export function CourseOverviewPage() {
@@ -181,12 +181,9 @@ export function CourseOverviewPage() {
       .sort((a, b) => a.name.localeCompare(b.name, "ko"));
   }, [data.courses, data.events, query, onlyPending]);
   return (
+    <>
+    <PageHeading title={t("과목별 현황")} />
     <section className="overview-page">
-      <header className="page-heading">
-        <div>
-          <h1>{t("과목별 현황")}</h1>
-        </div>
-      </header>
       <div className="overview-tools">
         <input
           aria-label={t("과목 검색")}
@@ -212,11 +209,11 @@ export function CourseOverviewPage() {
             <article className="overview-card" key={course.id}>
               <h2>{course.name}</h2>
               <div className="course-counts">
-                <span className="type-badge assignment">{t("과제")}{" "}{pending.filter((e) => e.kind === "assignment").length}
+                <span className="type-badge assignment">{t("과제")}{" "}<ChangedNumber value={pending.filter((e) => e.kind === "assignment").length} />
                 </span>
-                <span className="type-badge movie">{t("영상")}{" "}{pending.filter((e) => e.kind === "movie").length}
+                <span className="type-badge movie">{t("영상")}{" "}<ChangedNumber value={pending.filter((e) => e.kind === "movie").length} />
                 </span>
-                <span>{t("완료")}{" "}{done}/{course.items.length}
+                <span>{t("완료")}{" "}<ChangedNumber value={`${done}/${course.items.length}`} />
                 </span>
               </div>
               <progress
@@ -236,5 +233,7 @@ export function CourseOverviewPage() {
       </div>
       {!groups.length && <p className="empty">{t("과목 없음")}</p>}
     </section>
+    </>
   );
 }
+import { PageHeading } from "./PageHeading";

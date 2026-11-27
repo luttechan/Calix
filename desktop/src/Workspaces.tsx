@@ -1,4 +1,7 @@
 import { t, useLanguage, type Language } from "./i18n";
+import { PageHeading } from "./PageHeading";
+import { ColorField } from "./ColorField";
+import { dateEras, type DateEra } from "./dateEra";
 import { useMemo, useState } from "react";
 import {
   Plus,
@@ -33,6 +36,7 @@ import { dateKey, dueText, status, weekdays } from "./dates";
 import type { Task } from "./types";
 import { ThemePicker } from "./ThemePicker";
 import { VesperPairing } from "./VesperPairing";
+import { ChangedNumber } from "./ChangedNumber";
 const taskCollator = new Intl.Collator("ko", { numeric: true });
 export function ChecklistPage() {
   useLanguage();
@@ -46,6 +50,7 @@ export function ChecklistPage() {
     [remove, setRemove] = useState<Task | null>(null),
     [sectionEdit, setSectionEdit] = useState(false),
     [statusEdit, setStatusEdit] = useState(false),
+    [statusColor, setStatusColor] = useState("#af527f"),
     [sort, setSort] = useState<{ key: keyof Task; descending: boolean }>({
       key: "due_at",
       descending: false,
@@ -91,10 +96,7 @@ export function ChecklistPage() {
   };
   return (
     <>
-      <div className="page-heading">
-        <div>
-          <h1>{t("체크리스트")}</h1>
-        </div>
+      <PageHeading title={t("체크리스트")}>
         <button
           className="primary"
           onClick={() =>
@@ -104,7 +106,7 @@ export function ChecklistPage() {
           }
         >
           <Plus size={17} />{t("할 일 추가")}{" "}</button>
-      </div>
+      </PageHeading>
       <div className="checklist-top">
         <div className="section-tabs">
           {data.sections.map((s) => (
@@ -131,7 +133,7 @@ export function ChecklistPage() {
           )}
         </div>
         <div className="toolbar">
-          <button onClick={() => setStatusEdit(true)}>
+          <button onClick={() => { setStatusColor("#af527f"); setStatusEdit(true); }}>
             <SlidersHorizontal size={15} />{t("상태 편집")}{" "}</button>
           {section === 1 && (
             <button onClick={() => setBatch(true)}>
@@ -153,7 +155,7 @@ export function ChecklistPage() {
               checked={pending}
               onChange={(e) => setPending(e.target.checked)}
             />{t("미완료만")}{" "}</label>
-          <span className="muted">{rows.length}{t("개")}</span>
+          <span className="muted"><ChangedNumber value={rows.length} />{t("개")}</span>
         </div>
         <div className="table-scroll">
           <table className="checklist-table" data-resized={Boolean(columns.widths)} style={columns.tableWidth ? {width: columns.tableWidth, minWidth: columns.tableWidth} : undefined}>
@@ -355,9 +357,9 @@ export function ChecklistPage() {
                     (s) => s.id === Number(e.target.value),
                   );
                   const form = e.currentTarget.form!;
+                  setStatusColor(s?.color || "#af527f");
                   for (const [key, value] of Object.entries({
                     name: s?.name || "",
-                    color: s?.color || "#af527f",
                     kind: s?.kind || "open",
                   })) {
                     (form.elements.namedItem(key) as HTMLInputElement).value =
@@ -376,8 +378,7 @@ export function ChecklistPage() {
             <label>{t("이름")}{" "}<input name="name" maxLength={24} required />
             </label>
             <div className="form-grid">
-              <label>{t("색상")}{" "}<input name="color" type="color" defaultValue="#af527f" />
-              </label>
+              <ColorField caption label={t("색상")} name="color" value={statusColor} onChange={setStatusColor} />
               <label>{t("처리")}{" "}<select name="kind">
                   <option value="open">{t("진행할 일")}</option>
                   <option value="done">{t("완료")}</option>
@@ -521,11 +522,12 @@ export function SettingsPage() {
     [backupPassword, setBackupPassword] = useState(""),
     [fileBusy, setFileBusy] = useState(false),
     [languageSaving, setLanguageSaving] = useState<Language | null>(null),
+    [dateEraSaving, setDateEraSaving] = useState<DateEra | null>(null),
     [ankiSelection, setAnkiSelection] = useState<boolean | null>(null);
   const categories = [
     ["profile", "내 프로필", UserRound],
     ["appearance", "화면", Palette],
-    ["language", "언어", Languages],
+    ["general", "일반 설정", Languages],
     ["alarms", "알림과 소리", Bell],
     ["calendar", "일정", CalendarDays],
     ["semester", "학기", CalendarRange],
@@ -562,11 +564,7 @@ export function SettingsPage() {
   };
   return (
     <>
-      <div className="page-heading">
-        <div>
-          <h1>{t("설정")}</h1>
-        </div>
-      </div>
+      <PageHeading title={t("설정")} />
       <div
         className="settings-categories"
         role="tablist"
@@ -747,9 +745,9 @@ export function SettingsPage() {
       </div>
       <div
         role="tabpanel"
-        id="settings-pane-language"
-        aria-labelledby="settings-tab-language"
-        hidden={category !== "language"}
+        id="settings-pane-general"
+        aria-labelledby="settings-tab-general"
+        hidden={category !== "general"}
       >
         <section className="glass settings-panel">
           <div className="settings-heading">
@@ -780,6 +778,17 @@ export function SettingsPage() {
               </label>
             ))}
           </fieldset>
+          <div className="setting-row">
+            <strong>{t("날짜 표기")}</strong>
+            <select aria-label={t("날짜 표기")} value={dateEraSaving ?? data.preferences.date_era ?? "gregorian"}
+              disabled={dateEraSaving !== null} onChange={event => {
+                const date_era = event.target.value as DateEra;
+                setDateEraSaving(date_era);
+                void mutate("preferences.save", { date_era }).catch(() => {}).finally(() => setDateEraSaving(null));
+              }}>
+              {dateEras.map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}
+            </select>
+          </div>
         </section>
       </div>
       <div
@@ -901,8 +910,7 @@ export function SettingsPage() {
             <div className="form-grid">
               <label>{t("이름")}{" "}<input name="name" required maxLength={40} />
               </label>
-              <label>{t("색상")}{" "}<input type="color" name="color" defaultValue="#af527f" />
-              </label>
+              <ColorField caption label={t("색상")} name="color" />
             </div>
             <div className="dialog-actions">
               <span />
