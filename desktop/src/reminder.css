@@ -94,7 +94,6 @@ html:has(body.reminder-surface), body.reminder-surface {
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
   display: flex;
   flex-direction: column;
   gap: 5px;

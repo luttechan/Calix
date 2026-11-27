@@ -52,7 +52,6 @@ select:not([multiple]):open {
     background: var(--surface);
     color: var(--ink);
     box-shadow: 0 12px 32px #17142130;
-    scrollbar-width: thin;
     overscroll-behavior: contain;
   }
   select.calendar-month::picker(select) { max-block-size: min(27rem, 68dvh); }
@@ -80,7 +79,6 @@ select:not([multiple]):open {
   background: var(--surface);
   color: var(--ink);
   box-shadow: 0 12px 32px #17142130;
-  scrollbar-width: thin;
   overscroll-behavior: contain;
 }
 select:not([multiple]) option,

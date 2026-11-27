@@ -1704,6 +1704,11 @@ function CalendarPage({
     const action = event.target.closest<HTMLElement>("[data-calendar-edge]")?.dataset.calendarEdge;
     const period = key ? periods.find(period => period.event.key === key) : undefined;
     const selected = period?.event ?? (key ? buckets.get(origin)?.find(item => item.key === key) : undefined);
+    if (selected && button instanceof HTMLButtonElement && (action === "start" || action === "end")) {
+      // Focusing the resize handle must not scroll the calendar into view.
+      event.preventDefault();
+      button.focus({ preventScroll: true });
+    }
     drag.current = { pointer: event.pointerId, origin, x: event.clientX, y: event.clientY,
       grabbed: selected && cell && button ? { event: selected, start: period?.start ?? origin, end: period?.end ?? origin,
         action: action === "start" || action === "end" ? action : "move",

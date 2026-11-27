@@ -118,7 +118,6 @@
 .sidebar nav {
   min-height: 0;
   overflow-y: auto;
-  scrollbar-width: thin;
   flex: 1;
 }
 .sidebar-bottom {

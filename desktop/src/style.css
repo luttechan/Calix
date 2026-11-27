@@ -1,5 +1,6 @@
 @import "./learning.css";
 @import "./motion.css";
+@import "./scrollbars.css";
 @font-face {
   font-family: "Pretendard JP Variable";
   src: url("/assets/fonts/PretendardJPVariable.woff2") format("woff2");
@@ -881,7 +882,7 @@ label textarea {
   box-shadow: 0 2px 7px #37304408;
 }
 .calendar-panel {
-  overflow: hidden;
+  overflow: clip;
   padding: 10px 12px 13px;
 }
 .weekday-row {
@@ -935,7 +936,11 @@ label textarea {
   inset: 0;
   z-index: 2;
   pointer-events: none;
+  overflow: clip;
+  contain: paint;
 }
+
+.workspace main:has(.calendar-panel) { overflow-anchor: none; }
 .calendar-event.calendar-drag-bar {
   position: absolute;
   inset: 0 auto auto 0;
@@ -1142,7 +1147,6 @@ label textarea {
   color: var(--ink);
   box-shadow: 0 25px 100px #1d18272b;
   overflow: auto;
-  scrollbar-width: thin;
 }
 .modal.wide {
   width: min(900px, calc(100vw - 80px));
